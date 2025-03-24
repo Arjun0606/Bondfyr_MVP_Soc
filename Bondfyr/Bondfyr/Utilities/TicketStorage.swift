@@ -13,7 +13,6 @@ struct TicketStorage {
     static func save(_ ticket: TicketModel) {
         var existing = load()
         existing.append(ticket)
-
         if let data = try? JSONEncoder().encode(existing) {
             UserDefaults.standard.set(data, forKey: key)
         }

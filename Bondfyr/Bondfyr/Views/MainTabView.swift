@@ -8,21 +8,34 @@
 import SwiftUI
 
 struct MainTabView: View {
+    init() {
+        let tabBarAppearance = UITabBarAppearance()
+        tabBarAppearance.configureWithOpaqueBackground()
+        tabBarAppearance.backgroundColor = UIColor.black
+        UITabBar.appearance().standardAppearance = tabBarAppearance
+        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+    }
+
     var body: some View {
         TabView {
-            EventListView()
-                .tabItem {
-                    Label("Discover", systemImage: "sparkles")
-                }
+            NavigationView {
+                EventListView()
+            }
+            .tabItem {
+                Image(systemName: "sparkles")
+                Text("Discover")
+            }
 
             MyTicketsView()
                 .tabItem {
-                    Label("Tickets", systemImage: "qrcode")
+                    Image(systemName: "qrcode.viewfinder")
+                    Text("Tickets")
                 }
 
             ProfileView()
                 .tabItem {
-                    Label("Profile", systemImage: "person.circle")
+                    Image(systemName: "person.circle")
+                    Text("Profile")
                 }
         }
         .accentColor(.pink)

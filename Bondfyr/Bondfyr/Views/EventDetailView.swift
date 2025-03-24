@@ -9,19 +9,20 @@ import SwiftUI
 
 struct EventDetailView: View {
     let event: Event
-
+    
     @State private var selectedTier = ""
     @State private var ticketCount = 1
     @State private var prCode = ""
+    @State private var instagramUsername = ""  // ✅ NEW
     @State private var genders: [String] = [""]
     @State private var showWarning = false
     @State private var showPopup = false
     @State private var agreedToWarning = false
     @State private var confirmedTicket: TicketModel? = nil
-
+    
     let tiers = ["Early Bird", "Standard", "VIP"]
     let genderOptions = ["Male", "Female", "Trans", "Non-Binary"]
-
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -31,23 +32,23 @@ struct EventDetailView: View {
                     .frame(height: 200)
                     .clipped()
                     .cornerRadius(10)
-
+                
                 VStack(alignment: .leading, spacing: 16) {
                     Text(event.name)
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-
+                    
                     Text("\(event.location) • \(event.date)")
                         .foregroundColor(.gray)
-
+                    
                     Divider().background(Color.white.opacity(0.2))
-
+                    
                     // TIER SELECTION
                     Text("Select Ticket Tier")
                         .font(.headline)
                         .foregroundColor(.white)
-
+                    
                     Picker("Tier", selection: $selectedTier) {
                         Text("Select a Tier").tag("")
                         ForEach(tiers, id: \.self) { tier in
@@ -58,13 +59,13 @@ struct EventDetailView: View {
                     .padding()
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(10)
-
+                    
                     // TICKET COUNT
                     Stepper("Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
                         adjustGenderArray()
                     })
                     .foregroundColor(.white)
-
+                    
                     // GENDER PICKERS
                     ForEach(0..<ticketCount, id: \.self) { index in
                         Menu {
@@ -84,14 +85,22 @@ struct EventDetailView: View {
                                 .cornerRadius(10)
                         }
                     }
-
-                    // PR CODE
+                    
+                    // INSTAGRAM USERNAME (OPTIONAL)
+                    TextField("Instagram handle (optional)", text: $instagramUsername)
+                        .autocapitalization(.none)
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(10)
+                        .foregroundColor(.white)
+                    
+                    // PR CODE (OPTIONAL)
                     TextField("PR Code (optional)", text: $prCode)
                         .padding()
                         .background(Color.white.opacity(0.1))
                         .cornerRadius(10)
                         .foregroundColor(.white)
-
+                    
                     // PROCEED BUTTON
                     Button(action: {
                         if shouldShowWarning() {
@@ -110,7 +119,7 @@ struct EventDetailView: View {
                     .disabled(!isFormValid())
                 }
                 .padding()
-
+                
                 if let ticket = confirmedTicket {
                     TicketConfirmationView(ticket: ticket)
                         .padding(.top)
@@ -132,7 +141,7 @@ struct EventDetailView: View {
             adjustGenderArray()
         }
     }
-
+    
     func adjustGenderArray() {
         if genders.count < ticketCount {
             genders += Array(repeating: "", count: ticketCount - genders.count)
@@ -140,17 +149,17 @@ struct EventDetailView: View {
             genders = Array(genders.prefix(ticketCount))
         }
     }
-
+    
     func shouldShowWarning() -> Bool {
         let maleCount = genders.filter { $0 == "Male" }.count
         let femaleCount = genders.filter { $0 == "Female" }.count
         return maleCount > femaleCount
     }
-
+    
     func isFormValid() -> Bool {
         return !selectedTier.isEmpty && !genders.contains("")
     }
-
+    
     func generateTicket() {
         let ticket = TicketModel(
             event: event.name,
@@ -160,6 +169,7 @@ struct EventDetailView: View {
             prCode: prCode,
             timestamp: ISO8601DateFormatter().string(from: Date()),
             ticketId: UUID().uuidString
+            // instagramUsername is optional
         )
         TicketStorage.save(ticket)
         confirmedTicket = ticket
