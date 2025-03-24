@@ -6,66 +6,74 @@
 //
 
 import SwiftUI
+import GoogleSignInSwift
 
 struct LoginView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
     @State private var email = ""
     @State private var password = ""
-    @State private var isLoggedIn = false
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        VStack(spacing: 20) {
+            Text("Welcome to Bondfyr")
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
 
-                VStack(spacing: 20) {
-                    Text("Welcome to Bondfyr")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
+            TextField("Email", text: $email)
+                .keyboardType(.emailAddress)
+                .autocapitalization(.none)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(10)
+                .foregroundColor(.white)
 
-                    TextField("Email", text: $email)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                        .padding()
-                        .background(Color(.darkGray))
-                        .cornerRadius(10)
-                        .foregroundColor(.white)
+            SecureField("Password", text: $password)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(10)
+                .foregroundColor(.white)
 
-                    SecureField("Password", text: $password)
-                        .padding()
-                        .background(Color(.darkGray))
-                        .cornerRadius(10)
-                        .foregroundColor(.white)
-
-                    Button(action: {
-                        isLoggedIn = true
-                    }) {
-                        Text("Login")
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.pink)
-                            .cornerRadius(10)
-                    }
-
-                    Button(action: {
-                        // Add signup logic later
-                    }) {
-                        Text("Don’t have an account? Sign up")
-                            .foregroundColor(.gray)
-                            .font(.footnote)
-                    }
-
-                    NavigationLink(
-                        destination: MainTabView(),
-                        isActive: $isLoggedIn
-                    ) {
-                        EmptyView()
+            Button(action: {
+                authViewModel.login(email: email, password: password) { success in
+                    if !success {
+                        print("Login failed")
                     }
                 }
-                .padding()
+            }) {
+                Text("Login")
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.pink)
+                    .cornerRadius(10)
             }
+
+            GoogleSignInButton {
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    authViewModel.signInWithGoogle(presenting: rootViewController) { success, error in
+                        if success {
+                            print("✅ Google Sign-In success")
+                        } else {
+                            print("❌ Google Sign-In failed: \(error?.localizedDescription ?? "Unknown error")")
+                        }
+                    }
+                }
+            }
+            .frame(height: 50)
+            .padding(.horizontal)
+
+            NavigationLink(
+                destination: SignUpView().environmentObject(authViewModel),
+                label: {
+                    Text("Don’t have an account? Sign up")
+                        .foregroundColor(.gray)
+                        .font(.footnote)
+                }
+            )
         }
-        .navigationViewStyle(StackNavigationViewStyle())
+        .padding()
+        .background(Color.black.ignoresSafeArea())
     }
 }

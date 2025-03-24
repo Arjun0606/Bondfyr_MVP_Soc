@@ -42,6 +42,20 @@ struct EventDetailView: View {
                     Text("\(event.location) • \(event.date)")
                         .foregroundColor(.gray)
                     
+                    Button(action: {
+                            if let url = URL(string: event.mapsURL) {
+                                UIApplication.shared.open(url)
+                            }
+                        }) {
+                            Label("Open in Google Maps", systemImage: "map")
+                                .foregroundColor(.pink)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(10)
+                        }
+
+                    
                     Divider().background(Color.white.opacity(0.2))
                     
                     // TIER SELECTION

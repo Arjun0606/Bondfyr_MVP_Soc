@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SplashView: View {
     @State private var isActive = false
+    @StateObject var authViewModel = AuthViewModel()
 
     var body: some View {
         ZStack {
@@ -16,7 +17,13 @@ struct SplashView: View {
                 .ignoresSafeArea()
 
             if isActive {
-                OnboardingView()
+                if authViewModel.isLoggedIn {
+                    MainTabView()
+                        .environmentObject(authViewModel)
+                } else {
+                    LoginView()
+                        .environmentObject(authViewModel)
+                }
             } else {
                 VStack(spacing: 20) {
                     Image(systemName: "flame.fill")
@@ -25,16 +32,21 @@ struct SplashView: View {
                         .frame(width: 100, height: 100)
                         .foregroundColor(Color.pink)
                         .shadow(radius: 10)
+                        .scaleEffect(isActive ? 0.8 : 1.0)
+                        .opacity(isActive ? 0 : 1)
+                        .animation(.easeInOut(duration: 0.6), value: isActive)
 
                     Text("Bondfyr")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
+                        .opacity(isActive ? 0 : 1)
+                        .animation(.easeInOut(duration: 0.6), value: isActive)
                 }
                 .transition(.opacity)
                 .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        withAnimation {
+                    withAnimation(.easeOut(duration: 1.0)) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             isActive = true
                         }
                     }
