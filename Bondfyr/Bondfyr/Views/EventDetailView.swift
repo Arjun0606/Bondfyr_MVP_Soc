@@ -10,19 +10,20 @@ import SwiftUI
 struct EventDetailView: View {
     let event: Event
 
-    @State private var selectedTier = "Standard"
+    @State private var selectedTier = ""
     @State private var ticketCount = 1
     @State private var prCode = ""
-    @State private var genders: [String] = ["Male"]
+    @State private var genders: [String] = [""]
     @State private var showWarning = false
-    @State private var showConfirmation = false
+    @State private var showPopup = false
+    @State private var agreedToWarning = false
 
     let tiers = ["Early Bird", "Standard", "VIP"]
     let genderOptions = ["Male", "Female", "Trans", "Non-Binary"]
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 Image(event.image)
                     .resizable()
                     .scaledToFill()
@@ -30,110 +31,147 @@ struct EventDetailView: View {
                     .clipped()
                     .cornerRadius(10)
 
-                Text(event.name)
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(event.name)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
 
-                Text(event.location)
-                    .foregroundColor(.gray)
+                    Text("\(event.location) • \(event.date)")
+                        .foregroundColor(.gray)
 
-                Text("Date: \(event.date)")
-                    .foregroundColor(.gray)
+                    Divider().background(Color.white.opacity(0.2))
 
-                Divider().background(Color.white.opacity(0.3))
-
-                VStack(alignment: .leading, spacing: 10) {
+                    // TIER SELECTION
                     Text("Select Ticket Tier")
+                        .font(.headline)
                         .foregroundColor(.white)
 
                     Picker("Tier", selection: $selectedTier) {
+                        Text("Select a Tier").tag("")
                         ForEach(tiers, id: \.self) { tier in
-                            Text(tier)
+                            Text(tier).tag(tier)
                         }
                     }
-                    .pickerStyle(SegmentedPickerStyle())
+                    .pickerStyle(MenuPickerStyle())
+                    .padding()
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(10)
 
-                    Stepper("Number of Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
+                    // TICKET COUNT
+                    Stepper("Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
                         adjustGenderArray()
                     })
                     .foregroundColor(.white)
 
+                    // GENDER PICKERS
                     ForEach(0..<ticketCount, id: \.self) { index in
-                        Picker("Person \(index + 1) Gender", selection: $genders[index]) {
+                        Menu {
                             ForEach(genderOptions, id: \.self) { gender in
-                                Text(gender)
+                                Button(action: {
+                                    genders[index] = gender
+                                }) {
+                                    Text(gender)
+                                }
                             }
+                        } label: {
+                            Text(genders[index].isEmpty ? "Gender" : genders[index])
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .foregroundColor(genders[index].isEmpty ? .gray : .white)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(10)
                         }
-                        .pickerStyle(MenuPickerStyle())
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(10)
                     }
 
+                    // PR CODE
                     TextField("PR Code (optional)", text: $prCode)
                         .padding()
                         .background(Color.white.opacity(0.1))
                         .cornerRadius(10)
                         .foregroundColor(.white)
 
-                    if showWarning {
-                        Text("⚠️ Entry may be denied at the venue if gender ratio is not met. No refunds will be provided.")
-                            .font(.footnote)
-                            .foregroundColor(.yellow)
-                            .padding(.top, 6)
-                    }
-
+                    // PROCEED BUTTON
                     Button(action: {
-                        checkGenderRatio()
-                        showConfirmation = true
+                        if shouldShowWarning() {
+                            showPopup = true
+                        } else {
+                            agreedToWarning = true
+                        }
                     }) {
                         Text("Proceed to Pay")
                             .foregroundColor(.white)
-                            .padding()
                             .frame(maxWidth: .infinity)
-                            .background(Color.pink)
+                            .padding()
+                            .background(isFormValid() ? Color.pink : Color.gray)
                             .cornerRadius(12)
                     }
-                    .padding(.top)
+                    .disabled(!isFormValid())
                 }
+                .padding()
 
-                if showConfirmation {
-                    VStack(spacing: 12) {
-                        Text("✅ Tickets Confirmed")
-                            .foregroundColor(.green)
-                            .font(.headline)
-
-                        let qrData = "\(event.name)-\(selectedTier)-\(ticketCount) tickets-\(genders.joined(separator: ","))-\(prCode)"
-                        Image(uiImage: QRGenerator.generate(from: qrData))
-                            .interpolation(.none)
-                            .resizable()
-                            .frame(width: 200, height: 200)
-                            .background(Color.white)
-                            .cornerRadius(10)
-                    }
+                if agreedToWarning {
+                    TicketConfirmationView(event: event, tier: selectedTier, genders: genders, prCode: prCode, count: ticketCount)
+                        .padding(.top)
                 }
             }
-            .padding()
         }
         .background(Color.black.ignoresSafeArea())
+        .alert(isPresented: $showPopup) {
+            Alert(
+                title: Text("⚠️ Gender Ratio Notice"),
+                message: Text("Entry may be denied at the venue if gender ratio is not met. This is at the discretion of the club. No refunds will be provided."),
+                primaryButton: .default(Text("I Agree")) {
+                    agreedToWarning = true
+                },
+                secondaryButton: .cancel()
+            )
+        }
         .onAppear {
             adjustGenderArray()
         }
     }
 
-    private func adjustGenderArray() {
+    func adjustGenderArray() {
         if genders.count < ticketCount {
-            genders += Array(repeating: "Male", count: ticketCount - genders.count)
+            genders += Array(repeating: "", count: ticketCount - genders.count)
         } else if genders.count > ticketCount {
             genders = Array(genders.prefix(ticketCount))
         }
     }
 
-    private func checkGenderRatio() {
+    func shouldShowWarning() -> Bool {
         let maleCount = genders.filter { $0 == "Male" }.count
         let femaleCount = genders.filter { $0 == "Female" }.count
+        return maleCount > femaleCount
+    }
 
-        showWarning = maleCount > femaleCount
+    func isFormValid() -> Bool {
+        return !selectedTier.isEmpty && !genders.contains("")
+    }
+}
+
+// QR confirmation view
+struct TicketConfirmationView: View {
+    let event: Event
+    let tier: String
+    let genders: [String]
+    let prCode: String
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("✅ Ticket Confirmed")
+                .foregroundColor(.green)
+                .font(.headline)
+
+            let qrString = "\(event.name)-\(tier)-\(count) tickets-\(genders.joined(separator: ","))-\(prCode)"
+            Image(uiImage: QRGenerator.generate(from: qrString))
+                .interpolation(.none)
+                .resizable()
+                .frame(width: 200, height: 200)
+                .background(Color.white)
+                .cornerRadius(10)
+        }
     }
 }
