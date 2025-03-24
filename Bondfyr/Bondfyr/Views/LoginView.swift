@@ -14,54 +14,57 @@ struct LoginView: View {
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                Text("Welcome to Bondfyr")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-                TextField("Email", text: $email)
-                    .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
-                    .foregroundColor(.white)
-
-                SecureField("Password", text: $password)
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
-                    .foregroundColor(.white)
-
-                Button(action: {
-                    isLoggedIn = true
-                }) {
-                    Text("Login")
+                VStack(spacing: 20) {
+                    Text("Welcome to Bondfyr")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
+
+                    TextField("Email", text: $email)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
                         .padding()
-                        .background(Color.pink)
+                        .background(Color(.darkGray))
                         .cornerRadius(10)
-                }
+                        .foregroundColor(.white)
 
-                Button(action: {
-                    // Add signup logic later
-                }) {
-                    Text("Don’t have an account? Sign up")
-                        .foregroundColor(.gray)
-                        .font(.footnote)
-                }
+                    SecureField("Password", text: $password)
+                        .padding()
+                        .background(Color(.darkGray))
+                        .cornerRadius(10)
+                        .foregroundColor(.white)
 
-                NavigationLink(
-                    destination: MainTabView(),
-                    isActive: $isLoggedIn
-                ) {
-                    EmptyView()
+                    Button(action: {
+                        isLoggedIn = true
+                    }) {
+                        Text("Login")
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.pink)
+                            .cornerRadius(10)
+                    }
+
+                    Button(action: {
+                        // Add signup logic later
+                    }) {
+                        Text("Don’t have an account? Sign up")
+                            .foregroundColor(.gray)
+                            .font(.footnote)
+                    }
+
+                    NavigationLink(
+                        destination: MainTabView(),
+                        isActive: $isLoggedIn
+                    ) {
+                        EmptyView()
+                    }
                 }
+                .padding()
             }
-            .padding()
-            .background(Color.black.ignoresSafeArea())
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }

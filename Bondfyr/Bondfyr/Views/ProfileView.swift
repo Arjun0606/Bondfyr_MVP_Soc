@@ -9,15 +9,21 @@ import SwiftUI
 
 struct ProfileView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Your Profile")
-                .font(.title)
-                .foregroundColor(.white)
+        ZStack {
+            Color.black.ignoresSafeArea()
 
-            Text("Coming soon: saved events, ticket history, logout, etc.")
-                .foregroundColor(.gray)
+            VStack(spacing: 20) {
+                Text("Your Profile")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+
+                Text("Coming soon: saved events, ticket history, logout, etc.")
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding()
+            }
+            .padding()
         }
-        .padding()
-        .background(Color.black.ignoresSafeArea())
     }
 }

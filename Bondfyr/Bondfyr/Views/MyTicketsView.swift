@@ -8,68 +8,60 @@
 import SwiftUI
 
 struct MyTicketsView: View {
-    @State private var tickets: [TicketModel] = []
+    @State private var dummyTicket = TicketModel(
+        event: "Vault",
+        tier: "VIP",
+        count: 1,
+        genders: ["Male"],
+        prCode: "PR123",
+        timestamp: ISO8601DateFormatter().string(from: Date()),
+        ticketId: UUID().uuidString
+    )
+
+    @State private var eventDate = Calendar.current.date(byAdding: .day, value: 3, to: Date())!
 
     var body: some View {
-        NavigationView {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
             ScrollView {
-                VStack(spacing: 24) {
-                    if tickets.isEmpty {
-                        Text("No active tickets yet.")
-                            .foregroundColor(.gray)
-                    } else {
-                        ForEach(tickets, id: \.ticketId) { ticket in
-                            VStack(spacing: 10) {
-                                Text("🎟️ Your Ticket")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
+                VStack(spacing: 20) {
+                    Text("Your Upcoming Ticket")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
 
-                                Image(uiImage: QRGenerator.generate(from: ticket))
-                                    .interpolation(.none)
-                                    .resizable()
-                                    .frame(width: 200, height: 200)
-                                    .background(Color.white)
-                                    .cornerRadius(10)
+                    Image(uiImage: QRGenerator.generate(from: dummyTicket))
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 200, height: 200)
+                        .background(Color.white)
+                        .cornerRadius(10)
 
-                                Text("\(ticket.event) — \(ticket.tier)")
-                                    .foregroundColor(.white)
-                                    .font(.title3)
+                    Text("\(dummyTicket.event) — \(dummyTicket.tier)")
+                        .foregroundColor(.white)
+                        .font(.headline)
 
-                                Text("Entry on: \(formattedDate(ticket.timestamp))")
-                                    .foregroundColor(.gray)
+                    Text("Entry on: \(formattedDate(eventDate))")
+                        .foregroundColor(.gray)
 
-                                Text("👥 \(ticket.count) Attendees — \(genderSummary(ticket.genders))")
-                                    .foregroundColor(.pink)
-                            }
-                            .padding()
-                            .background(Color.black.opacity(0.8))
-                            .cornerRadius(15)
-                        }
+                    HStack {
+                        Image(systemName: "hourglass")
+                        Text("2d 23h 59m left")
                     }
+                    .foregroundColor(.pink)
                 }
                 .padding()
             }
-            .navigationTitle("Tickets")
-            .background(Color.black.ignoresSafeArea())
-        }
-        .onAppear {
-            tickets = TicketStorage.load()
         }
     }
 
-    func formattedDate(_ isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: isoString) {
-            let out = DateFormatter()
-            out.dateStyle = .medium
-            out.timeStyle = .short
-            return out.string(from: date)
-        }
-        return isoString
-    }
-
-    func genderSummary(_ genders: [String]) -> String {
-        let counts = Dictionary(grouping: genders, by: { $0 }).mapValues { $0.count }
-        return counts.map { "\($0.value)x \($0.key)" }.joined(separator: ", ")
+    func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
