@@ -8,45 +8,68 @@
 import SwiftUI
 
 struct MyTicketsView: View {
-    @State private var dummyTicket = "Vault-VIP-Female-PR123"
-    @State private var eventDate = Calendar.current.date(byAdding: .day, value: 3, to: Date())!
+    @State private var tickets: [TicketModel] = []
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Your Upcoming Ticket")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    if tickets.isEmpty {
+                        Text("No active tickets yet.")
+                            .foregroundColor(.gray)
+                    } else {
+                        ForEach(tickets, id: \.ticketId) { ticket in
+                            VStack(spacing: 10) {
+                                Text("🎟️ Your Ticket")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
 
-            Image(uiImage: QRGenerator.generate(from: dummyTicket))
-                .interpolation(.none)
-                .resizable()
-                .frame(width: 200, height: 200)
-                .background(Color.white)
-                .cornerRadius(10)
+                                Image(uiImage: QRGenerator.generate(from: ticket))
+                                    .interpolation(.none)
+                                    .resizable()
+                                    .frame(width: 200, height: 200)
+                                    .background(Color.white)
+                                    .cornerRadius(10)
 
-            Text("Vault — VIP")
-                .foregroundColor(.white)
-                .font(.headline)
+                                Text("\(ticket.event) — \(ticket.tier)")
+                                    .foregroundColor(.white)
+                                    .font(.title3)
 
-            Text("Entry on: \(formattedDate(eventDate))")
-                .foregroundColor(.gray)
+                                Text("Entry on: \(formattedDate(ticket.timestamp))")
+                                    .foregroundColor(.gray)
 
-            Text("⏳ \(timeRemaining(to: eventDate)) left")
-                .foregroundColor(.pink)
+                                Text("👥 \(ticket.count) Attendees — \(genderSummary(ticket.genders))")
+                                    .foregroundColor(.pink)
+                            }
+                            .padding()
+                            .background(Color.black.opacity(0.8))
+                            .cornerRadius(15)
+                        }
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Tickets")
+            .background(Color.black.ignoresSafeArea())
         }
-        .padding()
-        .background(Color.black.ignoresSafeArea())
+        .onAppear {
+            tickets = TicketStorage.load()
+        }
     }
 
-    func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
-        return formatter.string(from: date)
+    func formattedDate(_ isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: isoString) {
+            let out = DateFormatter()
+            out.dateStyle = .medium
+            out.timeStyle = .short
+            return out.string(from: date)
+        }
+        return isoString
     }
 
-    func timeRemaining(to date: Date) -> String {
-        let diff = Calendar.current.dateComponents([.day, .hour, .minute], from: Date(), to: date)
-        return "\(diff.day ?? 0)d \(diff.hour ?? 0)h \(diff.minute ?? 0)m"
+    func genderSummary(_ genders: [String]) -> String {
+        let counts = Dictionary(grouping: genders, by: { $0 }).mapValues { $0.count }
+        return counts.map { "\($0.value)x \($0.key)" }.joined(separator: ", ")
     }
 }

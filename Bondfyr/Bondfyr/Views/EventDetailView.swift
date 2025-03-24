@@ -17,6 +17,7 @@ struct EventDetailView: View {
     @State private var showWarning = false
     @State private var showPopup = false
     @State private var agreedToWarning = false
+    @State private var confirmedTicket: TicketModel? = nil
 
     let tiers = ["Early Bird", "Standard", "VIP"]
     let genderOptions = ["Male", "Female", "Trans", "Non-Binary"]
@@ -96,7 +97,7 @@ struct EventDetailView: View {
                         if shouldShowWarning() {
                             showPopup = true
                         } else {
-                            agreedToWarning = true
+                            generateTicket()
                         }
                     }) {
                         Text("Proceed to Pay")
@@ -110,8 +111,8 @@ struct EventDetailView: View {
                 }
                 .padding()
 
-                if agreedToWarning {
-                    TicketConfirmationView(event: event, tier: selectedTier, genders: genders, prCode: prCode, count: ticketCount)
+                if let ticket = confirmedTicket {
+                    TicketConfirmationView(ticket: ticket)
                         .padding(.top)
                 }
             }
@@ -122,7 +123,7 @@ struct EventDetailView: View {
                 title: Text("⚠️ Gender Ratio Notice"),
                 message: Text("Entry may be denied at the venue if gender ratio is not met. This is at the discretion of the club. No refunds will be provided."),
                 primaryButton: .default(Text("I Agree")) {
-                    agreedToWarning = true
+                    generateTicket()
                 },
                 secondaryButton: .cancel()
             )
@@ -149,29 +150,18 @@ struct EventDetailView: View {
     func isFormValid() -> Bool {
         return !selectedTier.isEmpty && !genders.contains("")
     }
-}
 
-// QR confirmation view
-struct TicketConfirmationView: View {
-    let event: Event
-    let tier: String
-    let genders: [String]
-    let prCode: String
-    let count: Int
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("✅ Ticket Confirmed")
-                .foregroundColor(.green)
-                .font(.headline)
-
-            let qrString = "\(event.name)-\(tier)-\(count) tickets-\(genders.joined(separator: ","))-\(prCode)"
-            Image(uiImage: QRGenerator.generate(from: qrString))
-                .interpolation(.none)
-                .resizable()
-                .frame(width: 200, height: 200)
-                .background(Color.white)
-                .cornerRadius(10)
-        }
+    func generateTicket() {
+        let ticket = TicketModel(
+            event: event.name,
+            tier: selectedTier,
+            count: ticketCount,
+            genders: genders,
+            prCode: prCode,
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            ticketId: UUID().uuidString
+        )
+        TicketStorage.save(ticket)
+        confirmedTicket = ticket
     }
 }
