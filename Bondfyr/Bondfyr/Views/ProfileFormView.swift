@@ -17,11 +17,11 @@ struct ProfileFormView: View {
     @State private var phone: String = ""
     @State private var isSaving: Bool = false
     @State private var showError: Bool = false
-    @State private var phoneNumber: String = ""
-
 
     var body: some View {
         VStack(spacing: 20) {
+            Spacer()
+
             Text("Complete Your Profile")
                 .font(.title2)
                 .fontWeight(.bold)
@@ -54,23 +54,29 @@ struct ProfileFormView: View {
 
             Button(action: saveProfile) {
                 if isSaving {
-                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 } else {
                     Text("Save & Continue")
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.pink)
+                        .background(isFormValid() ? Color.pink : Color.gray)
                         .cornerRadius(10)
                 }
             }
             .disabled(!isFormValid())
 
+            Spacer()
         }
         .padding()
         .background(Color.black.ignoresSafeArea())
         .alert(isPresented: $showError) {
-            Alert(title: Text("Error"), message: Text("Failed to save profile. Try again."), dismissButton: .default(Text("OK")))
+            Alert(
+                title: Text("Error"),
+                message: Text("Failed to save your profile. Please try again."),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
@@ -82,21 +88,31 @@ struct ProfileFormView: View {
         guard let user = Auth.auth().currentUser else { return }
 
         isSaving = true
-        let profile = AppUser(uid: user.uid, name: name, email: user.email ?? "", dob: dob, phoneNumber: phone)
+
+        let profile = AppUser(
+            uid: user.uid,
+            name: name,
+            email: user.email ?? "",
+            dob: dob,
+            phoneNumber: phone
+        )
 
         do {
-            try Firestore.firestore().collection("users").document(user.uid).setData(from: profile) { error in
-                isSaving = false
-                if let error = error {
-                    print("❌ Firestore Save Error: \(error.localizedDescription)")
-                    showError = true
-                } else {
-                    DispatchQueue.main.async{
-                        authViewModel.currentUser = profile
-                        authViewModel.isLoggedIn = true
+            try Firestore.firestore()
+                .collection("users")
+                .document(user.uid)
+                .setData(from: profile) { error in
+                    isSaving = false
+                    if let error = error {
+                        print("❌ Firestore Save Error: \(error.localizedDescription)")
+                        showError = true
+                    } else {
+                        DispatchQueue.main.async {
+                            authViewModel.currentUser = profile
+                            authViewModel.isLoggedIn = true
+                        }
                     }
                 }
-            }
         } catch {
             print("❌ Encoding Error: \(error.localizedDescription)")
             isSaving = false

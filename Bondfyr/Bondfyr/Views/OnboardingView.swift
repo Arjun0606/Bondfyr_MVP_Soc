@@ -1,5 +1,5 @@
 //
-//  Onboarding.swift
+//  OnboardingView.swift
 //  Bondfyr
 //
 //  Created by Arjun Varma on 24/03/25.
@@ -17,8 +17,10 @@ struct OnboardingView: View {
             TabView(selection: $currentPage) {
                 OnboardingCard(title: "Discover Events", subtitle: "Explore curated gigs, nightlife and exclusive parties around you.", imageName: "sparkles")
                     .tag(0)
+
                 OnboardingCard(title: "Buy Smart Tickets", subtitle: "Tiered passes, group deals, gender-balanced discounts & more.", imageName: "ticket")
                     .tag(1)
+
                 OnboardingCard(title: "Smooth Entry", subtitle: "QR codes, real-time check-ins & lightning-fast payments.", imageName: "qrcode.viewfinder")
                     .tag(2)
             }

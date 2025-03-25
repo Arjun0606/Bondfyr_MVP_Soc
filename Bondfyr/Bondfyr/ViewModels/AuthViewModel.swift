@@ -6,84 +6,22 @@
 //
 
 import Foundation
-import FirebaseAuth
 import Firebase
+import FirebaseAuth
 import FirebaseFirestore
 import GoogleSignIn
-import GoogleSignInSwift
-import FirebaseCore
 
 class AuthViewModel: ObservableObject {
-    @Published var currentUser: AppUser? = nil
+    @Published var currentUser: AppUser?
     @Published var isLoggedIn: Bool = false
 
-    private var auth = Auth.auth()
-    private var db = Firestore.firestore()
+    private let auth = Auth.auth()
+    private let db = Firestore.firestore()
 
     init() {
-        self.isLoggedIn = auth.currentUser != nil
-    }
-
-    func login(email: String, password: String, completion: @escaping (Bool) -> Void) {
-        auth.signIn(withEmail: email, password: password) { result, error in
-            if let error = error {
-                print("❌ Login error: \(error.localizedDescription)")
-                completion(false)
-                return
-            }
-
-            self.isLoggedIn = true
-            completion(true)
-        }
-    }
-
-    func signUp(name: String, email: String, password: String, dob: Date, phoneNumber: String, completion: @escaping (Bool) -> Void) {
-        auth.createUser(withEmail: email, password: password) { result, error in
-            if let error = error {
-                print("❌ Sign up error: \(error.localizedDescription)")
-                completion(false)
-                return
-            }
-
-            guard let user = result?.user else {
-                completion(false)
-                return
-            }
-            let uid = user.uid
-
-            let appUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
-
-            do {
-                try self.db.collection("users").document(uid).setData(from: appUser)
-                self.currentUser = appUser
-                self.isLoggedIn = true
-                completion(true)
-            } catch {
-                print("❌ Firestore error: \(error.localizedDescription)")
-                completion(false)
-            }
-        }
-    }
-
-    func logout() {
-        do {
-            try auth.signOut()
-            self.isLoggedIn = false
-            self.currentUser = nil
-            UserDefaults.standard.set(false, forKey: "hasSeenOnboarding") // ✅ reset onboarding
-        } catch {
-            print("❌ Logout error: \(error.localizedDescription)")
-        }
-    }
-
-    func deleteAccount() {
-        guard let user = auth.currentUser else { return }
-        user.delete { error in
-            if let error = error {
-                print("❌ Delete account error: \(error.localizedDescription)")
-            } else {
-                self.logout() // ✅ also resets onboarding
-            }
+        if auth.currentUser != nil {
+            fetchUserProfile { _ in }
+            isLoggedIn = true
         }
     }
 
@@ -93,8 +31,7 @@ class AuthViewModel: ObservableObject {
             return
         }
 
-        let config = GIDConfiguration(clientID: clientID)
-        GIDSignIn.sharedInstance.configuration = config
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
 
         GIDSignIn.sharedInstance.signIn(withPresenting: presenting) { result, error in
             if let error = error {
@@ -102,28 +39,25 @@ class AuthViewModel: ObservableObject {
                 return
             }
 
-            guard
-                let user = result?.user,
-                let idToken = user.idToken?.tokenString
-            else {
-                completion(false, NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Google Sign-In credentials missing"]))
+            guard let user = result?.user,
+                  let idToken = user.idToken?.tokenString else {
+                completion(false, NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing Google credentials"]))
                 return
             }
 
             let accessToken = user.accessToken.tokenString
-
             let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: accessToken)
 
-            Auth.auth().signIn(with: credential) { authResult, error in
+            self.auth.signIn(with: credential) { result, error in
                 if let error = error {
                     completion(false, error)
                 } else {
-                    self.fetchUserProfile { success in
-                        DispatchQueue.main.async {
-                            self.isLoggedIn = true
-                        }
+                    DispatchQueue.main.async {
+                        self.isLoggedIn = true
                     }
-                    completion(true, nil)
+                    self.fetchUserProfile { success in
+                        completion(success, nil)
+                    }
                 }
             }
         }
@@ -141,15 +75,32 @@ class AuthViewModel: ObservableObject {
                let email = data["email"] as? String,
                let dobTimestamp = data["dob"] as? Timestamp,
                let phoneNumber = data["phoneNumber"] as? String {
-                
+
                 let dob = dobTimestamp.dateValue()
-                self.currentUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
-                self.isLoggedIn = true
+                let appUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
+
+                DispatchQueue.main.async {
+                    self.currentUser = appUser
+                }
                 completion(true)
             } else {
+                DispatchQueue.main.async {
+                    self.currentUser = nil
+                }
                 completion(false)
             }
         }
     }
 
+    func logout() {
+        do {
+            try auth.signOut()
+            DispatchQueue.main.async {
+                self.currentUser = nil
+                self.isLoggedIn = false
+            }
+        } catch {
+            print("❌ Logout Error: \(error.localizedDescription)")
+        }
+    }
 }

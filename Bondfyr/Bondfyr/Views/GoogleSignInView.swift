@@ -10,77 +10,35 @@ import GoogleSignInSwift
 
 struct GoogleSignInView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var isLoading = false
-    @State private var showProfileForm = false
-    @State private var navigateToMainApp = false
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        VStack(spacing: 20) {
+            Spacer()
+            Image("BondfyrLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 120, height: 120)
 
-            VStack(spacing: 40) {
-                Spacer()
+            Text("Welcome to Bondfyr")
+                .font(.title)
+                .foregroundColor(.white)
 
-                Image("BondfyrLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 120, height: 120)
+            GoogleSignInButton(action: handleSignIn)
+                .frame(width: 220, height: 50)
 
-                Text("Welcome to Bondfyr")
-                    .font(.title2)
-                    .foregroundColor(.white)
-
-                GoogleSignInButton(action: handleGoogleSignIn)
-                    .frame(height: 50)
-                    .padding(.horizontal, 40)
-
-                Spacer()
-            }
-
-            if isLoading {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    .scaleEffect(1.5)
-            }
+            Spacer()
         }
-        // Navigate to ProfileForm if needed
-        .fullScreenCover(isPresented: $showProfileForm) {
-            ProfileFormView()
-                .environmentObject(authViewModel)
-        }
-        // Navigate to main app if logged in
-        .fullScreenCover(isPresented: $navigateToMainApp) {
-            MainTabView()
-                .environmentObject(authViewModel)
-        }
+        .padding()
+        .background(Color.black.ignoresSafeArea())
     }
 
-    func handleGoogleSignIn() {
-        guard let rootVC = UIApplication.shared.connectedScenes
-            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
-            .first?.rootViewController else {
-            return
-        }
+    private func handleSignIn() {
+        guard let rootVC = UIApplication.shared.windows.first?.rootViewController else { return }
 
-        isLoading = true
-
-        authViewModel.signInWithGoogle(presenting: rootVC) { success, _ in
-            if success {
-                authViewModel.fetchUserProfile { exists in
-                    DispatchQueue.main.async {
-                        isLoading = false
-                        if exists {
-                            authViewModel.isLoggedIn = true
-                            navigateToMainApp = true
-                        } else {
-                            showProfileForm = true
-                        }
-                    }
-                }
-            } else {
-                isLoading = false
+        authViewModel.signInWithGoogle(presenting: rootVC) { success, error in
+            if !success {
+                print("❌ Google Sign-In Failed: \(error?.localizedDescription ?? "Unknown error")")
             }
         }
     }
 }
-
