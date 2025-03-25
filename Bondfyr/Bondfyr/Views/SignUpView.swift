@@ -15,6 +15,7 @@ struct SignUpView: View {
     @State private var dob = Date()
     @State private var email = ""
     @State private var password = ""
+    @State private var phoneNumber = ""
 
     var body: some View {
         ScrollView {
@@ -50,11 +51,18 @@ struct SignUpView: View {
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(10)
                     .foregroundColor(.white)
+                
+                TextField("Phone Number", text: $phoneNumber)
+                    .padding()
+                    .keyboardType(.phonePad)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(10)
+                    .foregroundColor(.white)
 
                 Button(action: {
-                    authViewModel.signUp(name: name, email: email, password: password, dob: dob) { success in
+                    authViewModel.signUp(name: name, email: email, password: password, dob: dob, phoneNumber: phoneNumber) { success in
                         if !success {
-                            print("Sign-up failed")
+                            print("❌ Sign-up failed")
                         }
                     }
 

@@ -10,70 +10,50 @@ import GoogleSignInSwift
 
 struct LoginView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
-    @State private var email = ""
-    @State private var password = ""
+    @State private var isSigningIn = false
 
     var body: some View {
         VStack(spacing: 20) {
+            Spacer()
+
             Text("Welcome to Bondfyr")
-                .font(.title)
+                .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
 
-            TextField("Email", text: $email)
-                .keyboardType(.emailAddress)
-                .autocapitalization(.none)
-                .padding()
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(10)
-                .foregroundColor(.white)
+            Spacer()
 
-            SecureField("Password", text: $password)
-                .padding()
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(10)
-                .foregroundColor(.white)
+            GoogleSignInButton(action: handleGoogleSignIn)
+                .frame(height: 50)
+                .padding(.horizontal)
 
-            Button(action: {
-                authViewModel.login(email: email, password: password) { success in
-                    if !success {
-                        print("Login failed")
-                    }
-                }
-            }) {
-                Text("Login")
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.pink)
-                    .cornerRadius(10)
-            }
-
-            GoogleSignInButton {
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootViewController = windowScene.windows.first?.rootViewController {
-                    authViewModel.signInWithGoogle(presenting: rootViewController) { success, error in
-                        if success {
-                            print("✅ Google Sign-In success")
-                        } else {
-                            print("❌ Google Sign-In failed: \(error?.localizedDescription ?? "Unknown error")")
-                        }
-                    }
-                }
-            }
-            .frame(height: 50)
-            .padding(.horizontal)
-
-            NavigationLink(
-                destination: SignUpView().environmentObject(authViewModel),
-                label: {
-                    Text("Don’t have an account? Sign up")
-                        .foregroundColor(.gray)
-                        .font(.footnote)
-                }
-            )
+            Spacer()
         }
         .padding()
         .background(Color.black.ignoresSafeArea())
+    }
+
+    func handleGoogleSignIn() {
+        guard let rootViewController = UIApplication.shared.connectedScenes
+                .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController })
+                .first else {
+            return
+        }
+
+        isSigningIn = true
+        authViewModel.signInWithGoogle(presenting: rootViewController) { success, error in
+            isSigningIn = false
+            if let error = error {
+                print("❌ Google Sign-In error: \(error.localizedDescription)")
+            } else {
+                print("✅ Google Sign-In success")
+            }
+        }
+    }
+}
+
+struct LoginView_Previews: PreviewProvider {
+    static var previews: some View {
+        LoginView().environmentObject(AuthViewModel())
     }
 }

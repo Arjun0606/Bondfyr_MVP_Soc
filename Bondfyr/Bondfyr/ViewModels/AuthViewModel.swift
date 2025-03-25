@@ -11,6 +11,7 @@ import Firebase
 import FirebaseFirestore
 import GoogleSignIn
 import GoogleSignInSwift
+import FirebaseCore
 
 class AuthViewModel: ObservableObject {
     @Published var currentUser: AppUser? = nil
@@ -36,7 +37,7 @@ class AuthViewModel: ObservableObject {
         }
     }
 
-    func signUp(name: String, email: String, password: String, dob: Date, completion: @escaping (Bool) -> Void) {
+    func signUp(name: String, email: String, password: String, dob: Date, phoneNumber: String, completion: @escaping (Bool) -> Void) {
         auth.createUser(withEmail: email, password: password) { result, error in
             if let error = error {
                 print("❌ Sign up error: \(error.localizedDescription)")
@@ -50,13 +51,11 @@ class AuthViewModel: ObservableObject {
             }
             let uid = user.uid
 
-            let appUser = AppUser(uid: uid, name: name, email: email, dob: dob)
-
+            let appUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
 
             do {
                 try self.db.collection("users").document(uid).setData(from: appUser)
                 self.currentUser = appUser
-
                 self.isLoggedIn = true
                 completion(true)
             } catch {
@@ -71,8 +70,20 @@ class AuthViewModel: ObservableObject {
             try auth.signOut()
             self.isLoggedIn = false
             self.currentUser = nil
+            UserDefaults.standard.set(false, forKey: "hasSeenOnboarding") // ✅ reset onboarding
         } catch {
             print("❌ Logout error: \(error.localizedDescription)")
+        }
+    }
+
+    func deleteAccount() {
+        guard let user = auth.currentUser else { return }
+        user.delete { error in
+            if let error = error {
+                print("❌ Delete account error: \(error.localizedDescription)")
+            } else {
+                self.logout() // ✅ also resets onboarding
+            }
         }
     }
 
@@ -91,15 +102,14 @@ class AuthViewModel: ObservableObject {
                 return
             }
 
-            guard let user = result?.user else {
-                completion(false, NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user returned from Google Sign-In"]))
+            guard
+                let user = result?.user,
+                let idToken = user.idToken?.tokenString
+            else {
+                completion(false, NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Google Sign-In credentials missing"]))
                 return
             }
 
-            guard let idToken = user.idToken?.tokenString else {
-                completion(false, NSError(domain: "", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing ID Token"]))
-                return
-            }
             let accessToken = user.accessToken.tokenString
 
             let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: accessToken)
@@ -108,12 +118,38 @@ class AuthViewModel: ObservableObject {
                 if let error = error {
                     completion(false, error)
                 } else {
-                    DispatchQueue.main.async {
-                        self.isLoggedIn = true
+                    self.fetchUserProfile { success in
+                        DispatchQueue.main.async {
+                            self.isLoggedIn = true
+                        }
                     }
                     completion(true, nil)
                 }
             }
         }
     }
+
+    func fetchUserProfile(completion: @escaping (Bool) -> Void) {
+        guard let uid = auth.currentUser?.uid else {
+            completion(false)
+            return
+        }
+
+        db.collection("users").document(uid).getDocument { snapshot, error in
+            if let data = snapshot?.data(),
+               let name = data["name"] as? String,
+               let email = data["email"] as? String,
+               let dobTimestamp = data["dob"] as? Timestamp,
+               let phoneNumber = data["phoneNumber"] as? String {
+                
+                let dob = dobTimestamp.dateValue()
+                self.currentUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
+                self.isLoggedIn = true
+                completion(true)
+            } else {
+                completion(false)
+            }
+        }
+    }
+
 }

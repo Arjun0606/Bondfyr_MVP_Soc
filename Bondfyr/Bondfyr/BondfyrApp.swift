@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
-import FirebaseCore
+import Firebase
 
 @main
 struct BondfyrApp: App {
+    @StateObject var authViewModel = AuthViewModel()
+
     init() {
         FirebaseApp.configure()
     }
@@ -17,6 +19,7 @@ struct BondfyrApp: App {
     var body: some Scene {
         WindowGroup {
             SplashView()
+                .environmentObject(authViewModel)
         }
     }
 }

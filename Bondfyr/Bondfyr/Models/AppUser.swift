@@ -12,4 +12,5 @@ struct AppUser: Codable {
     let name: String
     let email: String
     let dob: Date
+    let phoneNumber: String
 }

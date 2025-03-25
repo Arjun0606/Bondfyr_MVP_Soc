@@ -15,4 +15,5 @@ struct TicketModel: Codable {
     let prCode: String
     let timestamp: String
     let ticketId: String
+    let phoneNumber: String
 }

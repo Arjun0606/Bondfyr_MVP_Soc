@@ -10,6 +10,7 @@ import SwiftUI
 struct OnboardingView: View {
     @State private var currentPage = 0
     let totalPages = 3
+    @Binding var hasSeenOnboarding: Bool
 
     var body: some View {
         VStack {
@@ -28,8 +29,7 @@ struct OnboardingView: View {
                 if currentPage < totalPages - 1 {
                     currentPage += 1
                 } else {
-                    // Go to login
-                    UIApplication.shared.windows.first?.rootViewController = UIHostingController(rootView: LoginView())
+                    hasSeenOnboarding = true  // ✅ Mark onboarding complete
                 }
             }) {
                 Text(currentPage < totalPages - 1 ? "Next" : "Get Started")
@@ -42,6 +42,7 @@ struct OnboardingView: View {
                     .padding(.horizontal)
             }
         }
+        .background(Color.black.ignoresSafeArea())
     }
 }
 
@@ -56,7 +57,7 @@ struct OnboardingCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(height: 120)
-                .foregroundColor(.blue)
+                .foregroundColor(.pink)
 
             Text(title)
                 .font(.title)
