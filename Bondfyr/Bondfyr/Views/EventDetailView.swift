@@ -20,9 +20,7 @@ struct EventDetailView: View {
     @State private var prCode = ""
     @State private var instagramUsername = ""
     @State private var genders: [String] = [""]
-    @State private var showWarning = false
     @State private var showPopup = false
-    @State private var agreedToWarning = false
     @State private var showConfirmationPopup = false
     @State private var navigateToTickets = false
 
@@ -66,7 +64,6 @@ struct EventDetailView: View {
 
                     Divider().background(Color.white.opacity(0.2))
 
-                    // TIER SELECTION
                     Text("Select Ticket Tier")
                         .font(.headline)
                         .foregroundColor(.white)
@@ -82,13 +79,11 @@ struct EventDetailView: View {
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(10)
 
-                    // TICKET COUNT
                     Stepper("Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
                         adjustGenderArray()
                     })
                     .foregroundColor(.white)
 
-                    // GENDER PICKERS
                     ForEach(0..<ticketCount, id: \.self) { index in
                         Menu {
                             ForEach(genderOptions, id: \.self) { gender in
@@ -108,7 +103,6 @@ struct EventDetailView: View {
                         }
                     }
 
-                    // INSTAGRAM USERNAME (OPTIONAL)
                     TextField("Instagram handle (optional)", text: $instagramUsername)
                         .autocapitalization(.none)
                         .padding()
@@ -116,14 +110,12 @@ struct EventDetailView: View {
                         .cornerRadius(10)
                         .foregroundColor(.white)
 
-                    // PR CODE (OPTIONAL)
                     TextField("PR Code (optional)", text: $prCode)
                         .padding()
                         .background(Color.white.opacity(0.1))
                         .cornerRadius(10)
                         .foregroundColor(.white)
 
-                    // PROCEED BUTTON
                     Button(action: {
                         if shouldShowWarning() {
                             showPopup = true
@@ -147,26 +139,22 @@ struct EventDetailView: View {
         .onAppear {
             resetForm()
         }
-        .alert(isPresented: $showPopup) {
-            Alert(
-                title: Text("⚠️ Gender Ratio Notice"),
-                message: Text("Entry may be denied at the venue if gender ratio is not met. This is at the discretion of the club. No refunds will be provided."),
-                primaryButton: .default(Text("I Agree")) {
-                    generateTicket()
-                },
-                secondaryButton: .cancel()
-            )
-        }
-        .alert(isPresented: $showConfirmationPopup) {
-            Alert(
-                title: Text("✅ Ticket Confirmed"),
-                message: Text("Your ticket has been successfully purchased."),
-                dismissButton: .default(Text("Go to Tickets")) {
-                    tabSelection.selectedTab = .tickets
-                    presentationMode.wrappedValue.dismiss()
-                }
-            )
-        }
+        .alert("⚠️ Gender Ratio Notice", isPresented: $showPopup, actions: {
+            Button("I Agree") {
+                generateTicket()
+            }
+            Button("Cancel", role: .cancel) {}
+        }, message: {
+            Text("Entry may be denied at the venue if gender ratio is not met. This is at the discretion of the club. No refunds will be provided.")
+        })
+        .alert("✅ Ticket Confirmed", isPresented: $showConfirmationPopup, actions: {
+            Button("Go to Tickets") {
+                tabSelection.selectedTab = .tickets
+                presentationMode.wrappedValue.dismiss()
+            }
+        }, message: {
+            Text("Your ticket has been successfully purchased.")
+        })
     }
 
     func adjustGenderArray() {
@@ -196,7 +184,7 @@ struct EventDetailView: View {
             prCode: prCode,
             timestamp: ISO8601DateFormatter().string(from: Date()),
             ticketId: UUID().uuidString,
-            phoneNumber: "" // Removed phone collection
+            phoneNumber: ""
         )
         TicketStorage.save(ticket)
         showConfirmationPopup = true
