@@ -6,25 +6,36 @@
 //
 
 import SwiftUI
+import GoogleSignIn
 import GoogleSignInSwift
 
 struct GoogleSignInView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
+    @State private var isLoading = false
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             Spacer()
-            Image("BondfyrLogo")
+
+            Image(systemName: "flame.fill")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 120, height: 120)
+                .frame(width: 80, height: 80)
+                .foregroundColor(.pink)
 
             Text("Welcome to Bondfyr")
                 .font(.title)
+                .fontWeight(.bold)
                 .foregroundColor(.white)
 
-            GoogleSignInButton(action: handleSignIn)
-                .frame(width: 220, height: 50)
+            GoogleSignInButton(action: handleGoogleSignIn)
+                .frame(height: 48)
+                .padding(.horizontal)
+
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            }
 
             Spacer()
         }
@@ -32,12 +43,23 @@ struct GoogleSignInView: View {
         .background(Color.black.ignoresSafeArea())
     }
 
-    private func handleSignIn() {
-        guard let rootVC = UIApplication.shared.windows.first?.rootViewController else { return }
+    func handleGoogleSignIn() {
+        guard let rootVC = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController })
+            .first else { return }
 
+        isLoading = true
         authViewModel.signInWithGoogle(presenting: rootVC) { success, error in
-            if !success {
-                print("❌ Google Sign-In Failed: \(error?.localizedDescription ?? "Unknown error")")
+            DispatchQueue.main.async {
+                isLoading = false
+            }
+
+            if let error = error {
+                print("❌ Google Sign-In Error: \(error.localizedDescription)")
+            }
+
+            if success {
+                // handled in SplashView already
             }
         }
     }

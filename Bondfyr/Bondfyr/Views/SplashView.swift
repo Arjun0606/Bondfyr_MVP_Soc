@@ -39,12 +39,12 @@ struct SplashView: View {
                 .opacity(opacity)
                 .onAppear {
                     withAnimation(.easeIn(duration: 1.0)) {
-                        opacity = 1.0 // Fade in
+                        opacity = 1.0 // fade in
                     }
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                         withAnimation(.easeOut(duration: 0.5)) {
-                            opacity = 0 // Fade out before transition
+                            opacity = 0 // fade out
                         }
 
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -52,14 +52,16 @@ struct SplashView: View {
                         }
                     }
                 }
+
             } else {
-                if !hasSeenOnboarding {
+                if !hasSeenOnboarding && Auth.auth().currentUser == nil {
                     OnboardingView(hasSeenOnboarding: $hasSeenOnboarding)
+
                 } else if let _ = Auth.auth().currentUser {
-                    if authViewModel.currentUser == nil {
-                        ProfileFormView()
-                    } else {
+                    if let user = authViewModel.currentUser {
                         MainTabView()
+                    } else {
+                        ProfileFormView()
                     }
                 } else {
                     GoogleSignInView()
