@@ -11,6 +11,7 @@ import Firebase
 @main
 struct BondfyrApp: App {
     @StateObject var authViewModel = AuthViewModel()
+    @StateObject var tabSelection = TabSelection()  // ✅ add this
 
     init() {
         FirebaseApp.configure()
@@ -20,6 +21,7 @@ struct BondfyrApp: App {
         WindowGroup {
             SplashView()
                 .environmentObject(authViewModel)
+                .environmentObject(tabSelection)  // ✅ inject it
         }
     }
 }

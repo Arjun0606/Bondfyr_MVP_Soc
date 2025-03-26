@@ -5,7 +5,12 @@
 //  Created by Arjun Varma on 24/03/25.
 //
 
+import Foundation
 import SwiftUI
+import FirebaseAuth
+import Firebase
+import FirebaseFirestore
+import Combine
 
 struct EventDetailView: View {
     let event: Event
@@ -14,12 +19,15 @@ struct EventDetailView: View {
     @State private var ticketCount = 1
     @State private var prCode = ""
     @State private var instagramUsername = ""
-    @State private var phoneNumber = ""  // ✅ NEW
     @State private var genders: [String] = [""]
     @State private var showWarning = false
     @State private var showPopup = false
     @State private var agreedToWarning = false
-    @State private var confirmedTicket: TicketModel? = nil
+    @State private var showConfirmationPopup = false
+    @State private var navigateToTickets = false
+
+    @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var tabSelection: TabSelection
 
     let tiers = ["Early Bird", "Standard", "VIP"]
     let genderOptions = ["Male", "Female", "Non-Binary"]
@@ -100,20 +108,6 @@ struct EventDetailView: View {
                         }
                     }
 
-                    // PHONE NUMBER
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Phone Number", text: $phoneNumber)
-                            .keyboardType(.phonePad)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                            .foregroundColor(.white)
-
-                        Text("Required in case the club needs to contact you with entry info or last-minute updates.")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-
                     // INSTAGRAM USERNAME (OPTIONAL)
                     TextField("Instagram handle (optional)", text: $instagramUsername)
                         .autocapitalization(.none)
@@ -147,14 +141,12 @@ struct EventDetailView: View {
                     .disabled(!isFormValid())
                 }
                 .padding()
-
-                if let ticket = confirmedTicket {
-                    TicketConfirmationView(ticket: ticket)
-                        .padding(.top)
-                }
             }
         }
         .background(Color.black.ignoresSafeArea())
+        .onAppear {
+            resetForm()
+        }
         .alert(isPresented: $showPopup) {
             Alert(
                 title: Text("⚠️ Gender Ratio Notice"),
@@ -165,8 +157,15 @@ struct EventDetailView: View {
                 secondaryButton: .cancel()
             )
         }
-        .onAppear {
-            adjustGenderArray()
+        .alert(isPresented: $showConfirmationPopup) {
+            Alert(
+                title: Text("✅ Ticket Confirmed"),
+                message: Text("Your ticket has been successfully purchased."),
+                dismissButton: .default(Text("Go to Tickets")) {
+                    tabSelection.selectedTab = .tickets
+                    presentationMode.wrappedValue.dismiss()
+                }
+            )
         }
     }
 
@@ -185,7 +184,7 @@ struct EventDetailView: View {
     }
 
     func isFormValid() -> Bool {
-        return !selectedTier.isEmpty && !genders.contains("") && !phoneNumber.isEmpty
+        return !selectedTier.isEmpty && !genders.contains("")
     }
 
     func generateTicket() {
@@ -197,9 +196,17 @@ struct EventDetailView: View {
             prCode: prCode,
             timestamp: ISO8601DateFormatter().string(from: Date()),
             ticketId: UUID().uuidString,
-            phoneNumber: phoneNumber
+            phoneNumber: "" // Removed phone collection
         )
         TicketStorage.save(ticket)
-        confirmedTicket = ticket
+        showConfirmationPopup = true
+    }
+
+    func resetForm() {
+        selectedTier = ""
+        ticketCount = 1
+        prCode = ""
+        instagramUsername = ""
+        genders = [""]
     }
 }

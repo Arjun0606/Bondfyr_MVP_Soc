@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @EnvironmentObject var tabSelection: TabSelection
+
     init() {
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
@@ -17,7 +19,7 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $tabSelection.selectedTab) {
             NavigationView {
                 EventListView()
             }
@@ -25,18 +27,21 @@ struct MainTabView: View {
                 Image(systemName: "sparkles")
                 Text("Discover")
             }
+            .tag(Tab.discover)
 
             MyTicketsView()
                 .tabItem {
                     Image(systemName: "qrcode.viewfinder")
                     Text("Tickets")
                 }
+                .tag(Tab.tickets)
 
             ProfileView()
                 .tabItem {
                     Image(systemName: "person.circle")
                     Text("Profile")
                 }
+                .tag(Tab.profile)
         }
         .accentColor(.pink)
     }
