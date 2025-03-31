@@ -187,6 +187,10 @@ struct EventDetailView: View {
             phoneNumber: ""
         )
         TicketStorage.save(ticket)
+        
+        // Schedule a notification for the photo contest
+        NotificationManager.shared.schedulePhotoNotification(forEvent: event.name)
+        
         showConfirmationPopup = true
     }
 
