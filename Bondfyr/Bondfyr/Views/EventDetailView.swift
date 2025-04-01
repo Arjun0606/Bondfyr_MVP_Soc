@@ -23,6 +23,8 @@ struct EventDetailView: View {
     @State private var showPopup = false
     @State private var showConfirmationPopup = false
     @State private var navigateToTickets = false
+    @State private var zoomedImage: String? = nil
+    @State private var zoomScale: CGFloat = 1.0
 
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var tabSelection: TabSelection
@@ -31,118 +33,176 @@ struct EventDetailView: View {
     let genderOptions = ["Male", "Female", "Non-Binary"]
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                Image(event.image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 200)
-                    .clipped()
-                    .cornerRadius(10)
+        ZStack {
+            Color.black.ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(event.name)
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-
-                    Text("\(event.location) • \(event.date)")
-                        .foregroundColor(.gray)
-
-                    Button(action: {
-                        if let url = URL(string: event.mapsURL) {
-                            UIApplication.shared.open(url)
+            ScrollView {
+                VStack(spacing: 20) {
+                    Image(event.eventPosterImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .cornerRadius(10)
+                        .onTapGesture {
+                            zoomedImage = event.eventPosterImage
+                            zoomScale = 1.0
                         }
-                    }) {
-                        Label("Open in Google Maps", systemImage: "map")
-                            .foregroundColor(.pink)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                    }
 
-                    Divider().background(Color.white.opacity(0.2))
-
-                    Text("Select Ticket Tier")
-                        .font(.headline)
-                        .foregroundColor(.white)
-
-                    Picker("Tier", selection: $selectedTier) {
-                        Text("Select a Tier").tag("")
-                        ForEach(tiers, id: \.self) { tier in
-                            Text(tier).tag(tier)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
-
-                    Stepper("Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
-                        adjustGenderArray()
-                    })
-                    .foregroundColor(.white)
-
-                    ForEach(0..<ticketCount, id: \.self) { index in
-                        Menu {
-                            ForEach(genderOptions, id: \.self) { gender in
-                                Button(action: {
-                                    genders[index] = gender
-                                }) {
-                                    Text(gender)
+                    if let gallery = event.galleryImages, !gallery.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(gallery, id: \.self) { imageName in
+                                    Image(imageName)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 120, height: 120)
+                                        .clipped()
+                                        .cornerRadius(8)
+                                        .onTapGesture {
+                                            zoomedImage = imageName
+                                            zoomScale = 1.0
+                                        }
                                 }
                             }
-                        } label: {
-                            Text(genders[index].isEmpty ? "Gender" : genders[index])
+                            .padding(.horizontal)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(event.name)
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+
+                        Text("\(event.location) • \(event.date)")
+                            .foregroundColor(.gray)
+
+                        Button(action: {
+                            if let url = URL(string: event.mapsURL) {
+                                UIApplication.shared.open(url)
+                            }
+                        }) {
+                            Label("Open in Google Maps", systemImage: "map")
+                                .foregroundColor(.pink)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .foregroundColor(genders[index].isEmpty ? .gray : .white)
                                 .background(Color.white.opacity(0.1))
                                 .cornerRadius(10)
                         }
-                    }
 
-                    TextField("Instagram handle (optional)", text: $instagramUsername)
-                        .autocapitalization(.none)
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(10)
-                        .foregroundColor(.white)
+                        Divider().background(Color.white.opacity(0.2))
 
-                    TextField("PR Code (optional)", text: $prCode)
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(10)
-                        .foregroundColor(.white)
-
-                    Button(action: {
-                        if shouldShowWarning() {
-                            showPopup = true
-                        } else {
-                            generateTicket()
-                        }
-                    }) {
-                        Text("Proceed to Pay")
+                        Text("About this Event")
+                            .font(.headline)
                             .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(isFormValid() ? Color.pink : Color.gray)
-                            .cornerRadius(12)
-                    }
-                    .disabled(!isFormValid())
+                        Text(event.description)
+                            .foregroundColor(.gray)
 
-                    // ❗ No Refunds Disclaimer
-                    Text("🎟️ All sales are final. No refunds or cancellations. Entry is at the club's discretion.")
-                        .font(.footnote)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 4)
+                        Divider().background(Color.white.opacity(0.2))
+
+                        Text("Select Ticket Tier")
+                            .font(.headline)
+                            .foregroundColor(.white)
+
+                        Picker("Tier", selection: $selectedTier) {
+                            Text("Select a Tier").tag("")
+                            ForEach(tiers, id: \.self) { tier in
+                                Text(tier).tag(tier)
+                            }
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(10)
+
+                        Stepper("Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
+                            adjustGenderArray()
+                        })
+                        .foregroundColor(.white)
+
+                        ForEach(0..<ticketCount, id: \.self) { index in
+                            Menu {
+                                ForEach(genderOptions, id: \.self) { gender in
+                                    Button(action: {
+                                        genders[index] = gender
+                                    }) {
+                                        Text(gender)
+                                    }
+                                }
+                            } label: {
+                                Text(genders[index].isEmpty ? "Gender" : genders[index])
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .foregroundColor(genders[index].isEmpty ? .gray : .white)
+                                    .background(Color.white.opacity(0.1))
+                                    .cornerRadius(10)
+                            }
+                        }
+
+                        TextField("Instagram handle (optional)", text: $instagramUsername)
+                            .autocapitalization(.none)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                            .foregroundColor(.white)
+
+                        TextField("PR Code (optional)", text: $prCode)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                            .foregroundColor(.white)
+
+                        Button(action: {
+                            if shouldShowWarning() {
+                                showPopup = true
+                            } else {
+                                generateTicket()
+                            }
+                        }) {
+                            Text("Proceed to Pay")
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(isFormValid() ? Color.pink : Color.gray)
+                                .cornerRadius(12)
+                        }
+                        .disabled(!isFormValid())
+
+                        Text("🎟️ All sales are final. No refunds or cancellations. Entry is at the club's discretion.")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 4)
+                    }
+                    .padding()
                 }
-                .padding()
+            }
+
+            // 🔍 Zoomed Image Popup
+            if let image = zoomedImage {
+                Color.black.opacity(0.9).ignoresSafeArea()
+                VStack {
+                    Spacer()
+                    Image(image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .scaleEffect(zoomScale)
+                        .gesture(MagnificationGesture().onChanged { value in
+                            zoomScale = value
+                        })
+                        .padding()
+                    Spacer()
+                    Button("Close") {
+                        zoomedImage = nil
+                    }
+                    .padding()
+                    .foregroundColor(.white)
+                    .background(Color.pink)
+                    .cornerRadius(8)
+                }
+                .transition(.scale)
             }
         }
-        .background(Color.black.ignoresSafeArea())
         .onAppear {
             resetForm()
         }
@@ -194,9 +254,7 @@ struct EventDetailView: View {
             phoneNumber: ""
         )
         TicketStorage.save(ticket)
-
         NotificationManager.shared.schedulePhotoNotification(forEvent: event.name)
-
         showConfirmationPopup = true
     }
 

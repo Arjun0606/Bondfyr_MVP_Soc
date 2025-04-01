@@ -12,7 +12,7 @@ struct EventCardView: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            Image(event.image)
+            Image(event.venueLogoImage)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 60, height: 60)
