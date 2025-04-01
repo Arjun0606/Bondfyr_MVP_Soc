@@ -24,7 +24,9 @@ struct BondfyrApp: App {
                 .environmentObject(authViewModel)
                 .environmentObject(tabSelection)
                 .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPhotoCaptureView"))) { _ in
-                    if let window = UIApplication.shared.windows.first {
+                    if let windowScene = UIApplication.shared.connectedScenes
+                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                       let window = windowScene.windows.first {
                         window.rootViewController = UIHostingController(rootView:
                             PhotoCaptureView(onCapture: { capturedImage in
                                 print("Captured Image: \(capturedImage)")

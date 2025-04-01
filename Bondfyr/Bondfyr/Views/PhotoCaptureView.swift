@@ -9,9 +9,8 @@ import SwiftUI
 import AVFoundation
 
 struct PhotoCaptureView: UIViewControllerRepresentable {
-    @Environment(\.presentationMode) var presentationMode
     var onCapture: (UIImage) -> Void
-    
+
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
@@ -19,7 +18,7 @@ struct PhotoCaptureView: UIViewControllerRepresentable {
         picker.delegate = context.coordinator
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
@@ -34,14 +33,25 @@ struct PhotoCaptureView: UIViewControllerRepresentable {
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.presentationMode.wrappedValue.dismiss()
+            picker.dismiss(animated: true) {
+                if let windowScene = UIApplication.shared.connectedScenes
+                    .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    window.rootViewController = UIHostingController(
+                        rootView: MainTabView()
+                            .environmentObject(AuthViewModel())
+                            .environmentObject(TabSelection())
+                    )
+                    window.makeKeyAndVisible()
+                }
+            }
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
                 parent.onCapture(image)
             }
-            parent.presentationMode.wrappedValue.dismiss()
+            picker.dismiss(animated: true)
         }
     }
 }

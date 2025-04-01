@@ -131,6 +131,13 @@ struct EventDetailView: View {
                             .cornerRadius(12)
                     }
                     .disabled(!isFormValid())
+
+                    // ❗ No Refunds Disclaimer
+                    Text("🎟️ All sales are final. No refunds or cancellations. Entry is at the club's discretion.")
+                        .font(.footnote)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
                 }
                 .padding()
             }
@@ -187,10 +194,9 @@ struct EventDetailView: View {
             phoneNumber: ""
         )
         TicketStorage.save(ticket)
-        
-        // Schedule a notification for the photo contest
+
         NotificationManager.shared.schedulePhotoNotification(forEvent: event.name)
-        
+
         showConfirmationPopup = true
     }
 
