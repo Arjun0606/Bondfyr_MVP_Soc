@@ -16,8 +16,10 @@ struct Event: Identifiable {
     let venueLogoImage: String // used in EventListView
     let eventPosterImage: String // used in EventDetailView top
     let location: String
+    let city: String
     let mapsURL: String
     let galleryImages: [String]?
+    let instagramHandle: String
 }
 
 let sampleEvents: [Event] = [
@@ -29,8 +31,10 @@ let sampleEvents: [Event] = [
         venueLogoImage: "High_spirits",
         eventPosterImage: "Hs_e",
         location: "Mundhwa, Pune",
+        city: "Pune",
         mapsURL: "https://maps.app.goo.gl/92DFDF4oRGoVgFPs6?g_st=com.google.maps.preview.copy",
-        galleryImages: ["Hs1", "Hs2", "Hs3"]
+        galleryImages: ["Hs1", "Hs2", "Hs3"],
+        instagramHandle: "thehighspirits"
     ),
     Event(
         name: "Qora",
@@ -40,8 +44,10 @@ let sampleEvents: [Event] = [
         venueLogoImage: "Qora",
         eventPosterImage: "Q_e",
         location: "Koregaon Park, Pune",
+        city: "Pune",
         mapsURL: "https://maps.app.goo.gl/PyuS1E19kp38bKwi9?g_st=com.google.maps.preview.copy",
-        galleryImages: ["Q1", "Q2", "Q3"]
+        galleryImages: ["Q1", "Q2", "Q3"],
+        instagramHandle: "qora_pune"
     ),
     Event(
         name: "Vault",
@@ -51,8 +57,10 @@ let sampleEvents: [Event] = [
         venueLogoImage: "Vault",
         eventPosterImage: "V_e",
         location: "SB Road, Pune",
+        city: "Pune",
         mapsURL: "https://maps.app.goo.gl/B37Ry8uMQueSSAfp7?g_st=com.google.maps.preview.copy",
-        galleryImages: ["V1", "V2", "V3"]
+        galleryImages: ["V1", "V2", "V3"],
+        instagramHandle: "vault.pune"
     )
 ]
 

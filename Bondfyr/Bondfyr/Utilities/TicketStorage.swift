@@ -8,21 +8,32 @@
 import Foundation
 
 struct TicketStorage {
-    static let key = "saved_tickets"
-
+    private static let key = "saved_tickets"
+    
     static func save(_ ticket: TicketModel) {
-        var existing = load()
-        existing.append(ticket)
-        if let data = try? JSONEncoder().encode(existing) {
-            UserDefaults.standard.set(data, forKey: key)
+        var tickets = load()
+        tickets.append(ticket)
+        saveAll(tickets)
+    }
+    
+    static func saveAll(_ tickets: [TicketModel]) {
+        if let encoded = try? JSONEncoder().encode(tickets) {
+            UserDefaults.standard.set(encoded, forKey: key)
         }
     }
-
+    
     static func load() -> [TicketModel] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let tickets = try? JSONDecoder().decode([TicketModel].self, from: data) else {
-            return []
+        if let data = UserDefaults.standard.data(forKey: key) {
+            if let decoded = try? JSONDecoder().decode([TicketModel].self, from: data) {
+                return decoded
+            }
         }
-        return tickets
+        return []
+    }
+    
+    static func delete(ticketId: String) {
+        var tickets = load()
+        tickets.removeAll { $0.ticketId == ticketId }
+        saveAll(tickets)
     }
 }

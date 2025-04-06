@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "bondfyr_logo_static_zoomed.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -12,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "bondfyr_logo_static_zoomed 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -23,6 +25,7 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "bondfyr_logo_static_zoomed 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

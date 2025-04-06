@@ -7,11 +7,16 @@
 
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 struct ProfileView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showDeleteAlert = false
-
+    @State private var showReauthAlert = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = "An error occurred"
+    @State private var navigateToLogin = false
+    
     // Mock event history – replace with Firestore data later
     let attendedEvents = [
         ("Qora", "March 10, 2025"),
@@ -76,6 +81,7 @@ struct ProfileView: View {
                 // Logout Button
                 Button(action: {
                     authViewModel.logout()
+                    resetToSplashScreen()
                 }) {
                     Text("Logout")
                         .foregroundColor(.white)
@@ -114,6 +120,35 @@ struct ProfileView: View {
             .padding()
         }
         .background(Color.black.ignoresSafeArea())
+        .alert(isPresented: $showErrorAlert) {
+            Alert(
+                title: Text("Error"),
+                message: Text(errorMessage),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .onDisappear {
+            // Check if we need to navigate to login
+            if navigateToLogin {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if let windowScene = UIApplication.shared.connectedScenes
+                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                       let window = windowScene.windows.first {
+                        
+                        // Clear user defaults if needed
+                        UserDefaults.standard.removeObject(forKey: "hasSeenOnboarding")
+                        
+                        // Reset to login view
+                        window.rootViewController = UIHostingController(
+                            rootView: GoogleSignInView()
+                                .environmentObject(AuthViewModel())
+                                .environmentObject(TabSelection())
+                        )
+                        window.makeKeyAndVisible()
+                    }
+                }
+            }
+        }
     }
 
     func formatDate(_ date: Date?) -> String {
@@ -125,13 +160,57 @@ struct ProfileView: View {
 
     func deleteAccount() {
         guard let user = Auth.auth().currentUser else { return }
-        user.delete { error in
+        
+        // First delete user data from Firestore
+        let db = Firestore.firestore()
+        db.collection("users").document(user.uid).delete { error in
             if let error = error {
-                print("❌ Failed to delete account: \(error.localizedDescription)")
-            } else {
-                authViewModel.logout()
-                print("✅ Account deleted successfully.")
+                self.errorMessage = "Failed to delete user data: \(error.localizedDescription)"
+                self.showErrorAlert = true
+                return
             }
+            
+            // Then delete the account
+            user.delete { error in
+                if let error = error {
+                    print("❌ Failed to delete account: \(error.localizedDescription)")
+                    
+                    // Check for authentication error - might need to reauthenticate
+                    if let authError = error as? AuthErrorCode, 
+                       authError.code == .requiresRecentLogin {
+                        // We set a flag to navigate to login after view disappears
+                        self.errorMessage = "For security reasons, you need to log in again before deleting your account"
+                        self.showErrorAlert = true
+                        
+                        // First logout the user
+                        self.authViewModel.logout()
+                        self.resetToSplashScreen()
+                    } else {
+                        self.errorMessage = "Failed to delete account: \(error.localizedDescription)"
+                        self.showErrorAlert = true
+                    }
+                } else {
+                    print("✅ Account deleted successfully.")
+                    self.authViewModel.logout()
+                    self.resetToSplashScreen()
+                }
+            }
+        }
+    }
+    
+    // Helper function to reset to splash screen
+    func resetToSplashScreen() {
+        if let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+           let window = windowScene.windows.first {
+            
+            // Reset to splash view
+            window.rootViewController = UIHostingController(
+                rootView: SplashView()
+                    .environmentObject(AuthViewModel())
+                    .environmentObject(TabSelection())
+            )
+            window.makeKeyAndVisible()
         }
     }
 }

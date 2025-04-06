@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "Q_e 1.jpg",
+      "filename" : "bondfyr_logo_zoomed_transparent_1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "Q_e 2.jpg",
+      "filename" : "bondfyr_logo_zoomed_transparent_2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "Q_e.jpg",
+      "filename" : "bondfyr_logo_zoomed_transparent_3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

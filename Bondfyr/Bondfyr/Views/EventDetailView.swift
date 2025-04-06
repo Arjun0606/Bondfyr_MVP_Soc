@@ -22,9 +22,11 @@ struct EventDetailView: View {
     @State private var genders: [String] = [""]
     @State private var showPopup = false
     @State private var showConfirmationPopup = false
-    @State private var navigateToTickets = false
     @State private var zoomedImage: String? = nil
     @State private var zoomScale: CGFloat = 1.0
+    @State private var navigateToGallery = false
+    @State private var navigateToCheckIn = false
+    @State private var showAttendeesView = false
 
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var tabSelection: TabSelection
@@ -100,6 +102,54 @@ struct EventDetailView: View {
 
                         Divider().background(Color.white.opacity(0.2))
 
+                        Button(action: {
+                            navigateToGallery = true
+                        }) {
+                            HStack {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                Text("Event Photos")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                            }
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                        }
+
+                        Button(action: {
+                            showAttendeesView = true
+                        }) {
+                            HStack {
+                                Image(systemName: "person.3.fill")
+                                Text("Live Attendance")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                            }
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                        }
+
+                        // Instagram button
+                        Button(action: {
+                            openInstagram(for: event.name)
+                        }) {
+                            HStack {
+                                Image(systemName: "camera.circle.fill")
+                                Text("Follow on Instagram")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                            }
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                        }
+
+                        Divider().background(Color.white.opacity(0.2))
+
                         Text("Select Ticket Tier")
                             .font(.headline)
                             .foregroundColor(.white)
@@ -156,10 +206,10 @@ struct EventDetailView: View {
                             if shouldShowWarning() {
                                 showPopup = true
                             } else {
-                                generateTicket()
+                                preparePayment()
                             }
                         }) {
-                            Text("Proceed to Pay")
+                            Text("Get Tickets")
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding()
@@ -216,12 +266,18 @@ struct EventDetailView: View {
         })
         .alert("✅ Ticket Confirmed", isPresented: $showConfirmationPopup, actions: {
             Button("Go to Tickets") {
-                tabSelection.selectedTab = .tickets
                 presentationMode.wrappedValue.dismiss()
+                tabSelection.selectedTab = .tickets
             }
         }, message: {
             Text("Your ticket has been successfully purchased.")
         })
+        .sheet(isPresented: $navigateToGallery) {
+            EventPhotoGalleryView(eventId: event.id.uuidString, eventName: event.name)
+        }
+        .sheet(isPresented: $showAttendeesView) {
+            EventAttendeesView(event: event)
+        }
     }
 
     func adjustGenderArray() {
@@ -253,8 +309,26 @@ struct EventDetailView: View {
             ticketId: UUID().uuidString,
             phoneNumber: ""
         )
+        
+        // Save ticket directly without payment processing
         TicketStorage.save(ticket)
-        NotificationManager.shared.schedulePhotoNotification(forEvent: event.name)
+        showConfirmationPopup = true
+    }
+    
+    func preparePayment() {
+        let ticket = TicketModel(
+            event: event.name,
+            tier: selectedTier,
+            count: ticketCount,
+            genders: genders,
+            prCode: prCode,
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            ticketId: UUID().uuidString,
+            phoneNumber: ""
+        )
+        
+        // Save ticket directly without payment processing
+        TicketStorage.save(ticket)
         showConfirmationPopup = true
     }
 
@@ -264,5 +338,29 @@ struct EventDetailView: View {
         prCode = ""
         instagramUsername = ""
         genders = [""]
+    }
+
+    private func openInstagram(for clubName: String) {
+        var instagramHandle = ""
+        
+        switch clubName {
+        case "High Spirits":
+            instagramHandle = "thehighspirits"
+        case "Qora":
+            instagramHandle = "qora_pune"
+        case "Vault":
+            instagramHandle = "vault.pune"
+        default:
+            return
+        }
+        
+        let instagramURL = URL(string: "instagram://user?username=\(instagramHandle)")
+        let instagramWebURL = URL(string: "https://www.instagram.com/\(instagramHandle)")
+        
+        if let instagramURL = instagramURL, UIApplication.shared.canOpenURL(instagramURL) {
+            UIApplication.shared.open(instagramURL)
+        } else if let instagramWebURL = instagramWebURL {
+            UIApplication.shared.open(instagramWebURL)
+        }
     }
 }

@@ -16,6 +16,7 @@ struct EventPhoto: Identifiable, Codable {
     var imageUrl: String
     var timestamp: Date
     var likes: Int = 0
+    var isContestEntry: Bool = false
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -24,5 +25,6 @@ struct EventPhoto: Identifiable, Codable {
         case imageUrl
         case timestamp
         case likes
+        case isContestEntry
     }
 }
