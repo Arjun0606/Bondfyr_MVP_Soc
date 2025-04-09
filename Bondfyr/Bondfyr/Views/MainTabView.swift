@@ -28,6 +28,15 @@ struct MainTabView: View {
                 Text("Discover")
             }
             .tag(Tab.discover)
+            
+            NavigationView {
+                CityChatListView()
+            }
+            .tabItem {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                Text("Chat")
+            }
+            .tag(Tab.chat)
 
             MyTicketsView()
                 .tabItem {

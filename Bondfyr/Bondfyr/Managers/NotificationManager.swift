@@ -7,24 +7,103 @@
 
 import Foundation
 import UserNotifications
-import SwiftUI
+import Firebase
 import FirebaseFirestore
+import FirebaseMessaging
+import FirebaseAuth
 
-class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
+enum NotificationType {
+    case photoContestUnlocked(eventId: String, eventName: String)
+    case newEventAnnouncement(eventId: String, eventName: String)
+    case ticketPurchaseConfirmation(eventId: String, eventName: String, ticketId: String)
+    case upcomingEvent(eventId: String, eventName: String, daysUntilEvent: Int)
+    
+    var title: String {
+        switch self {
+        case .photoContestUnlocked(_, let eventName):
+            return "Photo Contest Unlocked! 📸"
+        case .newEventAnnouncement(_, let eventName):
+            return "New Event: \(eventName)"
+        case .ticketPurchaseConfirmation(_, let eventName, _):
+            return "Ticket Confirmed for \(eventName)"
+        case .upcomingEvent(_, let eventName, let days):
+            return "\(eventName) is in \(days) days!"
+        }
+    }
+    
+    var body: String {
+        switch self {
+        case .photoContestUnlocked(_, let eventName):
+            return "You can now share photos at \(eventName)! Your photos will be visible to all attendees."
+        case .newEventAnnouncement(_, let eventName):
+            return "We just announced a new event: \(eventName). Check it out!"
+        case .ticketPurchaseConfirmation(_, let eventName, _):
+            return "Your ticket for \(eventName) has been confirmed. It's available in the app."
+        case .upcomingEvent(_, let eventName, let days):
+            return "Get ready! \(eventName) is coming up in \(days) days."
+        }
+    }
+    
+    var identifier: String {
+        switch self {
+        case .photoContestUnlocked(let eventId, _):
+            return "photo-contest-unlocked-\(eventId)"
+        case .newEventAnnouncement(let eventId, _):
+            return "new-event-\(eventId)"
+        case .ticketPurchaseConfirmation(_, _, let ticketId):
+            return "ticket-confirmation-\(ticketId)"
+        case .upcomingEvent(let eventId, _, _):
+            return "upcoming-event-\(eventId)"
+        }
+    }
+    
+    var userInfo: [AnyHashable: Any] {
+        switch self {
+        case .photoContestUnlocked(let eventId, let eventName):
+            return [
+                "type": "photo_contest_unlocked",
+                "eventId": eventId,
+                "eventName": eventName
+            ]
+        case .newEventAnnouncement(let eventId, let eventName):
+            return [
+                "type": "new_event",
+                "eventId": eventId,
+                "eventName": eventName
+            ]
+        case .ticketPurchaseConfirmation(let eventId, let eventName, let ticketId):
+            return [
+                "type": "ticket_confirmation",
+                "eventId": eventId,
+                "eventName": eventName,
+                "ticketId": ticketId
+            ]
+        case .upcomingEvent(let eventId, let eventName, let daysUntilEvent):
+            return [
+                "type": "upcoming_event",
+                "eventId": eventId,
+                "eventName": eventName,
+                "daysUntilEvent": daysUntilEvent
+            ]
+        }
+    }
+}
+
+class NotificationManager: NSObject {
     static let shared = NotificationManager()
 
     private let notificationCenter = UNUserNotificationCenter.current()
     
     override init() {
         super.init()
-        notificationCenter.delegate = self  // Set delegate in init
+        self.notificationCenter.delegate = self
         
         // Check authorization status on initialization
         checkNotificationStatus()
     }
     
     private func checkNotificationStatus() {
-        notificationCenter.getNotificationSettings { settings in
+        self.notificationCenter.getNotificationSettings { settings in
             if settings.authorizationStatus != .authorized {
                 print("Notifications not authorized, will request permission")
                 DispatchQueue.main.async {
@@ -38,7 +117,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     func requestAuthorization() {
         print("Requesting notification permission with alert, sound, badge")
-        notificationCenter.requestAuthorization(options: [.alert, .sound, .badge, .provisional]) { granted, error in
+        self.notificationCenter.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 print("✅ Notification permission granted")
                 
@@ -59,6 +138,37 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         requestAuthorization()
     }
 
+    // Test function to send a notification immediately
+    func sendTestNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "📸 Contest Photo Opportunity!"
+        content.body = "Take your best retro-filtered shot now - no retakes allowed!"
+        content.sound = .default
+        content.userInfo = [
+            "eventId": "test-event-id", 
+            "eventName": "Retro Night", 
+            "type": "contest_active",
+            "direct_to_camera": "true"  // Add this to indicate we want to go directly to the camera
+        ]
+        
+        // Trigger after 3 seconds
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
+        
+        let request = UNNotificationRequest(
+            identifier: "testNotification_\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+        
+        self.notificationCenter.add(request) { error in
+            if let error = error {
+                print("❌ Error sending test notification: \(error.localizedDescription)")
+            } else {
+                print("✅ Test notification scheduled successfully")
+            }
+        }
+    }
+
     func schedulePhotoNotification(forEvent eventName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Time to Capture the Moment!"
@@ -68,7 +178,7 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10, repeats: false) // 10 sec for testing
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request) { error in
+        self.notificationCenter.add(request) { error in
             if let error = error {
                 print("Failed to schedule notification: \(error)")
             }
@@ -165,38 +275,244 @@ class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             trigger: trigger
         )
         
-        notificationCenter.add(request) { error in
+        self.notificationCenter.add(request) { error in
             if let error = error {
                 print("Error scheduling event reminder: \(error.localizedDescription)")
             }
         }
     }
 
-    // Handle Notification Clicks
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        print("Notification Clicked: \(response.notification.request.content.body)")
-        
-        let userInfo = response.notification.request.content.userInfo
-        
-        DispatchQueue.main.async {
-            if let type = userInfo["type"] as? String, type == "contest" {
-                // Contest notification
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("NavigateToContestPhotoCapture"), 
-                    object: nil,
-                    userInfo: userInfo
-                )
-            } else {
-                // Regular photo notification
-                NotificationCenter.default.post(name: NSNotification.Name("NavigateToPhotoCaptureView"), object: nil)
+    // MARK: - Local Notifications
+    
+    func scheduleLocalNotification(for notificationType: NotificationType, delaySeconds: TimeInterval = 0) {
+        // Check if notifications are authorized
+        self.notificationCenter.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else {
+                print("Notifications not authorized")
+                return
+            }
+            
+            // Create the notification content
+            let content = UNMutableNotificationContent()
+            content.title = notificationType.title
+            content.body = notificationType.body
+            content.sound = .default
+            content.userInfo = notificationType.userInfo
+            
+            // Create the trigger (time-based)
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, delaySeconds), repeats: false)
+            
+            // Create the notification request
+            let request = UNNotificationRequest(
+                identifier: notificationType.identifier,
+                content: content,
+                trigger: trigger
+            )
+            
+            // Schedule the notification
+            self.notificationCenter.add(request) { error in
+                if let error = error {
+                    print("Error scheduling notification: \(error)")
+                }
             }
         }
-        completionHandler()
     }
+    
+    // MARK: - Remote Notifications
+    
+    func registerDeviceToken(_ deviceToken: Data) {
+        Messaging.messaging().apnsToken = deviceToken
+        
+        // Get the FCM token
+        Messaging.messaging().token { token, error in
+            if let error = error {
+                print("Error getting FCM token: \(error)")
+                return
+            }
+            
+            if let token = token {
+                self.saveTokenToFirestore(token)
+            }
+        }
+    }
+    
+    private func saveTokenToFirestore(_ token: String) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("User not logged in, can't save device token")
+            return
+        }
+        
+        let db = Firestore.firestore()
+        let tokenData: [String: Any] = [
+            "token": token,
+            "device": "iOS",
+            "lastUpdated": FieldValue.serverTimestamp()
+        ]
+        
+        db.collection("users").document(userId).collection("deviceTokens").document(token).setData(tokenData) { error in
+            if let error = error {
+                print("Error saving device token: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Photo Contest Specific
+    
+    func sendPhotoContestUnlockedNotification(eventId: String, eventName: String) {
+        let notificationType = NotificationType.photoContestUnlocked(eventId: eventId, eventName: eventName)
+        scheduleLocalNotification(for: notificationType, delaySeconds: 2)
+    }
+    
+    // Vendor-triggered photo contest notification
+    func triggerPhotoContestForEvent(eventId: String) {
+        // Get event details
+        let db = Firestore.firestore()
+        db.collection("events").document(eventId).getDocument { [weak self] snapshot, error in
+            guard let self = self,
+                  let data = snapshot?.data(),
+                  let eventName = data["name"] as? String else {
+                print("Error getting event data for contest notification")
+                return
+            }
+            
+            // 1. Send notification to all users with tickets for this event
+            self.notifyCheckedInUsersAboutPhotoContest(eventId: eventId, eventName: eventName)
+            
+            // 2. Update event's contest status in Firestore
+            self.updateEventContestStatus(eventId: eventId, isActive: true)
+        }
+    }
+    
+    private func notifyCheckedInUsersAboutPhotoContest(eventId: String, eventName: String) {
+        // Create notification content
+        let content = UNMutableNotificationContent()
+        content.title = "📸 Photo Contest Now Live!"
+        content.body = "Take your best photo at \(eventName) - you have 12 hours to participate!"
+        content.sound = .default
+        content.userInfo = [
+            "eventId": eventId,
+            "eventName": eventName,
+            "type": "vendor_triggered_contest"
+        ]
+        
+        // Trigger notification immediately
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        
+        // Create request with unique identifier 
+        let request = UNNotificationRequest(
+            identifier: "vendor_photo_contest_\(eventId)_\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+        
+        // Schedule notification
+        self.notificationCenter.add(request) { error in
+            if let error = error {
+                print("Error scheduling vendor-triggered contest notification: \(error)")
+            } else {
+                print("Vendor-triggered contest notification scheduled successfully")
+            }
+        }
+        
+        // For FCM, we would typically send to all users with tokens registered for this event
+        // This would be handled by a Cloud Function in a real implementation
+    }
+    
+    private func updateEventContestStatus(eventId: String, isActive: Bool) {
+        let db = Firestore.firestore()
+        db.collection("events").document(eventId).updateData([
+            "photoContestActive": isActive,
+            "photoContestStartTime": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                print("Error updating event contest status: \(error)")
+            } else {
+                print("Event contest status updated successfully")
+            }
+        }
+    }
+    
+    // End photo contest for an event
+    func endPhotoContestForEvent(eventId: String) {
+        // Update event's contest status in Firestore
+        let db = Firestore.firestore()
+        db.collection("events").document(eventId).updateData([
+            "photoContestActive": false,
+            "photoContestEndTime": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                print("Error ending event contest: \(error)")
+            } else {
+                print("Event contest ended successfully")
+            }
+        }
+    }
+    
+    // MARK: - Notification Management
+    
+    func cancelNotification(identifier: String) {
+        self.notificationCenter.removePendingNotificationRequests(withIdentifiers: [identifier])
+        self.notificationCenter.removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
+    
+    func cancelAllNotifications() {
+        self.notificationCenter.removeAllPendingNotificationRequests()
+        self.notificationCenter.removeAllDeliveredNotifications()
+    }
+}
 
-    // Ensure notifications work in foreground
+// MARK: - UNUserNotificationCenterDelegate
+
+extension NotificationManager: UNUserNotificationCenterDelegate {
+    // Called when a notification is displayed and the app is in the foreground
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .sound])
+        // Show the notification even when the app is in the foreground
+        completionHandler([.banner, .sound, .badge])
+    }
+    
+    // Called when a user interacts with a notification
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let userInfo = response.notification.request.content.userInfo
+        
+        // Handle navigation based on notification type
+        if let type = userInfo["type"] as? String {
+            switch type {
+            case "photo_contest_unlocked":
+                if let eventId = userInfo["eventId"] as? String {
+                    // Handle navigation to photo contest (this would be implemented by the app's navigation system)
+                    print("Should navigate to photo contest for event \(eventId)")
+                    
+                    // Post a notification that can be observed by the app to navigate
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToPhotoContest"),
+                        object: nil,
+                        userInfo: userInfo
+                    )
+                }
+            case "new_event", "upcoming_event":
+                if let eventId = userInfo["eventId"] as? String {
+                    // Handle navigation to event details
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToEvent"),
+                        object: nil,
+                        userInfo: userInfo
+                    )
+                }
+            case "ticket_confirmation":
+                if let ticketId = userInfo["ticketId"] as? String {
+                    // Handle navigation to ticket details
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToTicket"),
+                        object: nil,
+                        userInfo: userInfo
+                    )
+                }
+            default:
+                break
+            }
+        }
+        
+        completionHandler()
     }
 }
 

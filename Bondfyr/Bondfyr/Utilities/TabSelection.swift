@@ -11,8 +11,9 @@ class TabSelection: ObservableObject {
     @Published var selectedTab: Tab = .discover
 }
 
-enum Tab {
+enum Tab: Int, Hashable {
     case discover
+    case chat
     case tickets
     case profile
 }

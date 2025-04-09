@@ -18,6 +18,7 @@
 		DC40AA932D91934800D78A39 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AA922D91934800D78A39 /* GoogleSignIn */; };
 		DC40AA952D91934800D78A39 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AA942D91934800D78A39 /* GoogleSignInSwift */; };
 		DC40AAB42D9AAD2500D78A39 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AAB32D9AAD2500D78A39 /* FirebaseStorage */; };
+		DC40AC872DA5790F00D78A39 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AC862DA5790F00D78A39 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DC40AC872DA5790F00D78A39 /* FirebaseMessaging in Frameworks */,
 				DC40AA782D9185E000D78A39 /* FirebaseAppCheck in Frameworks */,
 				DC40AA722D9185E000D78A39 /* FirebaseAnalytics in Frameworks */,
 				DC40AA7A2D9185E000D78A39 /* FirebaseAppDistribution-Beta in Frameworks */,
@@ -169,6 +171,7 @@
 				DC40AA922D91934800D78A39 /* GoogleSignIn */,
 				DC40AA942D91934800D78A39 /* GoogleSignInSwift */,
 				DC40AAB32D9AAD2500D78A39 /* FirebaseStorage */,
+				DC40AC862DA5790F00D78A39 /* FirebaseMessaging */,
 			);
 			productName = Bondfyr;
 			productReference = DCBA6B5C2D90FA0E00214DC5 /* Bondfyr.app */;
@@ -692,6 +695,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DC40AA702D91831000D78A39 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		DC40AC862DA5790F00D78A39 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC40AA702D91831000D78A39 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

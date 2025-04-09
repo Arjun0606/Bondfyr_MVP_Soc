@@ -41,9 +41,36 @@ struct SplashView: View {
                 .onDisappear {
                     print("GoogleSignInView disappeared, checking auth...")
                     // When GoogleSignInView disappears, check if we are logged in
-                    // This helps recover from the sign-in loop
-                    if Auth.auth().currentUser != nil {
-                        checkAuthStatus()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        if let user = Auth.auth().currentUser {
+                            print("Found authenticated user after GoogleSignInView disappeared: \(user.uid)")
+                            
+                            // Check if we have a valid profile or need to create one
+                            self.authViewModel.fetchUserProfile { success in
+                                if success {
+                                    // Normal sign-in with existing profile
+                                    print("User has an existing profile, navigating to main view")
+                                    DispatchQueue.main.async {
+                                        self.navigateToMainView = true
+                                    }
+                                } else {
+                                    // New user or deleted account, needs profile creation
+                                    print("User needs to create a profile, navigating to profile form")
+                                    DispatchQueue.main.async {
+                                        self.authViewModel.isLoggedIn = true
+                                        self.navigateToProfileForm = true
+                                    }
+                                }
+                            }
+                        } else {
+                            print("No authenticated user after GoogleSignInView disappeared")
+                            // If we get here with no user, we need to ensure the sign-in view stays presented
+                            if !navigateToMainView && !navigateToProfileForm && !navigateToOnboarding {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    navigateToSignIn = true
+                                }
+                            }
+                        }
                     }
                 }
         }
@@ -62,6 +89,38 @@ struct SplashView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserDidLogin"))) { _ in
             // Listen for login notification from GoogleSignInView
             checkAuthStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserDidLogout"))) { _ in
+            // Listen for logout notification
+            print("Received UserDidLogout notification, navigating to sign in")
+            
+            // First ensure we're not showing other screens
+            navigateToMainView = false
+            navigateToProfileForm = false
+            navigateToOnboarding = false
+            
+            // Clear auth state in view model
+            DispatchQueue.main.async {
+                authViewModel.currentUser = nil
+                authViewModel.isLoggedIn = false
+            }
+            
+            // Force sign out from Firebase
+            if Auth.auth().currentUser != nil {
+                do {
+                    try Auth.auth().signOut()
+                    print("Successfully signed out from Firebase Auth")
+                } catch {
+                    print("Error signing out: \(error)")
+                }
+            }
+            
+            // Allow any pending dismiss animations to complete
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Force show sign in view
+                navigateToSignIn = true
+                print("Navigation to sign-in triggered after logout")
+            }
         }
     }
     
@@ -94,19 +153,45 @@ struct SplashView: View {
         navigateToSignIn = false
         navigateToOnboarding = false
         
+        // First check if we have a Firebase user
         if let user = Auth.auth().currentUser {
             print("Found current user: \(user.uid)")
+            
+            // Check if we need to reauthenticate due to session expiration
+            let currentTime = Date().timeIntervalSince1970
+            let expirationWindow = 3600.0 // 1 hour in seconds
+            
+            if let lastAuthTime = user.metadata.lastSignInDate?.timeIntervalSince1970,
+               currentTime - lastAuthTime > expirationWindow {
+                print("User session may have expired, redirecting to sign in")
+                // Force sign out and redirect to sign in
+                try? Auth.auth().signOut()
+                navigateToSignIn = true
+                return
+            }
+            
+            // Check if we have a user profile
             authViewModel.fetchUserProfile { success in
                 if success && authViewModel.currentUser != nil {
                     print("User profile loaded - navigating to main view")
                     navigateToMainView = true
                 } else {
                     print("No user profile - navigating to profile form")
-                    navigateToProfileForm = true
+                    // Ensure we set isLoggedIn true since we have a Firebase user
+                    DispatchQueue.main.async {
+                        self.authViewModel.isLoggedIn = true
+                        self.navigateToProfileForm = true
+                    }
                 }
             }
         } else {
             print("No current user found")
+            // Ensure view model state is clean
+            DispatchQueue.main.async {
+                self.authViewModel.currentUser = nil
+                self.authViewModel.isLoggedIn = false
+            }
+            
             if !hasSeenOnboarding {
                 print("Navigating to onboarding")
                 navigateToOnboarding = true

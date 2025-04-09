@@ -46,7 +46,7 @@ struct ProfileFormView: View {
                 .cornerRadius(10)
                 .foregroundColor(.white)
 
-            Text("We ask for your phone in case clubs need to contact you for entry updates.")
+            Text("Phone number is required for venue contact and event updates.")
                 .font(.footnote)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)

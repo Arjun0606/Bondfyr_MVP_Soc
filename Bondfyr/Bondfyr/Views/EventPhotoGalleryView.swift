@@ -8,7 +8,7 @@ struct EventPhotoGalleryView: View {
     let eventName: String
     
     @StateObject private var photoManager = PhotoManager.shared
-    @State private var selectedPhoto: EventPhoto?
+    @State private var selectedPhoto: GalleryPhoto?
     @State private var isShowingPhotoCapture = false
     @State private var showLikeLeaderboard = true
     @State private var hasCheckedIn = false
@@ -20,7 +20,7 @@ struct EventPhotoGalleryView: View {
         GridItem(.flexible())
     ]
     
-    var topContestPhotos: [EventPhoto] {
+    var topContestPhotos: [GalleryPhoto] {
         let sorted = photoManager.photos.sorted { $0.likes > $1.likes }
         return Array(sorted.prefix(3))
     }
@@ -294,7 +294,11 @@ struct EventPhotoGalleryView: View {
         }
         .onAppear {
             checkUserStatus()
-            photoManager.fetchPhotos(eventId: eventId, contestOnly: true)
+            photoManager.getPhotos(for: eventId) { photos in
+                DispatchQueue.main.async {
+                    self.photoManager.photos = photos.filter { $0.isContestEntry }
+                }
+            }
         }
         .fullScreenCover(isPresented: $isShowingPhotoCapture) {
             if hasCheckedIn {
@@ -302,7 +306,7 @@ struct EventPhotoGalleryView: View {
             }
         }
         .sheet(item: $selectedPhoto) { photo in
-            PhotoDetailView(photo: photo)
+            EventPhotoDetailView(photo: photo)
         }
     }
     
@@ -351,8 +355,8 @@ struct EventPhotoGalleryView: View {
     }
 }
 
-struct PhotoDetailView: View {
-    let photo: EventPhoto
+struct EventPhotoDetailView: View {
+    let photo: GalleryPhoto
     @State private var isLiked = false
     @Environment(\.presentationMode) var presentationMode
     

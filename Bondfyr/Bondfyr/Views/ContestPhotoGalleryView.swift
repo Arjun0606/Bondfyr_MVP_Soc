@@ -6,7 +6,7 @@ struct ContestPhotoGalleryView: View {
     let eventName: String
     
     @StateObject private var photoManager = PhotoManager.shared
-    @State private var selectedPhoto: EventPhoto?
+    @State private var selectedPhoto: GalleryPhoto?
     @State private var isShowingPhotoCapture = false
     @State private var contestStatus: ContestStatus = .checking
     @Environment(\.presentationMode) var presentationMode
@@ -217,8 +217,12 @@ struct ContestPhotoGalleryView: View {
             }
         }
         .onAppear {
-            photoManager.fetchPhotos(eventId: eventId, contestOnly: true)
-            checkContestStatus()
+            photoManager.getPhotos(for: eventId) { photos in
+                DispatchQueue.main.async {
+                    self.photoManager.photos = photos.filter { $0.isContestEntry }
+                    self.checkContestStatus()
+                }
+            }
         }
         .fullScreenCover(isPresented: $isShowingPhotoCapture) {
             ContestPhotoCaptureView(eventId: eventId)
@@ -286,7 +290,7 @@ struct ContestPhotoGalleryView: View {
         }
     }
     
-    private var topPhotos: [EventPhoto] {
+    private var topPhotos: [GalleryPhoto] {
         // Return top 3 photos by likes (or all if less than 3)
         let sorted = photoManager.photos.sorted { $0.likes > $1.likes }
         return Array(sorted.prefix(3))
@@ -325,7 +329,7 @@ struct ContestPhotoGalleryView: View {
 }
 
 struct ContestPhotoDetailView: View {
-    let photo: EventPhoto
+    let photo: GalleryPhoto
     @State private var isLiked = false
     @Environment(\.presentationMode) var presentationMode
     
@@ -390,7 +394,7 @@ struct ContestPhotoDetailView: View {
                         Button(action: {
                             if !isLiked {
                                 isLiked = true
-                                PhotoManager.shared.likePhoto(photoId: photo.id)
+                                PhotoManager.shared.likePhoto(photo: photo)
                             }
                         }) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")

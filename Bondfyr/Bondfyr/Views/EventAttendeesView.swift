@@ -188,7 +188,9 @@ struct EventAttendeesView: View {
                     openInstagram(handle: event.instagramHandle)
                 }) {
                     HStack {
-                        Image(systemName: "camera.circle.fill")
+                        Image("instagram_logo")
+                            .resizable()
+                            .frame(width: 22, height: 22)
                         Text("Follow \(event.name) on Instagram")
                         Spacer()
                         Image(systemName: "arrow.up.right.square")

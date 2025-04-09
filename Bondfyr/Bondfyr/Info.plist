@@ -16,7 +16,13 @@
 		</dict>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Bondfyr needs access to your camera to capture event photos.</string>
+	<string>Bondfyr needs access to your camera to take photos for events and contests.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Bondfyr needs access to your photo library to save and share photos from events.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Bondfyr may need access to your microphone when capturing video.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Bondfyr needs calendar access to add events to your calendar and check for scheduling conflicts.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

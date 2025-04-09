@@ -119,4 +119,24 @@ class CheckInManager: ObservableObject {
                 completion(userIds)
             }
     }
+    
+    // Check if user has checked in to a specific event
+    func hasCheckedInToEvent(eventId: String) -> Bool {
+        guard let checkIn = activeCheckIn else {
+            return false
+        }
+        
+        return checkIn.eventId == eventId && checkIn.isActive
+    }
+    
+    // Get check-in time for a specific event
+    func getCheckInTime(eventId: String) -> Date? {
+        guard let checkIn = activeCheckIn, 
+              checkIn.eventId == eventId,
+              checkIn.isActive else {
+            return nil
+        }
+        
+        return checkIn.timestamp
+    }
 } 

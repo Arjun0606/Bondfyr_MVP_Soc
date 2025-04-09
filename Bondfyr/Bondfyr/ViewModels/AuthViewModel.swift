@@ -86,6 +86,7 @@ class AuthViewModel: ObservableObject {
 
     func fetchUserProfile(completion: @escaping (Bool) -> Void) {
         guard let uid = auth.currentUser?.uid else {
+            print("❌ No Firebase user found when trying to fetch profile")
             DispatchQueue.main.async {
                 self.currentUser = nil
                 self.isLoggedIn = false
@@ -98,9 +99,18 @@ class AuthViewModel: ObservableObject {
         db.collection("users").document(uid).getDocument { snapshot, error in
             if let error = error {
                 print("Error fetching user profile: \(error.localizedDescription)")
+                if let nsError = error as NSError?, nsError.domain.contains("app_check") {
+                    // AppCheck error - this is likely a temporary issue, don't reset auth state
+                    print("⚠️ AppCheck error - this is likely a temporary issue")
+                    completion(false)
+                    return
+                }
+                
                 DispatchQueue.main.async {
                     self.currentUser = nil
-                    self.isLoggedIn = false
+                    // Keep isLoggedIn true if we have a valid Firebase user but had error fetching profile
+                    // This allows us to go to profile creation instead of sign-in loop
+                    self.isLoggedIn = self.auth.currentUser != nil
                 }
                 completion(false)
                 return
@@ -113,7 +123,12 @@ class AuthViewModel: ObservableObject {
                let phoneNumber = data["phoneNumber"] as? String {
 
                 let dob = dobTimestamp.dateValue()
-                let appUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
+                
+                // Get role from user data or default to "user"
+                let roleString = data["role"] as? String ?? "user"
+                let role = AppUser.UserRole(rawValue: roleString) ?? .user
+                
+                let appUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber, role: role)
 
                 print("User profile loaded: \(name)")
                 DispatchQueue.main.async {
@@ -125,7 +140,9 @@ class AuthViewModel: ObservableObject {
                 print("User profile data incomplete or missing")
                 DispatchQueue.main.async {
                     self.currentUser = nil
-                    self.isLoggedIn = false
+                    // Keep isLoggedIn true if we have a valid Firebase user but had error fetching profile
+                    // This allows us to go to profile creation instead of sign-in loop
+                    self.isLoggedIn = self.auth.currentUser != nil
                 }
                 completion(false)
             }
@@ -140,8 +157,9 @@ class AuthViewModel: ObservableObject {
                 self.currentUser = nil
                 self.isLoggedIn = false
                 
-                // Post notification that logout is complete
-                NotificationCenter.default.post(name: NSNotification.Name("UserDidLogout"), object: nil)
+                // Remove notification post from here since we're handling it in SettingsView
+                // to better control the navigation flow
+                // NotificationCenter.default.post(name: NSNotification.Name("UserDidLogout"), object: nil)
             }
             
             // Reset to initial state if needed
@@ -158,10 +176,32 @@ class AuthViewModel: ObservableObject {
         // For now, just ensure we're on the main thread
         DispatchQueue.main.async {
             // Clear any cached data that should be reset
-            // Example: clear out any user-specific cached data
             UserDefaults.standard.removeObject(forKey: "lastViewedEventId")
             
+            // Clear other user-specific data
+            UserDefaults.standard.synchronize()
+            
             // Don't clear out hasSeenOnboarding as we don't want to show onboarding again
+        }
+    }
+    
+    func updateCurrentUser(_ user: AppUser) {
+        DispatchQueue.main.async {
+            self.currentUser = user
+        }
+        
+        // Update Firestore with the user data
+        let userRef = db.collection("users").document(user.uid)
+        userRef.updateData([
+            "name": user.name,
+            "phoneNumber": user.phoneNumber,
+            "role": user.role.rawValue
+        ]) { error in
+            if let error = error {
+                print("Error updating user in Firestore: \(error.localizedDescription)")
+            } else {
+                print("User data updated successfully in Firestore")
+            }
         }
     }
 }

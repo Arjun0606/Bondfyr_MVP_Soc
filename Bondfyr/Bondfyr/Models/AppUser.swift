@@ -13,4 +13,20 @@ struct AppUser: Codable {
     let email: String
     let dob: Date
     let phoneNumber: String
+    let role: UserRole
+    
+    enum UserRole: String, Codable {
+        case user
+        case vendor
+        case admin
+    }
+    
+    init(uid: String, name: String, email: String, dob: Date, phoneNumber: String, role: UserRole = .user) {
+        self.uid = uid
+        self.name = name
+        self.email = email
+        self.dob = dob
+        self.phoneNumber = phoneNumber
+        self.role = role
+    }
 }

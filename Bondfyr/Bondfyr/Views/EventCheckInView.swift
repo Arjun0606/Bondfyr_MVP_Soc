@@ -15,6 +15,7 @@ struct EventCheckInView: View {
     @State private var isLoading = false
     @State private var userTickets: [TicketModel] = []
     @State private var selectedTicket: TicketModel?
+    @State private var showEventChat = false
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -68,38 +69,57 @@ struct EventCheckInView: View {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 } else if checkInManager.activeCheckIn != nil {
-                    // User is checked in
-                    VStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .resizable()
-                            .frame(width: 50, height: 50)
-                            .foregroundColor(.green)
-                        
-                        Text("You're checked in!")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        Text("Checked in at \(formatDate(checkInManager.activeCheckIn?.timestamp ?? Date()))")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        
-                        Button(action: {
-                            checkOut()
-                        }) {
-                            Text("Check Out")
+                    // If already checked in
+                    if let checkIn = checkInManager.activeCheckIn, checkIn.eventId == event.id.uuidString {
+                        VStack(spacing: 16) {
+                            // Success icon and message
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.green)
+                            
+                            Text("You're checked in!")
+                                .font(.headline)
                                 .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(Color.red)
-                                .cornerRadius(8)
+                            
+                            Text("Check-in time: \(formatDate(checkIn.timestamp))")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            HStack(spacing: 12) {
+                                // Check-out button
+                                Button(action: {
+                                    checkOut()
+                                }) {
+                                    Text("Check Out")
+                                        .foregroundColor(.white)
+                                        .padding(.vertical, 10)
+                                        .padding(.horizontal, 20)
+                                        .background(Color.red.opacity(0.7))
+                                        .cornerRadius(8)
+                                }
+                                
+                                // Event chat button
+                                Button(action: {
+                                    showEventChat = true
+                                }) {
+                                    HStack {
+                                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                                            .font(.system(size: 14))
+                                        Text("Event Chat")
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 20)
+                                    .background(Color.pink)
+                                    .cornerRadius(8)
+                                }
+                            }
                         }
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(12)
                         .padding(.horizontal)
-                        .padding(.top, 10)
                     }
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
                 } else if userTickets.isEmpty {
                     // No tickets
                     VStack(spacing: 12) {
@@ -242,6 +262,9 @@ struct EventCheckInView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .sheet(isPresented: $showEventChat) {
+            EventChatView(event: event)
+        }
     }
     
     private func loadData() {
@@ -307,6 +330,10 @@ struct EventCheckInView: View {
             
             if success {
                 loadData()
+                // After successful check-in, show event chat option
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showEventChat = true
+                }
             }
         }
     }
