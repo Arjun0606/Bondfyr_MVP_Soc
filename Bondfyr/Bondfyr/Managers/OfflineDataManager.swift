@@ -162,6 +162,7 @@ class OfflineDataManager {
 // Codable version of Event for caching
 struct CachedEvent: Codable {
     let id: String
+    let firestoreId: String?
     let name: String
     let description: String
     let date: String
@@ -173,9 +174,11 @@ struct CachedEvent: Codable {
     let mapsURL: String
     let galleryImages: [String]?
     let instagramHandle: String
+    let photoContestActive: Bool
     
     init(from event: Event) {
         self.id = event.id.uuidString
+        self.firestoreId = event.firestoreId
         self.name = event.name
         self.description = event.description
         self.date = event.date
@@ -187,10 +190,12 @@ struct CachedEvent: Codable {
         self.mapsURL = event.mapsURL
         self.galleryImages = event.galleryImages
         self.instagramHandle = event.instagramHandle
+        self.photoContestActive = event.photoContestActive
     }
     
     func toEvent() -> Event {
         return Event(
+            firestoreId: firestoreId,
             name: name,
             description: description,
             date: date,
@@ -201,7 +206,8 @@ struct CachedEvent: Codable {
             city: city,
             mapsURL: mapsURL,
             galleryImages: galleryImages,
-            instagramHandle: instagramHandle
+            instagramHandle: instagramHandle,
+            photoContestActive: photoContestActive
         )
     }
 }

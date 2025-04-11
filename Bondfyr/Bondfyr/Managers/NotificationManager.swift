@@ -379,7 +379,13 @@ class NotificationManager: NSObject {
             self.notifyCheckedInUsersAboutPhotoContest(eventId: eventId, eventName: eventName)
             
             // 2. Update event's contest status in Firestore
-            self.updateEventContestStatus(eventId: eventId, isActive: true)
+            EventService.shared.togglePhotoContest(eventId: eventId, active: true) { success, error in
+                if let error = error {
+                    print("Error updating contest status: \(error.localizedDescription)")
+                } else {
+                    print("Contest status updated successfully")
+                }
+            }
         }
     }
     
@@ -416,20 +422,6 @@ class NotificationManager: NSObject {
         
         // For FCM, we would typically send to all users with tokens registered for this event
         // This would be handled by a Cloud Function in a real implementation
-    }
-    
-    private func updateEventContestStatus(eventId: String, isActive: Bool) {
-        let db = Firestore.firestore()
-        db.collection("events").document(eventId).updateData([
-            "photoContestActive": isActive,
-            "photoContestStartTime": FieldValue.serverTimestamp()
-        ]) { error in
-            if let error = error {
-                print("Error updating event contest status: \(error)")
-            } else {
-                print("Event contest status updated successfully")
-            }
-        }
     }
     
     // End photo contest for an event

@@ -509,6 +509,9 @@ struct EventDetailView: View {
     
     // Check if event chat is available based on check-in status
     private var isEventChatAvailable: Bool {
+        if let firestoreId = event.firestoreId {
+            return CheckInManager.shared.hasCheckedInToEvent(eventId: firestoreId)
+        }
         return CheckInManager.shared.hasCheckedInToEvent(eventId: event.id.uuidString)
     }
 
@@ -602,6 +605,16 @@ struct EventDetailView: View {
         
         message += "\n\nDo you still want to add this event to your calendar?"
         return message
+    }
+
+    // Add this method to trigger photo contest events with Firestore IDs
+    private func startPhotoContest() {
+        guard let firestoreId = event.firestoreId else {
+            print("Cannot start contest: No Firestore ID")
+            return
+        }
+        
+        NotificationManager.shared.triggerPhotoContestForEvent(eventId: firestoreId)
     }
 }
 

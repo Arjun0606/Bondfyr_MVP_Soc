@@ -28,136 +28,130 @@ struct ContestPhotoCaptureView: View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
             
-            if isShowingCamera {
-                ZStack {
-                    CameraView(capturedImage: $capturedImage, isShowingCamera: $isShowingCamera)
-                        .edgesIgnoringSafeArea(.all)
-                        .transition(.opacity)
-                    
-                    VStack {
-                        HStack {
-                            Button(action: {
-                                // Stop camera and cleanup
-                                isShowingCamera = false
-                                capturedImage = nil
-                                timer?.invalidate()
-                                removeScreenshotDetection()
-                                
-                                // Dismiss the view immediately
-                                DispatchQueue.main.async {
-                                    presentationMode.wrappedValue.dismiss()
-                                }
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 30))
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .background(Color.black.opacity(0.5))
-                                    .clipShape(Circle())
+            VStack {
+                // Header with back button
+                if !isShowingCamera && !isUploading && capturedImage == nil {
+                    HStack {
+                        Button(action: navigateToEventDetail) {
+                            HStack {
+                                Image(systemName: "chevron.left")
+                                Text("Back")
                             }
-                            .padding(.leading)
-                            Spacer()
+                            .foregroundColor(.white)
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        
                         Spacer()
                     }
                 }
-            } else if let image = capturedImage {
-                // Review captured photo
-                VStack {
-                    Text("Your Photo")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                    
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .cornerRadius(12)
-                        .padding()
-                    
-                    HStack(spacing: 30) {
-                        Button(action: {
-                            // Retake photo
-                            capturedImage = nil
-                            isShowingCamera = true
-                        }) {
-                            VStack {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 24))
-                                Text("Retake")
-                                    .font(.caption)
-                            }
+                
+                // Rest of the view content
+                if isShowingCamera {
+                    Color.black
+                        .edgesIgnoringSafeArea(.all)
+                        .onAppear {
+                            openCamera()
+                        }
+                } else if let image = capturedImage {
+                    // Review captured photo
+                    VStack {
+                        Text("Your Photo")
+                            .font(.headline)
                             .foregroundColor(.white)
+                            .padding()
+                        
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .cornerRadius(12)
+                            .padding()
+                        
+                        HStack(spacing: 30) {
+                            Button(action: {
+                                // Retake photo
+                                capturedImage = nil
+                                isShowingCamera = true
+                            }) {
+                                VStack {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .font(.system(size: 24))
+                                    Text("Retake")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.white)
+                            }
+                            
+                            Button(action: {
+                                // Upload photo
+                                uploadPhoto(image)
+                            }) {
+                                VStack {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 24))
+                                    Text("Upload")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.white)
+                            }
+                            .disabled(isUploading)
+                        }
+                        .padding(.top, 30)
+                        
+                        if isUploading {
+                            ProgressView("Uploading...")
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .foregroundColor(.white)
+                                .padding(.top, 20)
                         }
                         
-                        Button(action: {
-                            // Upload photo
-                            uploadPhoto(image)
-                        }) {
-                            VStack {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 24))
-                                Text("Upload")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.white)
-                        }
-                        .disabled(isUploading)
-                    }
-                    .padding(.top, 30)
-                    
-                    if isUploading {
-                        ProgressView("Uploading...")
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .foregroundColor(.white)
-                            .padding(.top, 20)
-                    }
-                    
-                    if uploadComplete {
-                        Text("Photo uploaded successfully!")
-                            .foregroundColor(.green)
-                            .padding()
-                            .onAppear {
-                                // Dismiss the view after upload is complete
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                    presentationMode.wrappedValue.dismiss()
+                        if uploadComplete {
+                            Text("Photo uploaded successfully!")
+                                .foregroundColor(.green)
+                                .padding()
+                                .onAppear {
+                                    // Navigate back to event details instead of just dismissing
+                                    print("Photo upload complete, navigating to event details...")
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                        self.navigateToEventDetail()
+                                    }
                                 }
-                            }
+                        }
                     }
                 }
             }
-        }
-        .alert(isPresented: $showErrorAlert) {
-            Alert(
-                title: Text("Error"),
-                message: Text(errorMessage),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .onAppear {
-            print("ContestPhotoCaptureView appeared, will open camera")
-            
-            // Set up screenshot detection
-            setupScreenshotDetection()
-            
-            // Open camera immediately
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                isShowingCamera = true
+            .alert(isPresented: $showErrorAlert) {
+                Alert(
+                    title: Text("Error"),
+                    message: Text(errorMessage),
+                    dismissButton: .default(Text("OK"))
+                )
             }
-        }
-        .onDisappear {
-            // Cleanup all resources
-            isShowingCamera = false
-            capturedImage = nil
-            timer?.invalidate()
-            removeScreenshotDetection()
-        }
-        .alert("Success", isPresented: $showSuccessAlert) {
-            Button("View Contest", role: .cancel) {
-                dismissToGallery()
+            .onAppear {
+                print("ContestPhotoCaptureView appeared, will open camera")
+                
+                // Set up screenshot detection
+                setupScreenshotDetection()
+                
+                // Open camera immediately
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    isShowingCamera = true
+                }
             }
-        } message: {
-            Text("Your retro photo has been submitted to the contest!")
+            .onDisappear {
+                // Cleanup all resources
+                isShowingCamera = false
+                capturedImage = nil
+                timer?.invalidate()
+                removeScreenshotDetection()
+            }
+            .alert("Success", isPresented: $showSuccessAlert) {
+                Button("View Contest", role: .cancel) {
+                    dismissToGallery()
+                }
+            } message: {
+                Text("Your retro photo has been submitted to the contest!")
+            }
         }
     }
     
@@ -285,28 +279,94 @@ struct ContestPhotoCaptureView: View {
     private func openCamera() {
         print("Opening camera for contest photo capture")
         
-        // Fall back to standard UIImagePickerController which is more reliable
+        // Use standard UIImagePickerController with built-in controls
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.cameraCaptureMode = .photo
         picker.allowsEditing = false
+        
+        // Enable built-in controls
+        picker.showsCameraControls = true
+        picker.cameraFlashMode = .auto
+        
+        // Use the delegate for image capture
         picker.delegate = ImagePickerDelegate(onCapture: handleCapturedImage)
         
         // Present the camera
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootViewController = windowScene.windows.first?.rootViewController {
-            // Check if a controller is already being presented
-            if rootViewController.presentedViewController != nil {
-                rootViewController.dismiss(animated: true) {
-                    // After dismissing, then present the camera
-                    rootViewController.present(picker, animated: true)
-                }
-            } else {
-                rootViewController.present(picker, animated: true)
-            }
+            rootViewController.present(picker, animated: true)
         } else {
             print("ERROR: Could not find root view controller to present camera")
         }
+    }
+    
+    private func createCameraOverlay(picker: UIImagePickerController) -> UIView {
+        let screenSize = UIScreen.main.bounds.size
+        let overlayView = UIView(frame: CGRect(x: 0, y: 0, width: screenSize.width, height: screenSize.height))
+        overlayView.backgroundColor = .clear
+        
+        // Create a safer area for buttons (avoid notch/home indicator)
+        let safeTopPadding: CGFloat = 50
+        let safeBottomPadding: CGFloat = 120
+        
+        // Flash toggle button
+        let flashButton = UIButton(type: .system)
+        flashButton.setImage(UIImage(systemName: "bolt.slash.fill"), for: .normal)
+        flashButton.tintColor = .white
+        flashButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        flashButton.layer.cornerRadius = 25
+        flashButton.frame = CGRect(x: screenSize.width - 70, y: safeTopPadding, width: 50, height: 50)
+        
+        var isFlashOn = false
+        flashButton.addAction(UIAction { _ in
+            isFlashOn.toggle()
+            flashButton.setImage(UIImage(systemName: isFlashOn ? "bolt.fill" : "bolt.slash.fill"), for: .normal)
+            picker.cameraFlashMode = isFlashOn ? .on : .off
+        }, for: .touchUpInside)
+        
+        // Camera flip button
+        let flipButton = UIButton(type: .system)
+        flipButton.setImage(UIImage(systemName: "camera.rotate.fill"), for: .normal)
+        flipButton.tintColor = .white
+        flipButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        flipButton.layer.cornerRadius = 25
+        flipButton.frame = CGRect(x: 20, y: safeTopPadding, width: 50, height: 50)
+        
+        flipButton.addAction(UIAction { _ in
+            picker.cameraDevice = picker.cameraDevice == .rear ? .front : .rear
+        }, for: .touchUpInside)
+        
+        // Capture button
+        let captureButton = UIButton(type: .system)
+        captureButton.backgroundColor = .white
+        captureButton.layer.cornerRadius = 35
+        captureButton.layer.borderWidth = 5
+        captureButton.layer.borderColor = UIColor.white.withAlphaComponent(0.5).cgColor
+        captureButton.frame = CGRect(x: (screenSize.width - 70) / 2, y: screenSize.height - safeBottomPadding, width: 70, height: 70)
+        
+        captureButton.addAction(UIAction { _ in
+            // Flash animation
+            UIView.animate(withDuration: 0.1, animations: {
+                overlayView.backgroundColor = .white
+                captureButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+            }) { _ in
+                UIView.animate(withDuration: 0.1) {
+                    overlayView.backgroundColor = .clear
+                    captureButton.transform = .identity
+                }
+            }
+            
+            // Take picture
+            picker.takePicture()
+        }, for: .touchUpInside)
+        
+        // Add all controls to overlay
+        overlayView.addSubview(flashButton)
+        overlayView.addSubview(flipButton)
+        overlayView.addSubview(captureButton)
+        
+        return overlayView
     }
     
     private func handleCapturedImage(image: UIImage?) {
@@ -364,7 +424,7 @@ struct ContestPhotoCaptureView: View {
                 }
                 
                 // Create a document in Firestore
-                savePhotoMetadata(imageUrl: downloadURL.absoluteString)
+                self.savePhotoMetadata(imageUrl: downloadURL.absoluteString)
             }
         }
     }
@@ -384,20 +444,83 @@ struct ContestPhotoCaptureView: View {
             "eventId": eventId,
             "imageUrl": imageUrl,
             "timestamp": FieldValue.serverTimestamp(),
-            "likeCount": 0
+            "likeCount": 0,
+            "isContestEntry": true,  // Add this flag to identify contest photos
+            "isPublic": true  // Make the photo publicly readable
         ]
         
-        db.collection("photo_contests").document().setData(photoData) { error in
-            isUploading = false
-            
+        // Save to event_photos collection first
+        db.collection("event_photos").document().setData(photoData) { error in
             if let error = error {
-                errorMessage = "Failed to save photo data: \(error.localizedDescription)"
-                showErrorAlert = true
+                print("Error saving to event_photos: \(error.localizedDescription)")
+                self.errorMessage = "Failed to save photo: \(error.localizedDescription)"
+                self.showErrorAlert = true
+                self.isUploading = false
                 return
             }
             
-            // Success
-            uploadComplete = true
+            // Then update the event's gallery
+            db.collection("events").document(self.eventId).updateData([
+                "galleryImages": FieldValue.arrayUnion([imageUrl])
+            ]) { error in
+                if let error = error {
+                    print("Error updating event gallery: \(error.localizedDescription)")
+                }
+                
+                // Finally save to photo_contests collection
+                db.collection("photo_contests").document().setData(photoData) { error in
+                    self.isUploading = false
+                    
+                    if let error = error {
+                        print("Error saving to photo_contests: \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    // Success - update UI and navigate
+                    DispatchQueue.main.async {
+                        self.uploadComplete = true
+                        
+                        // Notify that a new contest photo was added
+                        NotificationCenter.default.post(
+                            name: Notification.Name("ContestPhotoUploaded"),
+                            object: nil,
+                            userInfo: [
+                                "eventId": self.eventId,
+                                "imageUrl": imageUrl
+                            ]
+                        )
+                        
+                        // Show success alert and navigate
+                        self.showSuccessAlert = true
+                        
+                        // Navigate back to event details after a brief delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            self.navigateToEventDetail()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func navigateToEventDetail() {
+        print("Navigating back to event detail for event ID: \(eventId)")
+        
+        // First dismiss this view
+        dismissView()
+        
+        // Then post notification to navigate back to the event detail
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NotificationCenter.default.post(
+                name: Notification.Name("NavigateToEvent"),
+                object: nil,
+                userInfo: [
+                    "eventId": self.eventId,
+                    "source": "photoContest",
+                    "action": "showDetails",
+                    "forceRefresh": true
+                ]
+            )
         }
     }
     
@@ -460,12 +583,29 @@ struct ContestPhotoCaptureView: View {
     }
     
     private func dismissView() {
-        presentationMode.wrappedValue.dismiss()
+        // Ensure we're on the main thread when dismissing
+        DispatchQueue.main.async {
+            self.presentationMode.wrappedValue.dismiss()
+        }
     }
     
     private func dismissToGallery() {
-        NotificationCenter.default.post(name: Notification.Name("ContestPhotoUploaded"), object: nil)
+        // First dismiss this view
         dismissView()
+        
+        // Then post notification to navigate to gallery
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NotificationCenter.default.post(
+                name: Notification.Name("NavigateToEvent"),
+                object: nil,
+                userInfo: [
+                    "eventId": self.eventId,
+                    "source": "photoContest",
+                    "action": "showGallery",
+                    "forceRefresh": true
+                ]
+            )
+        }
     }
     
     private func timeString(from seconds: TimeInterval) -> String {
@@ -492,355 +632,6 @@ class ImagePickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigati
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         onCapture(nil)
         picker.dismiss(animated: true)
-    }
-}
-
-// Custom Camera View Controller with flip camera functionality
-class CustomCameraViewController: UIViewController, AVCapturePhotoCaptureDelegate {
-    // Capture session and device
-    private let captureSession = AVCaptureSession()
-    private var currentCameraPosition: AVCaptureDevice.Position = .back
-    private var cameraOutput = AVCapturePhotoOutput()
-    private var previewLayer: AVCaptureVideoPreviewLayer?
-    
-    // UI Elements
-    private var cancelButton: UIButton!
-    private var flipCameraButton: UIButton!
-    private var captureButton: UIButton!
-    
-    // Callback for captured image
-    var onCapture: ((UIImage?) -> Void)?
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        setupUI()
-        setupCaptureSession()
-    }
-    
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        startCaptureSession()
-    }
-    
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopCaptureSession()
-    }
-    
-    private func setupUI() {
-        view.backgroundColor = .black
-        
-        // Preview view
-        let previewView = UIView()
-        previewView.backgroundColor = .black
-        previewView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(previewView)
-        
-        // Camera controls container
-        let controlsView = UIView()
-        controlsView.backgroundColor = .clear
-        controlsView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(controlsView)
-        
-        // Cancel button
-        cancelButton = UIButton(type: .system)
-        cancelButton.translatesAutoresizingMaskIntoConstraints = false
-        cancelButton.setImage(UIImage(systemName: "xmark"), for: .normal)
-        cancelButton.tintColor = .white
-        cancelButton.backgroundColor = UIColor.gray.withAlphaComponent(0.5)
-        cancelButton.layer.cornerRadius = 20
-        cancelButton.addTarget(self, action: #selector(cancelButtonTapped), for: .touchUpInside)
-        view.addSubview(cancelButton)
-        
-        // Flip camera button
-        flipCameraButton = UIButton(type: .system)
-        flipCameraButton.translatesAutoresizingMaskIntoConstraints = false
-        flipCameraButton.setImage(UIImage(systemName: "camera.rotate"), for: .normal)
-        flipCameraButton.tintColor = .white
-        flipCameraButton.backgroundColor = UIColor.gray.withAlphaComponent(0.5)
-        flipCameraButton.layer.cornerRadius = 20
-        flipCameraButton.addTarget(self, action: #selector(flipCameraButtonTapped), for: .touchUpInside)
-        view.addSubview(flipCameraButton)
-        
-        // Capture button
-        captureButton = UIButton(type: .system)
-        captureButton.translatesAutoresizingMaskIntoConstraints = false
-        captureButton.backgroundColor = .white
-        captureButton.layer.cornerRadius = 35
-        captureButton.layer.borderWidth = 5
-        captureButton.layer.borderColor = UIColor.white.withAlphaComponent(0.5).cgColor
-        captureButton.addTarget(self, action: #selector(captureButtonTapped), for: .touchUpInside)
-        controlsView.addSubview(captureButton)
-        
-        // Setup constraints
-        NSLayoutConstraint.activate([
-            // Preview view
-            previewView.topAnchor.constraint(equalTo: view.topAnchor),
-            previewView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            previewView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            previewView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            // Cancel button
-            cancelButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
-            cancelButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            cancelButton.widthAnchor.constraint(equalToConstant: 40),
-            cancelButton.heightAnchor.constraint(equalToConstant: 40),
-            
-            // Flip camera button
-            flipCameraButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
-            flipCameraButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            flipCameraButton.widthAnchor.constraint(equalToConstant: 40),
-            flipCameraButton.heightAnchor.constraint(equalToConstant: 40),
-            
-            // Controls view
-            controlsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            controlsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            controlsView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            controlsView.heightAnchor.constraint(equalToConstant: 100),
-            
-            // Capture button
-            captureButton.centerXAnchor.constraint(equalTo: controlsView.centerXAnchor),
-            captureButton.centerYAnchor.constraint(equalTo: controlsView.centerYAnchor),
-            captureButton.widthAnchor.constraint(equalToConstant: 70),
-            captureButton.heightAnchor.constraint(equalToConstant: 70)
-        ])
-        
-        // Store the preview view reference to add the layer to
-        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        previewLayer?.videoGravity = .resizeAspectFill
-        previewLayer?.frame = previewView.bounds
-        previewLayer?.connection?.videoOrientation = .portrait
-        
-        if let previewLayer = previewLayer {
-            previewView.layer.addSublayer(previewLayer)
-        }
-    }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        previewLayer?.frame = view.bounds
-    }
-    
-    private func setupCaptureSession() {
-        captureSession.beginConfiguration()
-        
-        // Setup inputs
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentCameraPosition) else {
-            print("Failed to get the camera device")
-            return
-        }
-        
-        do {
-            let cameraInput = try AVCaptureDeviceInput(device: camera)
-            if captureSession.canAddInput(cameraInput) {
-                captureSession.addInput(cameraInput)
-            }
-            
-            if captureSession.canAddOutput(cameraOutput) {
-                captureSession.addOutput(cameraOutput)
-            }
-        } catch {
-            print("Error setting up camera: \(error.localizedDescription)")
-        }
-        
-        captureSession.commitConfiguration()
-    }
-    
-    private func startCaptureSession() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession.startRunning()
-        }
-    }
-    
-    private func stopCaptureSession() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession.stopRunning()
-        }
-    }
-    
-    @objc private func cancelButtonTapped() {
-        dismiss(animated: true) {
-            self.onCapture?(nil)
-        }
-    }
-    
-    @objc private func flipCameraButtonTapped() {
-        // Flip the camera
-        currentCameraPosition = (currentCameraPosition == .back) ? .front : .back
-        
-        // Reconfigure session with new camera
-        captureSession.beginConfiguration()
-        
-        // Remove existing inputs
-        for input in captureSession.inputs {
-            captureSession.removeInput(input)
-        }
-        
-        // Add new input
-        if let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentCameraPosition),
-           let cameraInput = try? AVCaptureDeviceInput(device: camera),
-           captureSession.canAddInput(cameraInput) {
-            captureSession.addInput(cameraInput)
-        }
-        
-        captureSession.commitConfiguration()
-    }
-    
-    @objc private func captureButtonTapped() {
-        // Flash button animation
-        UIView.animate(withDuration: 0.1, animations: {
-            self.view.backgroundColor = UIColor.white
-            self.captureButton.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        }) { _ in
-            UIView.animate(withDuration: 0.1) {
-                self.view.backgroundColor = UIColor.black
-                self.captureButton.transform = CGAffineTransform.identity
-            }
-        }
-        
-        // Capture the photo
-        let settings = AVCapturePhotoSettings()
-        cameraOutput.capturePhoto(with: settings, delegate: self)
-    }
-    
-    // AVCapturePhotoCaptureDelegate method
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if let error = error {
-            print("Error capturing photo: \(error.localizedDescription)")
-            onCapture?(nil)
-            return
-        }
-        
-        guard let imageData = photo.fileDataRepresentation(),
-              let image = UIImage(data: imageData) else {
-            print("Error converting photo to image")
-            onCapture?(nil)
-            return
-        }
-        
-        // Dismiss the camera view and provide the captured image
-        DispatchQueue.main.async {
-            self.dismiss(animated: true) {
-                self.onCapture?(image)
-            }
-        }
-    }
-}
-
-// Camera view using UIViewRepresentable
-struct CameraView: UIViewRepresentable {
-    @Binding var capturedImage: UIImage?
-    @Binding var isShowingCamera: Bool
-    
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: UIScreen.main.bounds)
-        
-        let captureSession = AVCaptureSession()
-        context.coordinator.captureSession = captureSession
-        
-        guard let backCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let input = try? AVCaptureDeviceInput(device: backCamera) else {
-            return view
-        }
-        
-        if captureSession.canAddInput(input) {
-            captureSession.addInput(input)
-        }
-        
-        // Configure photo output
-        let photoOutput = AVCapturePhotoOutput()
-        context.coordinator.photoOutput = photoOutput
-        
-        if captureSession.canAddOutput(photoOutput) {
-            captureSession.addOutput(photoOutput)
-        }
-        
-        // Setup preview layer
-        let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        previewLayer.videoGravity = .resizeAspectFill
-        previewLayer.frame = view.bounds
-        view.layer.addSublayer(previewLayer)
-        
-        // Add capture button
-        let buttonSize: CGFloat = 70
-        let captureButton = UIButton(frame: CGRect(
-            x: (view.bounds.width - buttonSize) / 2,
-            y: view.bounds.height - buttonSize - 60,
-            width: buttonSize,
-            height: buttonSize
-        ))
-        
-        captureButton.backgroundColor = .white
-        captureButton.layer.cornerRadius = buttonSize / 2
-        captureButton.layer.borderWidth = 6
-        captureButton.layer.borderColor = UIColor.white.cgColor
-        captureButton.addTarget(context.coordinator, action: #selector(Coordinator.capturePhoto), for: .touchUpInside)
-        
-        view.addSubview(captureButton)
-        
-        // Start capture session
-        DispatchQueue.global(qos: .userInitiated).async {
-            captureSession.startRunning()
-        }
-        
-        return view
-    }
-    
-    func updateUIView(_ uiView: UIView, context: Context) {
-        if !isShowingCamera {
-            context.coordinator.stopSession()
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, AVCapturePhotoCaptureDelegate {
-        var parent: CameraView
-        var captureSession: AVCaptureSession?
-        var photoOutput: AVCapturePhotoOutput?
-        
-        init(_ parent: CameraView) {
-            self.parent = parent
-        }
-        
-        func stopSession() {
-            DispatchQueue.global(qos: .userInitiated).async {
-                self.captureSession?.stopRunning()
-            }
-        }
-        
-        @objc func capturePhoto() {
-            guard let photoOutput = photoOutput else { return }
-            
-            let settings = AVCapturePhotoSettings()
-            if let previewPixelType = settings.availablePreviewPhotoPixelFormatTypes.first {
-                settings.previewPhotoFormat = [kCVPixelBufferPixelFormatTypeKey as String: previewPixelType]
-            }
-            
-            photoOutput.capturePhoto(with: settings, delegate: self)
-        }
-        
-        func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-            if let error = error {
-                print("Error capturing photo: \(error.localizedDescription)")
-                parent.capturedImage = nil
-                parent.isShowingCamera = false
-                return
-            }
-            
-            guard let imageData = photo.fileDataRepresentation(), 
-                  let image = UIImage(data: imageData) else {
-                return
-            }
-            
-            // Update the parent view
-            DispatchQueue.main.async {
-                self.parent.capturedImage = image
-                self.parent.isShowingCamera = false
-            }
-        }
     }
 }
 

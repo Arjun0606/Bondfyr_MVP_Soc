@@ -8,16 +8,17 @@
 import SwiftUI
 
 struct EventListView: View {
+    @EnvironmentObject var eventViewModel: EventViewModel
     @State private var selectedCity = "Pune"
     @State private var searchText = ""
-    @State private var isOfflineMode = false
     @State private var showOfflineAlert = false
     @State private var lastUpdateTimeString: String = "Never"
+    @State private var showCityDropdown = false
     
     let cities = ["Pune", "Mumbai", "Delhi", "Bangalore"]
     
     var filteredEvents: [Event] {
-        var events = isOfflineMode ? (OfflineDataManager.shared.getCachedEvents() ?? []) : sampleEvents
+        var events = eventViewModel.events
         
         if !selectedCity.isEmpty {
             events = events.filter { $0.city == selectedCity }
@@ -33,99 +34,208 @@ struct EventListView: View {
     
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
+            // Background gradient
+            LinearGradient(
+                gradient: Gradient(colors: [Color.black, Color.purple.opacity(0.8)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
             
-            VStack(spacing: 16) {
-                // Fixed searchbar with city selector
+            VStack(spacing: 0) {
+                // Top navigation bar with dropdown
                 HStack {
-                    // Search icon
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                        .padding(.leading, 8)
-                    
-                    // Search field
-                    TextField("Search events...", text: $searchText)
+                    Text("Events")
+                        .font(.title2)
+                        .fontWeight(.bold)
                         .foregroundColor(.white)
                     
                     Spacer()
                     
-                    // City selector button
+                    // City dropdown menu
                     Menu {
                         ForEach(cities, id: \.self) { city in
                             Button(action: {
                                 selectedCity = city
                             }) {
-                                Text(city)
+                                HStack {
+                                    Text(city)
+                                    if selectedCity == city {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
                             }
                         }
                     } label: {
-                        Text(selectedCity)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.pink)
-                            .cornerRadius(20)
+                        HStack {
+                            Text(selectedCity)
+                                .foregroundColor(.white)
+                            Image(systemName: "chevron.down")
+                                .foregroundColor(.white)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.pink)
+                        .cornerRadius(20)
                     }
-                    .padding(.trailing, 8)
+                    
+                    // Refresh button
+                    Button(action: {
+                        loadEvents()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(.white)
+                    }
                 }
-                .frame(height: 50)
-                .background(Color(.systemGray6).opacity(0.3))
-                .cornerRadius(8)
                 .padding(.horizontal)
+                .padding(.top, 8)
+                
+                // Search bar
+                searchBar
+                    .padding()
+                
+                // Offline indicator
+                if !eventViewModel.isOnline {
+                    offlineIndicator
+                }
                 
                 // Events list
-                ScrollView(showsIndicators: false) {
-                    eventsListContent
+                if eventViewModel.isLoading {
+                    loadingView
+                } else if let error = eventViewModel.errorMessage {
+                    errorView(error)
+                } else if filteredEvents.isEmpty {
+                    emptyStateView
+                } else {
+                    eventsList
                 }
             }
-            .padding(.top, 5)
+            .alert(isPresented: $showOfflineAlert) {
+                Alert(
+                    title: Text("Offline Mode"),
+                    message: Text("You're viewing cached data from \(lastUpdateTimeString). Connect to internet to see the latest events."),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
         .onAppear {
+            loadEvents()
             checkLastUpdateTime()
-        }
-        .alert(isPresented: $showOfflineAlert) {
-            Alert(
-                title: Text("No Offline Data"),
-                message: Text("You need to cache events before using offline mode. Connect to the internet and tap 'Cache All' to save events for offline use."),
-                dismissButton: .default(Text("OK"))
-            )
         }
     }
     
-    var eventsListContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if filteredEvents.isEmpty {
-                VStack(spacing: 20) {
-                    Image(systemName: "calendar.badge.exclamationmark")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 60, height: 60)
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.gray)
+            
+            TextField("Search events", text: $searchText)
+                .foregroundColor(.white)
+            
+            if !searchText.isEmpty {
+                Button(action: {
+                    searchText = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.gray)
-                    
-                    Text("No events found")
-                        .font(.title3)
-                        .fontWeight(.medium)
-                        .foregroundColor(.gray)
-                    
-                    Text("Try a different city or search term")
-                        .font(.subheadline)
-                        .foregroundColor(.gray.opacity(0.7))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 50)
-            } else {
-                // Show the events for the selected city
-                ForEach(filteredEvents) { event in
-                    NavigationLink(destination: EventDetailView(event: event)) {
-                        EventCardView(event: event)
-                    }
-                    .padding(.horizontal)
                 }
             }
         }
+        .padding(10)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(10)
     }
     
-    // Check when the cache was last updated
+    private var loadingView: some View {
+        VStack {
+            Spacer()
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                .scaleEffect(1.5)
+            Text("Loading events...")
+                .foregroundColor(.white)
+                .padding()
+            Spacer()
+        }
+    }
+    
+    private func errorView(_ message: String) -> some View {
+        VStack {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 50))
+                .foregroundColor(.yellow)
+                .padding()
+            Text(message)
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding()
+            Button("Try Again") {
+                loadEvents()
+            }
+            .padding()
+            .background(Color.pink)
+            .foregroundColor(.white)
+            .cornerRadius(10)
+            Spacer()
+        }
+        .padding()
+    }
+    
+    private var emptyStateView: some View {
+        VStack {
+            Spacer()
+            Image(systemName: "calendar.badge.exclamationmark")
+                .font(.system(size: 50))
+                .foregroundColor(.gray)
+                .padding()
+            Text("No events found for \(selectedCity)")
+                .foregroundColor(.white)
+                .padding()
+            Spacer()
+        }
+    }
+    
+    private var eventsList: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(filteredEvents) { event in
+                    NavigationLink(destination: EventDetailView(event: event)) {
+                        EventCard(event: event)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+        .padding(.top)
+    }
+    
+    private var offlineIndicator: some View {
+        Button(action: {
+            showOfflineAlert = true
+        }) {
+            HStack {
+                Image(systemName: "wifi.slash")
+                Text("Offline Mode")
+                Text("·")
+                Text("Last update: \(lastUpdateTimeString)")
+            }
+            .font(.caption)
+            .foregroundColor(.white)
+            .padding(8)
+            .background(Color.red.opacity(0.8))
+            .cornerRadius(5)
+        }
+        .padding(.bottom, 8)
+    }
+    
+    private func loadEvents() {
+        eventViewModel.fetchEvents()
+        checkLastUpdateTime()
+    }
+    
     private func checkLastUpdateTime() {
         if let lastUpdate = OfflineDataManager.shared.getLastCacheUpdateTime() {
             let formatter = DateFormatter()

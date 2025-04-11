@@ -96,9 +96,7 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundColor(.gray)
                                 
-                            Text("Made on Earth c-137 👽")
-                                .font(.caption2)
-                                .foregroundColor(.gray)
+                            EasterEggText()
                                 .padding(.top, 4)
                         }
                         .padding(.top, 24)
@@ -444,5 +442,26 @@ struct TermsOfServiceView: View {
                 presentationMode.wrappedValue.dismiss()
             })
         }
+    }
+}
+
+struct EasterEggText: View {
+    @State private var tapCount = 0
+    @State private var showSecretText = false
+    
+    var body: some View {
+        Button(action: {
+            tapCount += 1
+            if tapCount >= 5 && !showSecretText {
+                withAnimation(.spring()) {
+                    showSecretText = true
+                }
+            }
+        }) {
+            Text(showSecretText ? "🐯TG🍻RK☀️" : "Made on Earth c-137 👽")
+                .font(.caption2)
+                .foregroundColor(.gray)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 } 

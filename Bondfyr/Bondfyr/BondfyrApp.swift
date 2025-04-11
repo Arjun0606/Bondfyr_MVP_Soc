@@ -17,15 +17,23 @@ import FirebaseFirestore
 struct BondfyrApp: App {
     @StateObject var authViewModel = AuthViewModel()
     @StateObject var tabSelection = TabSelection()
+    @StateObject var eventViewModel = EventViewModel()
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     
     // Add state variables to manage navigation
     @State private var showContestPhotoCapture = false
     @State private var contestEventId: String? = nil
     @State private var contestEventName: String? = nil
+    @State private var pendingNavigationEventId: String? = nil
+    @State private var pendingNavigationAction: String? = nil
 
     init() {
         FirebaseApp.configure()
+        
+        // Enable Firestore persistence for offline use
+        let settings = Firestore.firestore().settings
+        settings.isPersistenceEnabled = true
+        Firestore.firestore().settings = settings
         
         // Temporarily disable AppCheck for development
         // Comment this back in when you've registered your app in Firebase console
@@ -44,6 +52,9 @@ struct BondfyrApp: App {
         _ = OfflineDataManager.shared
         _ = CalendarManager.shared
         
+        // Start network monitoring
+        NetworkMonitor.shared.startMonitoring()
+        
         // Cache all events for offline use if no cache exists
         if !OfflineDataManager.shared.hasCachedData() {
             OfflineDataManager.shared.cacheEvents(sampleEvents)
@@ -56,6 +67,9 @@ struct BondfyrApp: App {
         
         // Listen for contest photo notifications
         setupContestPhotoNotificationListener()
+        
+        // Listen for event navigation
+        setupEventNavigationListener()
     }
     
     func setupContestPhotoNotificationListener() {
@@ -75,6 +89,29 @@ struct BondfyrApp: App {
             }
         }
     }
+    
+    func setupEventNavigationListener() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("NavigateToEvent"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            print("Received NavigateToEvent notification in observer")
+            if let userInfo = notification.userInfo,
+               let eventId = userInfo["eventId"] as? String {
+                print("Should navigate to event details for event ID: \(eventId)")
+                
+                // Save the eventId to navigate to once the tab switches
+                self.pendingNavigationEventId = eventId
+                self.pendingNavigationAction = userInfo["action"] as? String
+                
+                // Switch to the discover tab which contains events
+                DispatchQueue.main.async {
+                    self.tabSelection.selectedTab = .discover
+                }
+            }
+        }
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -82,6 +119,17 @@ struct BondfyrApp: App {
                 SplashView()
                     .environmentObject(authViewModel)
                     .environmentObject(tabSelection)
+                    .environmentObject(eventViewModel)
+                    .environment(\.pendingEventNavigation, pendingNavigationEventId)
+                    .environment(\.pendingEventAction, pendingNavigationAction)
+                    .onChange(of: pendingNavigationEventId) { newValue in
+                        if newValue != nil {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                self.pendingNavigationEventId = nil
+                                self.pendingNavigationAction = nil
+                            }
+                        }
+                    }
                 
                 // Contest photo capture overlay
                 if showContestPhotoCapture, let eventId = contestEventId {
@@ -96,6 +144,8 @@ struct BondfyrApp: App {
             }
             .onAppear {
                 print("App body appeared")
+                // Trigger events to load when app appears
+                eventViewModel.fetchEvents()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToContestPhotoCapture"))) { notification in
                 print("Received NavigateToContestPhotoCapture notification in body")
@@ -118,6 +168,23 @@ struct BondfyrApp: App {
                     DispatchQueue.main.async {
                         self.showContestPhotoCapture = true
                         print("Set showContestPhotoCapture to true with default values")
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToEvent"))) { notification in
+                print("Received NavigateToEvent notification in body")
+                if let userInfo = notification.userInfo,
+                   let eventId = userInfo["eventId"] as? String {
+                    print("Navigating to event details for event ID: \(eventId)")
+                    
+                    // If we were showing the photo capture view, hide it
+                    if self.showContestPhotoCapture {
+                        self.showContestPhotoCapture = false
+                    }
+                    
+                    // Navigate to discover tab which shows events
+                    DispatchQueue.main.async {
+                        self.tabSelection.selectedTab = .discover
                     }
                 }
             }

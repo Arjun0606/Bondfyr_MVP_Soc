@@ -9,6 +9,7 @@ import Foundation
 
 struct Event: Identifiable {
     let id = UUID()
+    let firestoreId: String? // Firestore document ID
     let name: String
     let description: String
     let date: String
@@ -20,6 +21,24 @@ struct Event: Identifiable {
     let mapsURL: String
     let galleryImages: [String]?
     let instagramHandle: String
+    let photoContestActive: Bool
+    
+    // Constructor with Firestore ID
+    init(firestoreId: String? = nil, name: String, description: String, date: String, time: String, venueLogoImage: String, eventPosterImage: String, location: String, city: String, mapsURL: String, galleryImages: [String]?, instagramHandle: String, photoContestActive: Bool = false) {
+        self.firestoreId = firestoreId
+        self.name = name
+        self.description = description
+        self.date = date
+        self.time = time
+        self.venueLogoImage = venueLogoImage
+        self.eventPosterImage = eventPosterImage
+        self.location = location
+        self.city = city
+        self.mapsURL = mapsURL
+        self.galleryImages = galleryImages
+        self.instagramHandle = instagramHandle
+        self.photoContestActive = photoContestActive
+    }
 }
 
 let sampleEvents: [Event] = [
