@@ -1,450 +1,976 @@
 import SwiftUI
+import Firebase
 import FirebaseFirestore
-import Combine
 import FirebaseAuth
+import SDWebImageSwiftUI
 
 struct EventPhotoGalleryView: View {
-    let eventId: String
-    let eventName: String
+    let event: Event
+    let stringEventId: String?  // Optional string ID for notification cases
     
-    @StateObject private var photoManager = PhotoManager.shared
-    @State private var selectedPhoto: GalleryPhoto?
-    @State private var isShowingPhotoCapture = false
-    @State private var showLikeLeaderboard = true
-    @State private var hasCheckedIn = false
-    @State private var isLoading = true
-    @Environment(\.presentationMode) var presentationMode
+    @StateObject private var photoManager = PhotoContestManager.shared
+    @State private var showingCamera = false
+    @State private var inputImage: UIImage?
+    @State private var caption = ""
+    @State private var showingCaptionSheet = false
+    @State private var showingErrorAlert = false
+    @State private var errorMessage = ""
+    @State private var showingSuccessAlert = false
+    @State private var refreshTrigger = UUID()
+    @State private var forcedTestEventId = false
+    @State private var isLoading = false
+    @State private var photoRefreshRetryCount = 0
+    @State private var noPhotosMessage: String? = nil
+    @State private var setupPhotosComplete = false
+    @State private var selectedEventId: String?
     
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
+    // Standard initializer with Event object
+    init(event: Event) {
+        // Check if we have test-event-id set in UserDefaults
+        let lastEventId = UserDefaults.standard.string(forKey: "lastPhotoGalleryEventId") ?? ""
+        let pendingGalleryEventId = UserDefaults.standard.string(forKey: "pendingGalleryEventId")
+        
+        // Determine the value of stringEventId once, before assigning it
+        let finalStringEventId: String? = (lastEventId == "test-event-id" || pendingGalleryEventId == "test-event-id") 
+            ? "test-event-id" 
+            : nil
+        
+        self.event = event
+        self.stringEventId = finalStringEventId
+        
+        if finalStringEventId == "test-event-id" {
+            print("📸 EventPhotoGalleryView init: Using test-event-id from UserDefaults")
+        }
+    }
     
-    var topContestPhotos: [GalleryPhoto] {
-        let sorted = photoManager.photos.sorted { $0.likes > $1.likes }
-        return Array(sorted.prefix(3))
+    // Alternative initializer with string event ID (for notifications)
+    init(stringEventId: String) {
+        // Handle test-event-id directly
+        if stringEventId == "test-event-id" || 
+           UserDefaults.standard.string(forKey: "lastPhotoGalleryEventId") == "test-event-id" ||
+           UserDefaults.standard.string(forKey: "pendingGalleryEventId") == "test-event-id" {
+            print("📸 EventPhotoGalleryView init: Using test-event-id directly")
+        }
+        
+        // Create a properly initialized placeholder event with all required parameters
+        self.event = Event(
+            firestoreId: stringEventId,
+            name: "Photo Contest",
+            description: "Loading event details...",
+            date: "Today",
+            time: "Now",
+            venueLogoImage: "placeholder",
+            eventPosterImage: "placeholder",
+            location: "Loading...",
+            city: "Loading...",
+            mapsURL: "",
+            galleryImages: [],
+            instagramHandle: "",
+            photoContestActive: true
+        )
+        self.stringEventId = stringEventId
+        print("📸 EventPhotoGalleryView initialized with string ID: \(stringEventId)")
     }
     
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // Background color
+            LinearGradient(gradient: Gradient(colors: [Color.black, Color(red: 0.1, green: 0.1, blue: 0.3)]), startPoint: .top, endPoint: .bottom)
+                .edgesIgnoringSafeArea(.all)
             
-            VStack(spacing: 8) {
-                // Header with event name and close button
+            VStack(spacing: 0) {
+                // Header
                 HStack {
-                    Text(eventName + " Contest")
-                        .font(.headline)
+                    Text("Photo Contest")
+                        .font(.title)
+                        .fontWeight(.bold)
                         .foregroundColor(.white)
                     
                     Spacer()
                     
                     Button(action: {
-                        presentationMode.wrappedValue.dismiss()
+                        refreshPhotos()
                     }) {
-                        Image(systemName: "xmark")
+                        Image(systemName: "arrow.clockwise")
                             .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.gray.opacity(0.3))
-                            .clipShape(Circle())
+                            .font(.title2)
                     }
-                }
-                .padding(.horizontal)
-                .padding(.top)
-                
-                // Contest Status if applicable
-                if photoManager.contestActive {
-                    HStack {
-                        Image(systemName: "timer")
-                            .foregroundColor(.pink)
-                        
-                        if let timeRemaining = photoManager.getContestTimeRemaining() {
-                            Text("Contest active: \(timeString(from: timeRemaining))")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                        } else {
-                            Text("Contest active")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                        }
-                        
-                        Spacer()
                     }
                     .padding()
-                    .background(Color.pink.opacity(0.2))
-                    .cornerRadius(8)
-                    .padding(.horizontal)
-                }
                 
+                // Main Content Area
                 if isLoading {
                     Spacer()
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(1.5)
                     Spacer()
+                } else if photoManager.photos.isEmpty {
+                    emptyStateView
                 } else {
-                    // Leaders Section for contest photos
-                    if !topContestPhotos.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Leaderboard")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    showLikeLeaderboard.toggle()
-                                }) {
-                                    Image(systemName: showLikeLeaderboard ? "chevron.up" : "chevron.down")
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            .padding(.horizontal)
-                            
-                            if showLikeLeaderboard {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 12) {
-                                        ForEach(Array(topContestPhotos.enumerated()), id: \.element.id) { index, photo in
-                                            VStack {
-                                                ZStack(alignment: .topLeading) {
-                                                    AsyncImage(url: URL(string: photo.imageUrl)) { phase in
-                                                        switch phase {
-                                                        case .empty:
-                                                            ProgressView()
-                                                                .frame(width: 150, height: 150)
-                                                        case .success(let image):
-                                                            image
-                                                                .resizable()
-                                                                .aspectRatio(contentMode: .fill)
-                                                                .frame(width: 150, height: 150)
-                                                                .clipped()
-                                                        case .failure:
-                                                            Image(systemName: "exclamationmark.triangle")
-                                                                .frame(width: 150, height: 150)
-                                                        @unknown default:
-                                                            EmptyView()
-                                                        }
-                                                    }
-                                                    .cornerRadius(8)
-                                                    .onTapGesture {
-                                                        selectedPhoto = photo
-                                                    }
-                                                    
-                                                    // Position badge
-                                                    ZStack {
-                                                        Circle()
-                                                            .fill(positionColor(for: index))
-                                                            .frame(width: 30, height: 30)
-                                                        
-                                                        Text("\(index + 1)")
-                                                            .font(.caption)
-                                                            .fontWeight(.bold)
-                                                            .foregroundColor(.white)
-                                                    }
-                                                    .padding(6)
-                                                }
-                                                
-                                                HStack {
-                                                    Image(systemName: "heart.fill")
-                                                        .foregroundColor(.pink)
-                                                        .font(.caption)
-                                                    
-                                                    Text("\(photo.likes)")
-                                                        .font(.caption)
-                                                        .fontWeight(.bold)
-                                                        .foregroundColor(.white)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 8)
+                    photoGridView
+                }
+                
+                Spacer(minLength: 0)
+                
+                // Bottom bar with camera button
+                cameraButton
+            }
+            .alert(isPresented: $showingErrorAlert) {
+                Alert(
+                    title: Text("Error"),
+                    message: Text(errorMessage),
+                    dismissButton: .default(Text("OK")) {
+                        // Reset error state after acknowledgment
+                        errorMessage = ""
+                    }
+                )
+            }
+        }
+        .onAppear {
+            print("📷 EventPhotoGalleryView appeared")
+            
+            // Check if we have a pending gallery event ID
+            if let pendingId = UserDefaults.standard.string(forKey: "pendingGalleryEventId") {
+                print("📷 Found pending gallery event ID: \(pendingId)")
+                self.selectedEventId = pendingId
+                
+                // If we have a flag indicating a photo was just uploaded, force refresh
+                if UserDefaults.standard.bool(forKey: "photoJustUploaded") {
+                    print("📷 Photo was just uploaded - force refreshing!")
+                    
+                    // Multiple refresh attempts with delays
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.refreshPhotosWithStringId(eventId: pendingId)
                     }
                     
-                    if photoManager.photos.isEmpty {
-                        // Empty state
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        self.refreshPhotosWithStringId(eventId: pendingId)
+                    }
+                    
+                    // Clear the flags after processing
+                    UserDefaults.standard.set(false, forKey: "photoJustUploaded")
+                } else {
+                    self.setupPhotosWithStringId(eventId: pendingId)
+                }
+                
+                // Clear the pending ID after processing
+                UserDefaults.standard.removeObject(forKey: "pendingGalleryEventId")
+            } else {
+                // Regular setup if no pending ID
+                self.setupNotificationListeners()
+                self.setupPhotos()
+            }
+        }
+        .onDisappear {
+            print("📸 EventPhotoGalleryView disappeared, removing listeners")
+            // Clean up listeners when view disappears
+            if let stringId = stringEventId {
+                photoManager.removePhotoListener(for: stringId)
+            } else {
+                photoManager.removePhotoListener(for: event.id.uuidString)
+            }
+            
+            // Remove notification observers
+            NotificationCenter.default.removeObserver(self)
+        }
+        .sheet(isPresented: $showingCamera) {
+            ImagePicker(image: $inputImage)
+                .ignoresSafeArea()
+                .onDisappear {
+                    if inputImage != nil {
+                        print("📸 Camera closed with image, showing caption sheet")
+                        showingCaptionSheet = true
+                    } else {
+                        print("📸 Camera closed without image")
+                    }
+                }
+        }
+        .sheet(isPresented: $showingCaptionSheet) {
+            captionInputView
+        }
+        .onChange(of: photoManager.error) { error in
+            if let error = error {
+                print("📸 PhotoManager error: \(error.localizedDescription)")
+                errorMessage = error.localizedDescription
+                showingErrorAlert = true
+            }
+        }
+    }
+    
+    // MARK: - View Components
+    
+    private var emptyStateView: some View {
                         VStack(spacing: 20) {
                             Spacer()
                             
                             Image(systemName: "photo.on.rectangle.angled")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 100, height: 100)
-                                .foregroundColor(.gray)
-                            
-                            Text("No contest photos yet.")
-                                .foregroundColor(.gray)
-                            
-                            if hasCheckedIn {
-                                Button(action: {
-                                    isShowingPhotoCapture = true
-                                }) {
-                                    Text("Take contest photo")
+                .frame(width: 80, height: 80)
+                .foregroundColor(.white.opacity(0.5))
+            
+            Text("No Photos Yet")
+                .font(.title2)
+                .fontWeight(.bold)
                                         .foregroundColor(.white)
-                                        .padding()
-                                        .background(Color.pink)
-                                        .cornerRadius(8)
-                                }
-                            } else {
-                                HStack {
-                                    Image(systemName: "info.circle")
-                                        .foregroundColor(.gray)
-                                    
-                                    Text("You must be at the venue to take contest photos")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                .padding()
-                            }
+            
+            Text("Be the first to capture a moment!\nTap the camera button below to start.")
+                .font(.body)
+                .foregroundColor(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
                             
                             Spacer()
                         }
-                        .frame(maxHeight: .infinity)
-                    } else {
-                        // Photo grid
+    }
+    
+    private var photoGridView: some View {
                         ScrollView {
-                            LazyVGrid(columns: columns, spacing: 8) {
-                                ForEach(photoManager.photos, id: \.id) { photo in
-                                    ZStack(alignment: .topLeading) {
-                                        AsyncImage(url: URL(string: photo.imageUrl)) { phase in
-                                            switch phase {
-                                            case .empty:
-                                                ProgressView()
-                                                    .frame(height: 180)
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .aspectRatio(contentMode: .fill)
-                                                    .frame(height: 180)
-                                                    .clipped()
-                                            case .failure:
-                                                Image(systemName: "exclamationmark.triangle")
-                                                    .frame(height: 180)
-                                            @unknown default:
-                                                EmptyView()
-                                            }
-                                        }
-                                        .cornerRadius(8)
-                                        .overlay(
-                                            VStack {
-                                                Spacer()
-                                                HStack {
-                                                    Image(systemName: "heart.fill")
-                                                        .foregroundColor(.pink)
-                                                    
-                                                    Text("\(photo.likes)")
-                                                        .font(.caption)
-                                                        .foregroundColor(.white)
-                                                        .fontWeight(.bold)
-                                                    
-                                                    Spacer()
-                                                }
-                                                .padding(8)
-                                                .background(Color.black.opacity(0.6))
-                                            },
-                                            alignment: .bottom
-                                        )
-                                        .onTapGesture {
-                                            selectedPhoto = photo
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                        
-                        // Contest photo button - only for checked in users
-                        if hasCheckedIn {
-                            Button(action: {
-                                isShowingPhotoCapture = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "camera.fill")
-                                    Text("Take Contest Photo")
-                                }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.pink)
-                                .cornerRadius(8)
-                                .padding(.horizontal)
-                                .padding(.bottom)
-                            }
-                        } else {
-                            HStack {
-                                Image(systemName: "info.circle")
-                                    .foregroundColor(.gray)
+            LazyVStack(spacing: 20) {
+                // Leaderboard (Top 3)
+                if !photoManager.photos.isEmpty {
+                    leaderboardView
+                }
+                
+                // All photos
+                ForEach(photoManager.photos) { photo in
+                    PhotoContestCard(
+                        photo: photo,
+                        onLike: {
+                            likePhoto(photo)
+                        },
+                        onUnlike: {
+                            unlikePhoto(photo)
+                        },
+                        onDelete: {
+                            deletePhoto(photo)
+                        },
+                        isOwner: photo.userId == Auth.auth().currentUser?.uid
+                    )
+                    .padding(.horizontal)
+                }
+            }
+            .padding(.vertical)
+        }
+    }
+    
+    private var leaderboardView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("LEADERBOARD")
+                .font(.headline)
+                .foregroundColor(.white.opacity(0.8))
+                .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 15) {
+                    ForEach(Array(photoManager.photos.prefix(3).enumerated()), id: \.element.id) { index, photo in
+                        VStack {
+                            // Medal icon
+                            medalIcon(for: index)
+                                .font(.title)
+                                .foregroundColor(medalColor(for: index))
+                            
+                            // Photo - using fixed approach
+                            WebImage(url: URL(string: photo.photoURL))
+                                .resizable()
+                                .indicator(.activity)
+                                .transition(.fade(duration: 0.5))
+                                .scaledToFill()
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(medalColor(for: index), lineWidth: 2)
+                                )
+                            
+                            // Like count
+                            HStack(spacing: 5) {
+                                Image(systemName: "heart.fill")
+                                    .foregroundColor(.red)
+                                    .font(.footnote)
                                 
-                                Text("You must be at the venue to take contest photos")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+                                Text("\(photo.likeCount)")
+                                    .font(.footnote)
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Username
+                            Text(photo.userName)
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                                .lineLimit(1)
+                        }
+                        .frame(width: 100)
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.bottom, 10)
+    }
+    
+    private var cameraButton: some View {
+        VStack {
+            if let userPhoto = photoManager.userPhoto {
+                // User already has a photo uploaded
+                HStack {
+                    // User photo thumbnail - fixed approach
+                    WebImage(url: URL(string: userPhoto.photoURL))
+                        .resizable()
+                        .indicator(.activity)
+                        .transition(.fade(duration: 0.5))
+                        .scaledToFill()
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                    
+                    VStack(alignment: .leading) {
+                        Text("Your photo is live!")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        
+                        Text("Tap to delete and upload a new one")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        // Confirm deletion
+                        deletePhoto(userPhoto)
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                            .padding()
+                    }
+                }
+                .padding()
+                .background(Color.black.opacity(0.5))
+                .cornerRadius(12)
+                .padding()
+            } else {
+                // No photo uploaded, show camera button
+                Button(action: {
+                    // Direct camera access only - no notifications
+                    checkAndOpenCamera()
+                }) {
+                    HStack {
+                        Image(systemName: "camera.fill")
+                            .font(.title2)
+                        
+                        Text("Capture a Contest Photo")
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.white)
+                    .frame(height: 50)
+                    .frame(maxWidth: .infinity)
+                    .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(12)
+                    .padding()
+                }
+            }
+        }
+    }
+    
+    private var captionInputView: some View {
+        VStack(spacing: 20) {
+            // Header
+            Text("Add a caption to your photo")
+                .font(.headline)
+                .padding(.top)
+            
+            // Image preview
+            if let image = inputImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 200)
+                    .cornerRadius(10)
+            }
+            
+            // Caption field
+            TextField("Write a caption...", text: $caption)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.horizontal)
+            
+            // Buttons
+            HStack {
+                Button("Cancel") {
+                    caption = ""
+                    inputImage = nil
+                    showingCaptionSheet = false
+                }
+                .foregroundColor(.red)
+                .padding()
+                
+                Spacer()
+                
+                Button("Upload") {
+                    uploadPhoto()
+                    showingCaptionSheet = false
+                }
+                .foregroundColor(.blue)
+                .disabled(caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding()
+            }
+            
+            Spacer()
                             }
                             .padding()
-                            .background(Color.black.opacity(0.3))
-                            .cornerRadius(8)
-                            .padding(.horizontal)
-                            .padding(.bottom)
-                        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    func medalIcon(for index: Int) -> some View {
+        switch index {
+        case 0:
+            return Image(systemName: "1.circle.fill")
+        case 1:
+            return Image(systemName: "2.circle.fill")
+        case 2:
+            return Image(systemName: "3.circle.fill")
+        default:
+            return Image(systemName: "questionmark.circle.fill")
+        }
+    }
+    
+    func medalColor(for index: Int) -> Color {
+        switch index {
+        case 0:
+            return .yellow
+        case 1:
+            return .gray
+        case 2:
+            return .brown
+        default:
+            return .blue
+        }
+    }
+    
+    // MARK: - Photo Management
+    
+    private func setupPhotos() {
+        print("📸 Setting up photos for event: \(event.id.uuidString)")
+        
+        // Start real-time listener
+        let eventIdString = event.id.uuidString
+        photoManager.setupPhotoListener(for: eventIdString)
+        
+        // Initial fetch in case listener is slow
+        refreshPhotos()
+    }
+    
+    private func setupPhotosWithStringId(eventId: String) {
+        print("📸 Setting up photos for string event ID: \(eventId)")
+        
+        // First, clear any existing listener
+        if let stringId = stringEventId {
+            photoManager.removePhotoListener(for: stringId)
+        } else {
+            photoManager.removePhotoListener(for: event.id.uuidString)
+        }
+        
+        // Start real-time listener with the string ID
+        photoManager.setupPhotoListener(for: eventId)
+        
+        // Initial fetch with string ID
+        refreshPhotosWithStringId(eventId: eventId)
+        
+        // If the eventId is "test-event-id", set up multiple retries
+        if eventId == "test-event-id" {
+            print("📸 Setting up multiple fetch retries for test-event-id")
+            
+            // Try another immediate fetch
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("📸 First retry for test-event-id photos")
+                self.refreshPhotosWithStringId(eventId: "test-event-id")
+                
+                // Try again after 1 second
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    print("📸 Second retry for test-event-id photos")
+                    self.refreshPhotosWithStringId(eventId: "test-event-id")
+                    
+                    // Final retry after 2 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        print("📸 Final retry for test-event-id photos")
+                        self.refreshPhotosWithStringId(eventId: "test-event-id")
                     }
                 }
             }
         }
-        .onAppear {
-            checkUserStatus()
-            photoManager.getPhotos(for: eventId) { photos in
-                DispatchQueue.main.async {
-                    self.photoManager.photos = photos.filter { $0.isContestEntry }
-                }
-            }
-        }
-        .fullScreenCover(isPresented: $isShowingPhotoCapture) {
-            if hasCheckedIn {
-                ContestPhotoCaptureView(eventId: eventId)
-            }
-        }
-        .sheet(item: $selectedPhoto) { photo in
-            EventPhotoDetailView(photo: photo)
-        }
     }
     
-    private func checkUserStatus() {
-        isLoading = true
-        
-        guard let userId = Auth.auth().currentUser?.uid else {
-            isLoading = false
-            hasCheckedIn = false
+    private func refreshPhotos(forceRefresh: Bool = false) {
+        // Use the event ID string directly, no need to check if it's nil
+        let eventIdStr = event.id.uuidString
+        refreshPhotosWithStringId(eventId: eventIdStr, forceRefresh: forceRefresh)
+    }
+    
+    private func refreshPhotosWithStringId(eventId: String, forceRefresh: Bool = false) {
+        guard !isLoading || forceRefresh else {
+            print("⏳ Already loading photos, skipping refresh")
             return
         }
         
-        let db = Firestore.firestore()
-        db.collection("check_ins")
-            .whereField("eventId", isEqualTo: eventId)
-            .whereField("userId", isEqualTo: userId)
-            .whereField("isActive", isEqualTo: true)
-            .getDocuments { snapshot, error in
-                isLoading = false
+        let displayEventId = eventId.count > 8 ? "..." + eventId.suffix(8) : eventId
+        print("🔄 Starting photo refresh for event: \(displayEventId)")
+        
+        isLoading = true
+        print("📞 Calling photoManager.fetchPhotos for event ID: \(eventId)")
+        
+        // Reset error state
+        errorMessage = ""
+        showingErrorAlert = false
+        
+        photoManager.fetchPhotos(for: eventId) { result in
+                DispatchQueue.main.async {
+                self.isLoading = false
                 
-                if let documents = snapshot?.documents, !documents.isEmpty {
-                    hasCheckedIn = true
-                } else {
-                    hasCheckedIn = false
+                switch result {
+                case .success(let photos):
+                    print("✅ Successfully fetched \(photos.count) photos for event: \(displayEventId)")
+                    
+                    // Store the event ID in UserDefaults for later use
+                    UserDefaults.standard.set(eventId, forKey: "lastViewedEventId")
+                    
+                    // If we have no photos, display appropriate message
+                    if photos.isEmpty {
+                        print("⚠️ No photos found for this event")
+                        self.noPhotosMessage = "No photos yet! Be the first to upload one."
+                    } else {
+                        // Use empty string instead of nil for non-optional String
+                        self.noPhotosMessage = ""
+                    }
+                    
+                    // Update UI
+                    self.setupPhotosComplete = true
+                    
+                    // Reset retry count on success
+                    self.photoRefreshRetryCount = 0
+                    
+                case .failure(let error):
+                    print("❌ Failed to fetch photos for event \(displayEventId): \(error.localizedDescription)")
+                    
+                    if self.photoRefreshRetryCount < 3 {
+                        // Retry up to 3 times with exponential backoff
+                        self.photoRefreshRetryCount += 1
+                        let delay = pow(2.0, Double(self.photoRefreshRetryCount)) * 0.5
+                        print("🔄 Retrying photo fetch (attempt \(self.photoRefreshRetryCount)) in \(delay) seconds")
+                        
+                        // Capture eventId for the retry
+                        let capturedEventId = eventId
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                            self.refreshPhotosWithStringId(eventId: capturedEventId, forceRefresh: true)
+                        }
+                    } else {
+                        print("❌ Giving up after \(self.photoRefreshRetryCount) retry attempts")
+                        self.errorMessage = "Error loading photos: \(error.localizedDescription)"
+                        self.showingErrorAlert = true
+                        self.setupPhotosComplete = true
+                        self.noPhotosMessage = "Unable to load photos. Please try again later."
+                    }
                 }
             }
-    }
-    
-    private func positionColor(for index: Int) -> Color {
-        switch index {
-        case 0:
-            return .yellow // Gold
-        case 1:
-            return .gray // Silver
-        case 2:
-            return .brown // Bronze
-        default:
-            return .pink
         }
     }
     
-    private func timeString(from seconds: TimeInterval) -> String {
-        let minutes = Int(seconds) / 60
-        let remainingSeconds = Int(seconds) % 60
-        return String(format: "%d:%02d", minutes, remainingSeconds)
+    private func checkAndOpenCamera() {
+        print("📸 Check and open camera for event: \(stringEventId ?? event.id.uuidString)")
+        
+        guard let userId = Auth.auth().currentUser?.uid else {
+            errorMessage = "You need to be logged in to upload photos"
+            showingErrorAlert = true
+            print("❌ Camera check failed: User not logged in")
+            return
+        }
+        
+        // Check eligibility
+        let eventIdString = stringEventId ?? event.id.uuidString
+        print("📸 Checking upload eligibility for event ID: \(eventIdString)")
+        
+        photoManager.checkUploadEligibility(for: eventIdString) { result in
+            switch result {
+            case .success:
+                print("📸 User is eligible to upload, opening camera")
+                DispatchQueue.main.async {
+                    self.showingCamera = true
+                }
+            case .failure(let error):
+                print("❌ Camera check failed: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                    self.showingErrorAlert = true
+                }
+            }
+        }
+    }
+    
+    private func uploadPhoto() {
+        guard let image = inputImage else { 
+            print("❌ Upload photo failed: No input image")
+            return 
+        }
+        
+        print("📸 Starting photo upload process")
+        
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let eventIdString = stringEventId ?? event.id.uuidString
+        
+        print("📸 Uploading photo for event ID: \(eventIdString)")
+        
+        photoManager.uploadPhoto(for: eventIdString, image: image, caption: trimmedCaption) { result in
+            DispatchQueue.main.async {
+                self.inputImage = nil
+                self.caption = ""
+                
+                switch result {
+                case .success:
+                    print("📸 Photo upload successful")
+                    // Photo uploaded successfully, the listener will update the UI
+                    if self.stringEventId != nil {
+                        self.refreshPhotosWithStringId(eventId: eventIdString)
+                } else {
+                        self.refreshPhotos()
+                    }
+                case .failure(let error):
+                    print("❌ Photo upload failed: \(error.localizedDescription)")
+                    self.errorMessage = error.localizedDescription
+                    self.showingErrorAlert = true
+                }
+            }
+        }
+    }
+    
+    private func likePhoto(_ photo: PhotoContest) {
+        photoManager.likePhoto(photo.id) { result in
+            if case .failure(let error) = result {
+                print("❌ Like photo failed: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                    self.showingErrorAlert = true
+                }
+            } else {
+                print("📸 Photo liked successfully")
+            }
+        }
+    }
+    
+    private func unlikePhoto(_ photo: PhotoContest) {
+        photoManager.unlikePhoto(photo.id) { result in
+            if case .failure(let error) = result {
+                print("❌ Unlike photo failed: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.errorMessage = error.localizedDescription
+                    self.showingErrorAlert = true
+                }
+            } else {
+                print("📸 Photo unliked successfully")
+            }
+        }
+    }
+    
+    private func deletePhoto(_ photo: PhotoContest) {
+        photoManager.deletePhoto(photo.id) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .failure(let error):
+                    print("❌ Delete photo failed: \(error.localizedDescription)")
+                    // Don't show an error message for expected errors like "userAlreadyUploaded"
+                    // as these might appear after deleting a photo
+                    if let photoError = error as? PhotoContestError {
+                        if case .userAlreadyUploaded = photoError {
+                            // This is expected after deletion - just refresh
+                            let eventIdString = self.stringEventId ?? self.event.id.uuidString
+                            self.refreshPhotosWithStringId(eventId: eventIdString, forceRefresh: true)
+                            return
+                        }
+                    }
+                    
+                    self.errorMessage = error.localizedDescription
+                    self.showingErrorAlert = true
+                    
+                case .success:
+                    print("📸 Photo deleted successfully")
+                    // Clear any error messages
+                    self.errorMessage = ""
+                    self.showingErrorAlert = false
+                    
+                    // Refresh the photos list
+                    let eventIdString = self.stringEventId ?? self.event.id.uuidString
+                    self.refreshPhotosWithStringId(eventId: eventIdString, forceRefresh: true)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Notification Listeners
+    
+    private func setupNotificationListeners() {
+        setupPhotoGalleryNotificationListener()
+    }
+    
+    private func setupPhotoGalleryNotificationListener() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ForceShowEventGallery"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            print("📷 Received ForceShowEventGallery notification!")
+            
+            if let userInfo = notification.userInfo,
+               let eventId = userInfo["eventId"] as? String {
+                print("📷 Event ID from notification: \(eventId)")
+                
+                // Check additional flags that might be passed
+                let fromCamera = userInfo["fromCamera"] as? Bool ?? false
+                
+                // If this notification comes from camera, make sure we reload photos
+                if fromCamera {
+                    print("📷 This notification came directly from the camera - force refreshing!")
+                    // Force a short delay to ensure Firebase has registered the new photo
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.refreshPhotosWithStringId(eventId: eventId)
+                    }
+                    
+                    // Try again after a slightly longer delay as a backup
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        self.refreshPhotosWithStringId(eventId: eventId)
+                    }
+                } else {
+                    self.setupPhotosWithStringId(eventId: eventId)
+                }
+            }
+        }
+        
+        // Add listener for the direct gallery notification
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ShowDirectPhotoGallery"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            print("📷 Received ShowDirectPhotoGallery notification!")
+            
+            if let userInfo = notification.userInfo,
+               let eventId = userInfo["eventId"] as? String {
+                print("📷 Direct event ID from notification: \(eventId)")
+                
+                // Check for flags
+                let fromCamera = userInfo["fromCamera"] as? Bool ?? false
+                let forceShow = userInfo["forceShow"] as? Bool ?? false
+                
+                // Set local state
+                self.selectedEventId = eventId
+                
+                // If this notification comes with strong flags, prioritize the refresh
+                if fromCamera && forceShow {
+                    print("📷 High-priority photo gallery request - force refreshing!")
+                    
+                    // Force multiple refreshes with increasing delays to ensure we catch the new photo
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.refreshPhotosWithStringId(eventId: eventId)
+                    }
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        self.refreshPhotosWithStringId(eventId: eventId)
+                    }
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        self.refreshPhotosWithStringId(eventId: eventId)
+                    }
+                            } else {
+                    self.setupPhotosWithStringId(eventId: eventId)
+                }
+            }
+        }
     }
 }
 
-struct EventPhotoDetailView: View {
-    let photo: GalleryPhoto
-    @State private var isLiked = false
-    @Environment(\.presentationMode) var presentationMode
+// MARK: - Photo Contest Card
+
+struct PhotoContestCard: View {
+    let photo: PhotoContest
+    let onLike: () -> Void
+    let onUnlike: () -> Void
+    let onDelete: () -> Void
+    let isOwner: Bool
+    
+    @State private var showDeleteConfirmation = false
     
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        VStack(alignment: .leading, spacing: 8) {
+            // User info header
+            userInfoHeader
             
-            VStack {
-                // Close button
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.gray.opacity(0.3))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding()
+            // Photo - fixed implementation 
+            ZStack {
+                Rectangle()
+                    .foregroundColor(.gray.opacity(0.3))
+                    .frame(height: 200)
                 
-                Spacer()
-                
-                // Photo
-                AsyncImage(url: URL(string: photo.imageUrl)) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                    case .failure:
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.red)
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                
-                Spacer()
-                
-                // Info and interactions
-                VStack(spacing: 15) {
-                    ZStack {
-                        Text("Contest Entry")
-                            .font(.headline)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 12)
-                            .background(Color.pink)
-                            .foregroundColor(.white)
-                            .cornerRadius(20)
-                    }
-                    
-                    HStack(spacing: 20) {
-                        Button(action: {
-                            isLiked.toggle()
-                            if isLiked {
-                                PhotoManager.shared.likePhoto(photo: photo)
-                            } else {
-                                PhotoManager.shared.unlikePhoto(photo: photo)
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: isLiked ? "heart.fill" : "heart")
-                                    .foregroundColor(isLiked ? .pink : .white)
-                                
-                                Text("\(photo.likes + (isLiked ? 1 : 0))")
+                WebImage(url: URL(string: photo.photoURL))
+                    .resizable()
+                    .indicator(.activity)
+                    .transition(.fade(duration: 0.5))
+                    .scaledToFit()
+            }
+            .cornerRadius(12)
+            
+            // Caption
+            if !photo.caption.isEmpty {
+                Text(photo.caption)
                                     .foregroundColor(.white)
+                    .padding(.vertical, 4)
+            }
+            
+            // Like button and expiration info
+            likeAndExpirationRow
                             }
                             .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                        }
-                    }
-                    .padding(.bottom)
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(15)
+        .alert(isPresented: $showDeleteConfirmation) {
+            Alert(
+                title: Text("Delete Photo"),
+                message: Text("Are you sure you want to delete your photo? This cannot be undone."),
+                primaryButton: .destructive(Text("Delete")) {
+                    onDelete()
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+    
+    // Break down the view into smaller components
+    private var userInfoHeader: some View {
+        HStack {
+            // Profile image placeholder
+            Circle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 36, height: 36)
+                .overlay(
+                    Text(String(photo.userName.prefix(1).uppercased()))
+                        .foregroundColor(.white)
+                )
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(photo.userName)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                
+                // Time since posted
+                Text(timeAgo(from: photo.timestamp))
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            if isOwner {
+                Button(action: {
+                    showDeleteConfirmation = true
+                }) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red.opacity(0.8))
                 }
-                .padding()
             }
         }
-        .onAppear {
-            // Check if the user has already liked this photo
-            PhotoManager.shared.checkIfUserLikedPhoto(photo: photo) { liked in
-                isLiked = liked
+    }
+    
+    private var likeAndExpirationRow: some View {
+        HStack {
+            Button(action: {
+                if photo.userLiked {
+                    onUnlike()
+                } else {
+                    onLike()
+                }
+            }) {
+                Image(systemName: photo.userLiked ? "heart.fill" : "heart")
+                    .foregroundColor(photo.userLiked ? .red : .white)
+                    .frame(width: 24, height: 24)
             }
+            
+            Text("\(photo.likeCount) likes")
+                .foregroundColor(.white.opacity(0.8))
+                .font(.subheadline)
+            
+            Spacer()
+            
+            // Expiration time
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.caption)
+                
+                Text("Expires in \(timeUntilExpiry(from: photo.expirationTime))")
+                    .font(.caption)
+            }
+            .foregroundColor(.white.opacity(0.6))
+        }
+    }
+    
+    // Format time since posted
+    private func timeAgo(from date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
+    // Format time until expiry
+    private func timeUntilExpiry(from date: Date) -> String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: date)
+        
+        if let hours = components.hour, let minutes = components.minute {
+            if hours > 0 {
+                return "\(hours)h \(minutes)m"
+            } else {
+                return "\(minutes)m"
+            }
+        }
+        
+        return "soon"
+    }
+}
+
+// MARK: - Image Picker
+
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    @Environment(\.presentationMode) var presentationMode
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .camera
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.image = image
+            }
+            
+            parent.presentationMode.wrappedValue.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.presentationMode.wrappedValue.dismiss()
         }
     }
 } 
