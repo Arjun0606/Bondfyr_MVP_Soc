@@ -456,7 +456,7 @@ class PhotoContestManager: ObservableObject {
         // For demo purposes, first check if CheckInManager is available and if the user has checked in
         if CheckInManager.shared.hasCheckedInToEvent(eventId: eventId) {
             print("📷 User has checked in to the event")
-            completion(.success(()))
+        completion(.success(()))
             return
         }
         
@@ -857,7 +857,7 @@ class PhotoContestManager: ObservableObject {
                 id: "test-photo-1",
                 eventId: "test-event-id",
                 userId: currentUserId,
-                userName: userName,
+                                userName: userName,
                 photoURL: "https://firebasestorage.googleapis.com/v0/b/bondfyr-da123.appspot.com/o/sample%2Ftest_photo.jpg?alt=media",
                 caption: "This is a test photo",
                 timestamp: now.addingTimeInterval(-3600),
@@ -885,7 +885,7 @@ class PhotoContestManager: ObservableObject {
                 photoURL: "https://firebasestorage.googleapis.com/v0/b/bondfyr-da123.appspot.com/o/sample%2Ftest_photo.jpg?alt=media",
                 caption: "This is a test photo",
                 timestamp: now.addingTimeInterval(-10800),
-                expirationTime: expirationTime,
+                                expirationTime: expirationTime,
                 likeCount: 23,
                 userLiked: true
             )
@@ -965,7 +965,7 @@ class PhotoContestManager: ObservableObject {
                 print("Error liking photo: \(error.localizedDescription)")
                 self.error = .likeFailed
                 completion(.failure(.likeFailed))
-            } else {
+                    } else {
                 // Update local state
                 DispatchQueue.main.async {
                     if let index = self.photos.firstIndex(where: { $0.id == photoId }) {
@@ -1123,9 +1123,9 @@ class PhotoContestManager: ObservableObject {
                     self.error = .databaseError
                 }
                 completion(.failure(.databaseError))
-                return
-            }
-            
+                        return
+                    }
+                    
             // Check if the photo belongs to the current user
             if photoOwnerId != userId {
                 DispatchQueue.main.async {
@@ -1133,9 +1133,9 @@ class PhotoContestManager: ObservableObject {
                     self.error = .unauthorized
                 }
                 completion(.failure(.unauthorized))
-                return
-            }
-            
+                            return
+                        }
+                        
             // Mark the photo as deleted in Firestore
             self.db.collection("photo_contests").document(photoId).updateData([
                 "scheduledForDeletion": true
@@ -1157,7 +1157,7 @@ class PhotoContestManager: ObservableObject {
                         self.isLoading = false
                     }
                     
-                    if let error = error {
+                        if let error = error {
                         print("Error deleting photo from storage: \(error.localizedDescription)")
                         // Storage deletion failed, but Firestore updated successfully
                         // Consider this partial success
