@@ -6,37 +6,16 @@ struct CityChatListView: View {
     @State private var navigateToCityChat = false
     @State private var selectedCity: ChatCity?
     @State private var searchText = ""
-    @State private var showCityDropdown = false
-    @State private var selectedFilter = "All Cities"
-    
-    // Major cities for dropdown
-    let cityFilters = ["All Cities", "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Chennai", "Pune", "Kolkata", "Ahmedabad", "Jaipur", "Surat"]
-    
-    var filteredCities: [ChatCity] {
-        var filtered = chatManager.cities
-        
-        // Apply city filter if not showing all
-        if selectedFilter != "All Cities" {
-            filtered = filtered.filter { city in
-                city.displayName == selectedFilter
-            }
-        }
-        
-        // Apply search text filter
-        if !searchText.isEmpty {
-            filtered = filtered.filter { city in
-                city.displayName.lowercased().contains(searchText.lowercased())
-            }
-        }
-        
-        return filtered
-    }
     
     var body: some View {
         NavigationView {
             ZStack {
-                // Background
-                Color.black.ignoresSafeArea()
+                // Replace plain black with gradient
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.black, Color(red: 0.2, green: 0.08, blue: 0.3)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                ).ignoresSafeArea()
                 
                 VStack(spacing: 0) {
                     // Header
@@ -56,7 +35,8 @@ struct CityChatListView: View {
                                 .foregroundColor(.pink)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.top, -50)
                     
                     // Search bar
                     HStack {
@@ -79,107 +59,29 @@ struct CityChatListView: View {
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(12)
                     .padding(.horizontal)
+                    .padding(.top, 16)
                     
-                    // City dropdown
-                    VStack {
-                        Button(action: {
-                            withAnimation {
-                                showCityDropdown.toggle()
-                            }
-                        }) {
-                            HStack {
-                                Text(selectedFilter)
-                                    .foregroundColor(.white)
-                                
-                                Spacer()
-                                
-                                Image(systemName: showCityDropdown ? "chevron.up" : "chevron.down")
-                                    .foregroundColor(.pink)
-                                    .font(.system(size: 14))
-                            }
-                            .padding()
-                            .background(Color.white.opacity(0.05))
-                            .cornerRadius(12)
-                        }
-                        
-                        if showCityDropdown {
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    ForEach(cityFilters, id: \.self) { city in
-                                        Button(action: {
-                                            selectedFilter = city
-                                            withAnimation {
-                                                showCityDropdown = false
-                                            }
-                                        }) {
-                                            HStack {
-                                                Text(city)
-                                                    .foregroundColor(.white)
-                                                
-                                                Spacer()
-                                                
-                                                if selectedFilter == city {
-                                                    Image(systemName: "checkmark")
-                                                        .foregroundColor(.pink)
-                                                }
-                                            }
-                                            .padding(.vertical, 12)
-                                            .padding(.horizontal)
-                                            .background(
-                                                selectedFilter == city ? 
-                                                    Color.pink.opacity(0.2) : 
-                                                    Color.clear
-                                            )
-                                        }
-                                        
-                                        if city != cityFilters.last {
-                                            Divider()
-                                                .background(Color.gray.opacity(0.3))
-                                                .padding(.horizontal)
-                                        }
-                                    }
-                                }
-                                .background(Color.black.opacity(0.9))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                )
-                            }
-                            .frame(height: min(CGFloat(cityFilters.count) * 44, 300))
-                            .transition(.opacity)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .zIndex(1) // Make sure dropdown appears above the list
+                    // Section title
+                    Text("Available Cities")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal)
                     
-                    // City list
-                    if chatManager.isLoading {
-                        Spacer()
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .pink))
-                            .scaleEffect(1.5)
-                        Spacer()
-                    } else if filteredCities.isEmpty {
-                        Spacer()
-                        Text("No cities found")
-                            .foregroundColor(.gray)
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                ForEach(filteredCities) { city in
-                                    CityRow(city: city)
-                                        .onTapGesture {
-                                            selectedCity = city
-                                            navigateToCityChat = true
-                                        }
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.top, 8)
+                    // Direct hardcoded list of cities
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            // Manually create each city row to ensure they appear
+                            CityRow(city: ChatCity(id: "mumbai", name: "mumbai", displayName: "Mumbai", memberCount: 329))
+                            CityRow(city: ChatCity(id: "delhi", name: "delhi", displayName: "Delhi", memberCount: 204))
+                            CityRow(city: ChatCity(id: "bangalore", name: "bangalore", displayName: "Bangalore", memberCount: 451))
+                            CityRow(city: ChatCity(id: "pune", name: "pune", displayName: "Pune", memberCount: 176))
+                            CityRow(city: ChatCity(id: "hyderabad", name: "hyderabad", displayName: "Hyderabad", memberCount: 183))
+                            CityRow(city: ChatCity(id: "chennai", name: "chennai", displayName: "Chennai", memberCount: 147))
+                            CityRow(city: ChatCity(id: "kolkata", name: "kolkata", displayName: "Kolkata", memberCount: 135))
+                            CityRow(city: ChatCity(id: "ahmedabad", name: "ahmedabad", displayName: "Ahmedabad", memberCount: 112))
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
                     }
                 }
                 
@@ -199,16 +101,21 @@ struct CityChatListView: View {
             .navigationBarHidden(true)
             .onAppear {
                 chatManager.loadCities()
+                
+                // Setup notification observer for city selection
+                NotificationCenter.default.addObserver(forName: Notification.Name("OpenCityChat"), object: nil, queue: .main) { notification in
+                    if let city = notification.object as? ChatCity {
+                        selectedCity = city
+                        navigateToCityChat = true
+                    }
+                }
+            }
+            .onDisappear {
+                // Remove observer when view disappears
+                NotificationCenter.default.removeObserver(self)
             }
             .sheet(isPresented: $showInfoSheet) {
                 ChatInfoSheet()
-            }
-            .onTapGesture {
-                if showCityDropdown {
-                    withAnimation {
-                        showCityDropdown = false
-                    }
-                }
             }
         }
     }
@@ -253,6 +160,11 @@ struct CityRow: View {
         .padding()
         .background(Color.white.opacity(0.05))
         .cornerRadius(12)
+        .onTapGesture {
+            // Handle tap directly in the row
+            let nc = NotificationCenter.default
+            nc.post(name: Notification.Name("OpenCityChat"), object: city)
+        }
     }
 }
 

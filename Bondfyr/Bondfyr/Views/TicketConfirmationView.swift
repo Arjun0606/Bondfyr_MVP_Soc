@@ -34,7 +34,13 @@ struct TicketConfirmationView: View {
     var body: some View {
         mainContentView
             .padding()
-            .background(Color.black)
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.black, Color(red: 0.2, green: 0.08, blue: 0.3)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .cornerRadius(15)
             .overlay(
                 RoundedRectangle(cornerRadius: 15)

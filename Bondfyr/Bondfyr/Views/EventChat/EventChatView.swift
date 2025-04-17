@@ -71,7 +71,7 @@ struct EventChatView: View {
         LinearGradient(
             gradient: Gradient(colors: [
                 Color.black,
-                Color(red: 0.1, green: 0.1, blue: 0.2)
+                Color(red: 0.2, green: 0.08, blue: 0.3)
             ]),
             startPoint: .top,
             endPoint: .bottom

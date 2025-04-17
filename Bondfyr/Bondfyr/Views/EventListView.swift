@@ -6,80 +6,61 @@
 //
 
 import SwiftUI
+import Combine
+import FirebaseFirestore
 
 struct EventListView: View {
     @EnvironmentObject var eventViewModel: EventViewModel
-    @State private var selectedCity = "Pune"
     @State private var searchText = ""
+    @State private var selectedCity = "All Cities"
     @State private var showOfflineAlert = false
-    @State private var lastUpdateTimeString: String = "Never"
-    @State private var showCityDropdown = false
-    
-    let cities = ["Pune", "Mumbai", "Delhi", "Bangalore"]
+    @State private var lastUpdateTimeString = "Never"
+    @State private var navigateToEventId: String? = nil
+    @State private var navigateToGallery = false
+    @Environment(\.pendingEventNavigation) var pendingNavigation
+    @Environment(\.pendingEventAction) var pendingAction
     
     var filteredEvents: [Event] {
         var events = eventViewModel.events
         
-        if !selectedCity.isEmpty {
-            events = events.filter { $0.city == selectedCity }
+        // Filter by search text
+        if !searchText.isEmpty {
+            events = events.filter { $0.name.lowercased().contains(searchText.lowercased()) }
         }
         
-        if !searchText.isEmpty {
-            events = events.filter { $0.name.lowercased().contains(searchText.lowercased()) ||
-                $0.description.lowercased().contains(searchText.lowercased()) }
+        // Filter by city
+        if selectedCity != "All Cities" {
+            events = events.filter { $0.city == selectedCity }
         }
         
         return events
     }
     
+    var cities: [String] {
+        var citySet = Set<String>()
+        eventViewModel.events.forEach { citySet.insert($0.city) }
+        let cityArray = Array(citySet).sorted()
+        return ["All Cities"] + cityArray
+    }
+    
     var body: some View {
         ZStack {
-            // Background gradient
             LinearGradient(
-                gradient: Gradient(colors: [Color.black, Color.purple.opacity(0.8)]),
+                gradient: Gradient(colors: [Color.black, Color(red: 0.2, green: 0.08, blue: 0.3)]),
                 startPoint: .top,
                 endPoint: .bottom
-            )
-            .edgesIgnoringSafeArea(.all)
+            ).ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Top navigation bar with dropdown
+                // Header with title and refresh button
                 HStack {
-                    Text("Events")
-                        .font(.title2)
+                    Text("Discover")
+                        .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                     
                     Spacer()
                     
-                    // City dropdown menu
-                    Menu {
-                        ForEach(cities, id: \.self) { city in
-                            Button(action: {
-                                selectedCity = city
-                            }) {
-                                HStack {
-                                    Text(city)
-                                    if selectedCity == city {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Text(selectedCity)
-                                .foregroundColor(.white)
-                            Image(systemName: "chevron.down")
-                                .foregroundColor(.white)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(Color.pink)
-                        .cornerRadius(20)
-                    }
-                    
-                    // Refresh button
                     Button(action: {
                         loadEvents()
                     }) {
@@ -117,10 +98,67 @@ struct EventListView: View {
                     dismissButton: .default(Text("OK"))
                 )
             }
+            .onChange(of: pendingNavigation) { eventId in
+                handlePendingNavigation(eventId: eventId)
+            }
+            .onAppear {
+                loadEvents()
+                checkLastUpdateTime()
+                
+                // Check if we have pending navigation
+                handlePendingNavigation(eventId: pendingNavigation)
+            }
+            // Add navigation links for programmatic navigation
+            .background(
+                NavigationLink(
+                    destination: pendingNavigationDestination(),
+                    isActive: Binding(
+                        get: { navigateToEventId != nil },
+                        set: { if !$0 { navigateToEventId = nil } }
+                    )
+                ) {
+                    EmptyView()
+                }
+            )
         }
-        .onAppear {
-            loadEvents()
-            checkLastUpdateTime()
+    }
+    
+    // Handle pending navigation
+    private func handlePendingNavigation(eventId: String?) {
+        guard let eventId = eventId else { return }
+        
+        print("EventListView handling navigation for event: \(eventId)")
+        
+        // Find the event in the list
+        if let event = eventViewModel.events.first(where: { $0.id.uuidString == eventId }) {
+            // Set the navigation target
+            self.navigateToEventId = eventId
+            
+            // Check if we should navigate to gallery
+            if pendingAction == "showGallery" {
+                self.navigateToGallery = true
+            } else {
+                self.navigateToGallery = false
+            }
+        } else {
+            print("⚠️ Event not found for ID: \(eventId)")
+        }
+    }
+    
+    // Determine the navigation destination
+    private func pendingNavigationDestination() -> some View {
+        Group {
+            if let eventId = navigateToEventId,
+               let event = eventViewModel.events.first(where: { $0.id.uuidString == eventId }) {
+                if navigateToGallery {
+                    EventPhotoGalleryView(eventId: eventId, eventName: event.name)
+                } else {
+                    EventDetailView(event: event)
+                }
+            } else {
+                Text("Event not found")
+                    .foregroundColor(.red)
+            }
         }
     }
     

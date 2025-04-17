@@ -66,7 +66,13 @@ struct LoginView: View {
             }
             .padding(.top, 60)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground))
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.black, Color(red: 0.2, green: 0.08, blue: 0.3)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .edgesIgnoringSafeArea(.all)
             .navigationBarHidden(true)
         }

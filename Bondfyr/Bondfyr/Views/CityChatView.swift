@@ -59,7 +59,7 @@ struct CityChatView: View {
     // Background gradient
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.black, Color(red: 0.1, green: 0.05, blue: 0.15)]),
+            gradient: Gradient(colors: [Color.black, Color(red: 0.2, green: 0.08, blue: 0.3)]),
             startPoint: .top,
             endPoint: .bottom
         ).ignoresSafeArea()
