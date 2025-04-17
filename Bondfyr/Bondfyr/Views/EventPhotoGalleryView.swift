@@ -23,6 +23,7 @@ struct EventPhotoGalleryView: View {
     @State private var noPhotosMessage: String? = nil
     @State private var setupPhotosComplete = false
     @State private var selectedEventId: String?
+    @State private var uploadWindowTimer: Timer?
     
     // Standard initializer with Event object
     init(event: Event) {
@@ -161,6 +162,18 @@ struct EventPhotoGalleryView: View {
                 self.setupNotificationListeners()
                 self.setupPhotos()
             }
+            
+            // Set up timer to update remaining time every second
+            self.uploadWindowTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                // For testing, we're disabling the countdown completely
+                // This ensures the upload window stays open
+                DispatchQueue.main.async {
+                    // Make sure the window stays open by setting a minimum value
+                    if self.photoManager.uploadWindowRemainingSeconds < 60 * 60 { // If less than 1 hour
+                        self.photoManager.uploadWindowRemainingSeconds = 5 * 60 * 60 // Reset to 5 hours
+                    }
+                }
+            }
         }
         .onDisappear {
             print("📸 EventPhotoGalleryView disappeared, removing listeners")
@@ -173,6 +186,10 @@ struct EventPhotoGalleryView: View {
             
             // Remove notification observers
             NotificationCenter.default.removeObserver(self)
+            
+            // Clean up timer
+            uploadWindowTimer?.invalidate()
+            uploadWindowTimer = nil
         }
         .sheet(isPresented: $showingCamera) {
             ImagePicker(image: $inputImage)
@@ -330,7 +347,7 @@ struct EventPhotoGalleryView: View {
                             .fontWeight(.medium)
                             .foregroundColor(.white)
                         
-                        Text("Tap to delete and upload a new one")
+                        Text("Delete to upload a new photo")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -352,25 +369,63 @@ struct EventPhotoGalleryView: View {
                 .padding()
             } else {
                 // No photo uploaded, show camera button
-                Button(action: {
-                    // Direct camera access only - no notifications
-                    checkAndOpenCamera()
-                }) {
+                VStack(spacing: 8) {
+                    // Upload window info
                     HStack {
-                        Image(systemName: "camera.fill")
-                            .font(.title2)
+                        Image(systemName: "clock")
+                            .foregroundColor(.yellow)
                         
-                        Text("Capture a Contest Photo")
-                            .fontWeight(.semibold)
+                        Text("Upload window: \(formatTimeRemaining(photoManager.uploadWindowRemainingSeconds))")
+                            .font(.caption)
+                            .foregroundColor(.yellow)
+                        
+                        Spacer()
                     }
-                    .foregroundColor(.white)
-                    .frame(height: 50)
-                    .frame(maxWidth: .infinity)
-                    .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
-                    .cornerRadius(12)
-                    .padding()
+                    .padding(.horizontal)
+                    
+                            Button(action: {
+                        // Direct camera access only - no notifications
+                        checkAndOpenCamera()
+                            }) {
+                                HStack {
+                                    Image(systemName: "camera.fill")
+                                .font(.title2)
+                            
+                            Text("Capture a Contest Photo")
+                                .fontWeight(.semibold)
+                                }
+                                .foregroundColor(.white)
+                        .frame(height: 50)
+                                .frame(maxWidth: .infinity)
+                        .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    }
+                    // Only disable if user already has a photo
+                    .disabled(photoManager.userUploadCount >= 1)
+                    .opacity(photoManager.userUploadCount >= 1 ? 0.5 : 1.0)
                 }
+                .padding(.vertical, 10)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(12)
+                                .padding()
             }
+        }
+    }
+    
+    // Helper to format time remaining
+    private func formatTimeRemaining(_ seconds: TimeInterval) -> String {
+        if seconds <= 0 {
+            return "Closed"
+        }
+        
+        let hours = Int(seconds) / 3600
+        let minutes = Int(seconds) % 3600 / 60
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m remaining"
+        } else {
+            return "\(minutes)m remaining"
         }
     }
     
