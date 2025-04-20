@@ -9,7 +9,6 @@ struct SettingsView: View {
     @AppStorage("darkModeEnabled") private var darkModeEnabled = true
     @AppStorage("eventReminders") private var eventReminders = true
     
-    @State private var showLogoutAlert = false
     @State private var showDeleteAccountAlert = false
     @State private var showPrivacyPolicy = false
     @State private var showTermsOfService = false
@@ -58,20 +57,8 @@ struct SettingsView: View {
                             }
                         }
                         
-                        // Account actions
+                        // Account actions - Only Delete Account now (removed Logout button)
                         VStack(spacing: 16) {
-                            Button(action: {
-                                showLogoutAlert = true
-                            }) {
-                                Text("Logout")
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.pink)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                            
                             Button(action: {
                                 showDeleteAccountAlert = true
                             }) {
@@ -114,17 +101,6 @@ struct SettingsView: View {
                 Text("Back")
                     .foregroundColor(.white)
             })
-            .alert(isPresented: $showLogoutAlert) {
-                Alert(
-                    title: Text("Logout"),
-                    message: Text("Are you sure you want to log out?"),
-                    primaryButton: .destructive(Text("Logout")) {
-                        // Execute a clean logout process
-                        performCleanLogout()
-                    },
-                    secondaryButton: .cancel()
-                )
-            }
             .alert(isPresented: $showDeleteAccountAlert) {
                 Alert(
                     title: Text("Delete Account"),
@@ -144,93 +120,16 @@ struct SettingsView: View {
         }
     }
     
-    // Helper methods for clean logout and account deletion
-    private func performCleanLogout() {
-        print("Performing clean logout")
-        
-        // First, get a reference to the current auth user ID before logout
-        let _ = Auth.auth().currentUser?.uid
-        
-        // Force reset the auth state immediately to make sign-out more aggressive
-        DispatchQueue.main.async {
-            self.authViewModel.currentUser = nil
-            self.authViewModel.isLoggedIn = false
-        }
-        
-        // Dismiss the current view first
-        self.presentationMode.wrappedValue.dismiss()
-        
-        // Give time for the settings view to dismiss
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            // Then notify the app about logout - this should trigger SplashView navigation
-            NotificationCenter.default.post(
-                name: NSNotification.Name("UserDidLogout"),
-                object: nil
-            )
-            
-            // Force dismiss any presented view controller
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let rootVC = windowScene.windows.first?.rootViewController {
-                rootVC.dismiss(animated: true)
-            }
-            
-            // After a small delay, perform the actual logout
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                // Try to forcibly sign out the user
-                do {
-                    try Auth.auth().signOut()
-                } catch {
-                    print("Error signing out: \(error)")
-                }
-                
-                // Finally, call the view model logout to clear all state
-                self.authViewModel.logout()
-            }
-        }
-    }
-    
     private func deleteUserAccount() {
         print("Deleting user account")
         
-        // Dismiss the current view first
+        // First, dismiss the current view
         self.presentationMode.wrappedValue.dismiss()
         
-        // Give time for the settings view to dismiss
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            // Notify about logout
-            NotificationCenter.default.post(
-                name: NSNotification.Name("UserDidLogout"),
-                object: nil
-            )
-            
-            // Then perform the deletion after notification has been processed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if let user = Auth.auth().currentUser {
-                    // Get the uid before deleting
-                    let uid = user.uid
-                    
-                    // Delete user data from Firestore first
-                    let db = Firestore.firestore()
-                    db.collection("users").document(uid).delete { error in
-                        if let error = error {
-                            print("Error deleting user data: \(error.localizedDescription)")
-                        } else {
-                            print("User data deleted successfully")
-                        }
-                        
-                        // Then delete the Firebase Auth user
-                        user.delete { error in
-                            if let error = error {
-                                print("Error deleting user: \(error.localizedDescription)")
-                                // If we can't delete the user, at least log them out
-                                authViewModel.logout()
-                            } else {
-                                print("User deleted successfully")
-                                authViewModel.logout()
-                            }
-                        }
-                    }
-                }
+        // Use the improved delete account method
+        authViewModel.deleteAccount { error in
+            if let error = error {
+                print("❌ Error deleting account: \(error.localizedDescription)")
             }
         }
     }
