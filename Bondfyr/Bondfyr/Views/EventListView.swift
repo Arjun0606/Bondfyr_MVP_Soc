@@ -30,17 +30,21 @@ struct EventListView: View {
         
         // Filter by city
         if selectedCity != "All Cities" {
-            events = events.filter { $0.city == selectedCity }
+            if selectedCity == "Pune" {
+                // All current events are in Pune, so no additional filtering needed
+                // Do nothing as all current events are already in Pune
+            } else {
+                // For other cities, we don't have events yet
+                events = []
+            }
         }
         
         return events
     }
     
     var cities: [String] {
-        var citySet = Set<String>()
-        eventViewModel.events.forEach { citySet.insert($0.city) }
-        let cityArray = Array(citySet).sorted()
-        return ["All Cities"] + cityArray
+        // Hardcoded list of major Indian cities
+        return ["All Cities", "Pune", "Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Kolkata", "Ahmedabad", "Jaipur"]
     }
     
     var body: some View {
@@ -74,6 +78,11 @@ struct EventListView: View {
                 // Search bar
                 searchBar
                     .padding()
+                
+                // City dropdown
+                cityDropdown
+                    .padding(.horizontal)
+                    .padding(.bottom, 10)
                 
                 // Offline indicator
                 if !eventViewModel.isOnline {
@@ -151,7 +160,7 @@ struct EventListView: View {
             if let eventId = navigateToEventId,
                let event = eventViewModel.events.first(where: { $0.id.uuidString == eventId }) {
                 if navigateToGallery {
-                    EventPhotoGalleryView(eventId: eventId, eventName: event.name)
+                    EventPhotoGalleryView(event: event)
                 } else {
                     EventDetailView(event: event)
                 }
@@ -182,6 +191,37 @@ struct EventListView: View {
         .padding(10)
         .background(Color.white.opacity(0.1))
         .cornerRadius(10)
+    }
+    
+    private var cityDropdown: some View {
+        Menu {
+            ForEach(cities, id: \.self) { city in
+                Button(action: {
+                    selectedCity = city
+                }) {
+                    HStack {
+                        Text(city)
+                        if selectedCity == city {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "mappin.and.ellipse")
+                    .foregroundColor(.pink)
+                Text(selectedCity)
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .foregroundColor(.gray)
+                    .font(.system(size: 14))
+            }
+            .padding(10)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+        }
     }
     
     private var loadingView: some View {
