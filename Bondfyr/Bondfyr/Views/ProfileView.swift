@@ -515,7 +515,8 @@ struct EditProfileView: View {
                     name: self.name,
                     email: currentUser.email,
                     dob: currentUser.dob,
-                    phoneNumber: self.phone
+                    phoneNumber: self.phone,
+                    role: currentUser.role // Explicitly preserve the user's existing role
                 )
                 
                 // Update the Auth ViewModel with the new user

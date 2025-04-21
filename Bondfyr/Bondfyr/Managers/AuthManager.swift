@@ -179,6 +179,7 @@ class AuthManager {
                             "email": email,
                             "name": name,
                             "photoURL": user.photoURL?.absoluteString ?? "",
+                            "role": "user",
                             "lastLogin": Timestamp()
                         ]
                         
