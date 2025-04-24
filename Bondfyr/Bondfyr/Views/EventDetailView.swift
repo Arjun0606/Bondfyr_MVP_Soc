@@ -22,10 +22,12 @@ struct EventDetailView: View {
     let event: Event
 
     @State private var selectedTier = ""
-    @State private var ticketCount = 1
+    @State private var ticketCount = 0
     @State private var prCode = ""
     @State private var instagramUsername = ""
-    @State private var genders: [String] = [""]
+    @State private var maleCount = 0
+    @State private var femaleCount = 0
+    @State private var nonBinaryCount = 0
     @State private var showPopup = false
     @State private var showConfirmationPopup = false
     @State private var zoomedImage: String? = nil
@@ -53,272 +55,91 @@ struct EventDetailView: View {
 
     var body: some View {
         ZStack {
+            // Background gradient
             LinearGradient(
                 gradient: Gradient(colors: [Color.black, Color(red: 0.2, green: 0.08, blue: 0.3)]),
                 startPoint: .top,
                 endPoint: .bottom
             ).ignoresSafeArea()
-
+            
+            // Main content
             ScrollView {
                 VStack(spacing: 20) {
-                    Image(event.eventPosterImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .cornerRadius(10)
-                        .onTapGesture {
-                            zoomedImage = event.eventPosterImage
-                            zoomScale = 1.0
-                        }
-
-                    if let gallery = event.galleryImages, !gallery.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(gallery, id: \.self) { imageName in
-                                    Image(imageName)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 120, height: 120)
-                                        .clipped()
-                                        .cornerRadius(8)
-                                        .onTapGesture {
-                                            zoomedImage = imageName
-                                            zoomScale = 1.0
-                                        }
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(event.name)
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-
-                        Text("\(event.location) • \(event.date)")
-                            .foregroundColor(.gray)
-
-                        Button(action: {
-                            if let url = URL(string: event.mapsURL) {
-                                UIApplication.shared.open(url)
-                            }
-                        }) {
-                            Label("Open in Google Maps", systemImage: "map")
-                                .foregroundColor(.pink)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.white.opacity(0.1))
-                                .cornerRadius(10)
-                        }
-
-                        Divider().background(Color.white.opacity(0.2))
-
-                        Text("About this Event")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        Text(event.description)
-                            .foregroundColor(.gray)
-
-                        Divider().background(Color.white.opacity(0.2))
-                        
-                        // Removed Calendar and Offline buttons section
-
-                        Button(action: {
-                            navigateToGallery = true
-                        }) {
-                            HStack {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                Text("Event Photos")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                            }
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                        }
-
-                        Button(action: {
-                            showAttendeesView = true
-                        }) {
-                            HStack {
-                                Image(systemName: "person.3.fill")
-                                Text("Live Attendance")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                            }
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                        }
-
-                        // Instagram button
-                        instagramButton
-
-                        // Event chat button
-                        eventChatButton
-
-                        Divider().background(Color.white.opacity(0.2))
-
-                        Text("Select Ticket Tier")
-                            .font(.headline)
-                            .foregroundColor(.white)
-
-                        Picker("Tier", selection: $selectedTier) {
-                            Text("Select a Tier").tag("")
-                            ForEach(tiers, id: \.self) { tier in
-                                Text(tier).tag(tier)
-                            }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(10)
-
-                        Stepper("Tickets: \(ticketCount)", value: $ticketCount, in: 1...6, onEditingChanged: { _ in
-                            adjustGenderArray()
-                        })
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(10)
-                        .accentColor(.pink)
-
-                        ForEach(0..<ticketCount, id: \.self) { index in
-                            Menu {
-                                ForEach(genderOptions, id: \.self) { gender in
-                                    Button(action: {
-                                        genders[index] = gender
-                                    }) {
-                                        Text(gender)
-                                    }
-                                }
-                            } label: {
-                                Text(genders[index].isEmpty ? "Gender" : genders[index])
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .foregroundColor(genders[index].isEmpty ? .gray : .white)
-                                    .background(Color.white.opacity(0.1))
-                                    .cornerRadius(10)
-                            }
-                        }
-
-                        TextField("Instagram handle (optional)", text: $instagramUsername)
-                            .autocapitalization(.none)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                            .foregroundColor(.white)
-
-                        TextField("PR Code (optional)", text: $prCode)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(10)
-                            .foregroundColor(.white)
-
-                        Button(action: {
-                            if shouldShowWarning() {
-                                showPopup = true
-                            } else {
-                                preparePayment()
-                            }
-                        }) {
-                            Text("Get Tickets")
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(isFormValid() ? Color.pink : Color.gray)
-                                .cornerRadius(12)
-                        }
-                        .disabled(!isFormValid())
-
-                        Text("🎟️ All sales are final. No refunds or cancellations. Entry is at the club's discretion.")
-                            .font(.footnote)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 4)
-                        
-                        // Test notification button (for debugging)
-                        Button(action: {
-                            NotificationManager.shared.sendTestNotification()
-                            print("Test notification scheduled")
-                        }) {
-                            Text("Test Notification")
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .cornerRadius(12)
-                        }
-                        .padding(.top, 10)
-                        
-                        // Test chat button (for debugging)
-                        Button(action: {
-                            ChatManager.shared.enableTestMode()
-                            navigateToEventChat = true
-                        }) {
-                            Text("Test Event Chat")
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.purple)
-                                .cornerRadius(12)
-                        }
-                        .padding(.top, 10)
-                    }
-                    .padding()
+                    eventImageSection
+                    eventInfoSection
+                    
+                    Divider().background(Color.white.opacity(0.2))
+                    
+                    actionButtonsSection
+                    
+                    Divider().background(Color.white.opacity(0.2))
+                    
+                    ticketSection
+                    
+                    #if DEBUG
+                    debugButtonsSection
+                    #endif
                 }
+                .padding()
             }
-
-            // 🔍 Zoomed Image Popup
+            
+            // Zoomed image overlay
             if let image = zoomedImage {
-                Color.black.opacity(0.9).ignoresSafeArea()
-                VStack {
-                    Spacer()
-                    Image(image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .scaleEffect(zoomScale)
-                        .gesture(MagnificationGesture().onChanged { value in
-                            zoomScale = value
-                        })
+                ZStack {
+                    Color.black.opacity(0.9).ignoresSafeArea()
+                    VStack {
+                        Spacer()
+                        Image(image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .scaleEffect(zoomScale)
+                            .gesture(MagnificationGesture().onChanged { value in
+                                zoomScale = value
+                            })
+                            .padding()
+                        Spacer()
+                        Button("Close") {
+                            zoomedImage = nil
+                        }
                         .padding()
-                    Spacer()
-                    Button("Close") {
-                        zoomedImage = nil
+                        .foregroundColor(.white)
+                        .background(Color.pink)
+                        .cornerRadius(8)
                     }
-                    .padding()
-                    .foregroundColor(.white)
-                    .background(Color.pink)
-                    .cornerRadius(8)
                 }
                 .transition(.scale)
             }
+            
+            // Loading overlay
+            if isAddingToCalendar {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .progressViewStyle(CircularProgressViewStyle(tint: .pink))
+                    .frame(width: 60, height: 60)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+            }
         }
-        .onAppear {
-            resetForm()
-        }
-        .alert("⚠️ Gender Ratio Notice", isPresented: $showPopup, actions: {
+        .onAppear { resetForm() }
+        // Alerts and sheets
+        .alert("⚠️ Gender Ratio Notice", isPresented: $showPopup) {
             Button("I Agree") {
                 generateTicket()
             }
             Button("Cancel", role: .cancel) {}
-        }, message: {
+        } message: {
             Text("Entry may be denied at the venue if gender ratio is not met. This is at the discretion of the club. No refunds will be provided.")
-        })
-        .alert("✅ Ticket Confirmed", isPresented: $showConfirmationPopup, actions: {
+        }
+        .alert("✅ Ticket Confirmed", isPresented: $showConfirmationPopup) {
             Button("Go to Tickets") {
                 presentationMode.wrappedValue.dismiss()
                 tabSelection.selectedTab = .tickets
             }
-        }, message: {
+        } message: {
             Text("Your ticket has been successfully purchased.")
-        })
+        }
         .sheet(isPresented: $navigateToGallery) {
-            EventPhotoGalleryView(eventId: event.id.uuidString, eventName: event.name)
+            EventPhotoGalleryView(event: event)
         }
         .sheet(isPresented: $showAttendeesView) {
             EventAttendeesView(event: event)
@@ -326,7 +147,7 @@ struct EventDetailView: View {
         .sheet(isPresented: $navigateToEventChat) {
             EventChatView(event: event)
         }
-        .confirmationDialog("Add to Calendar", isPresented: $showCalendarActionSheet, titleVisibility: .visible) {
+        .confirmationDialog("Add to Calendar", isPresented: $showCalendarActionSheet) {
             Button("Add to Default Calendar") {
                 addEventToCalendar()
             }
@@ -350,40 +171,61 @@ struct EventDetailView: View {
         } message: {
             Text(getConflictsMessage())
         }
-        .overlay(
-            Group {
-                if isAddingToCalendar {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .progressViewStyle(CircularProgressViewStyle(tint: .pink))
-                        .frame(width: 60, height: 60)
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(10)
-                }
-            }
-        )
     }
 
-    func adjustGenderArray() {
-        if genders.count < ticketCount {
-            genders += Array(repeating: "", count: ticketCount - genders.count)
-        } else if genders.count > ticketCount {
-            genders = Array(genders.prefix(ticketCount))
+    // MARK: - Debug Section
+    private var debugButtonsSection: some View {
+        VStack(spacing: 10) {
+            Button(action: {
+                ChatManager.shared.enableTestMode()
+                navigateToEventChat = true
+            }) {
+                Text("Test Event Chat")
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.purple)
+                    .cornerRadius(12)
+            }
         }
+        .padding(.top, 10)
+    }
+
+    func updateTicketCount() {
+        ticketCount = maleCount + femaleCount + nonBinaryCount
     }
 
     func shouldShowWarning() -> Bool {
-        let maleCount = genders.filter { $0 == "Male" }.count
-        let femaleCount = genders.filter { $0 == "Female" }.count
         return maleCount > femaleCount
     }
 
     func isFormValid() -> Bool {
-        return !selectedTier.isEmpty && !genders.contains("")
+        return !selectedTier.isEmpty && ticketCount > 0
+    }
+    
+    func getGenderArray() -> [String] {
+        var genders: [String] = []
+        
+        // Add male tickets
+        for _ in 0..<maleCount {
+            genders.append("Male")
+        }
+        
+        // Add female tickets
+        for _ in 0..<femaleCount {
+            genders.append("Female")
+        }
+        
+        // Add non-binary tickets
+        for _ in 0..<nonBinaryCount {
+            genders.append("Non-Binary")
+        }
+        
+        return genders
     }
 
     func generateTicket() {
-        TicketManager.shared.purchaseTicket(event: event, tier: selectedTier, count: ticketCount, genders: genders, prCode: prCode) { result in
+        TicketManager.shared.purchaseTicket(event: event, tier: selectedTier, count: ticketCount, genders: getGenderArray(), prCode: prCode) { result in
             // Handle result
         }
     }
@@ -393,7 +235,7 @@ struct EventDetailView: View {
             event: event.name,
             tier: selectedTier,
             count: ticketCount,
-            genders: genders,
+            genders: getGenderArray(),
             prCode: prCode,
             timestamp: ISO8601DateFormatter().string(from: Date()),
             ticketId: UUID().uuidString,
@@ -425,10 +267,12 @@ struct EventDetailView: View {
 
     func resetForm() {
         selectedTier = ""
-        ticketCount = 1
+        ticketCount = 0
         prCode = ""
         instagramUsername = ""
-        genders = [""]
+        maleCount = 0
+        femaleCount = 0
+        nonBinaryCount = 0
     }
 
     private func openInstagram(for clubName: String) {
@@ -619,6 +463,293 @@ struct EventDetailView: View {
         }
         
         NotificationManager.shared.triggerPhotoContestForEvent(eventId: firestoreId)
+    }
+
+    // MARK: - Subviews
+    private var eventImageSection: some View {
+        VStack {
+            Image(event.eventPosterImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .cornerRadius(10)
+                .onTapGesture {
+                    zoomedImage = event.eventPosterImage
+                    zoomScale = 1.0
+                }
+            
+            if let gallery = event.galleryImages, !gallery.isEmpty {
+                gallerySection(gallery: gallery)
+            }
+        }
+    }
+    
+    func gallerySection(gallery: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(gallery, id: \.self) { imageName in
+                    galleryImage(imageName: imageName)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+    
+    func galleryImage(imageName: String) -> some View {
+        Image(imageName)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 120, height: 120)
+            .clipped()
+            .cornerRadius(8)
+            .onTapGesture {
+                zoomedImage = imageName
+                zoomScale = 1.0
+            }
+    }
+    
+    var eventInfoSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(event.name)
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text("\(event.location) • \(event.date)")
+                .foregroundColor(.gray)
+            
+            mapButton
+            
+            Divider().background(Color.white.opacity(0.2))
+            
+            aboutSection
+        }
+    }
+    
+    var mapButton: some View {
+        Button(action: {
+            if let url = URL(string: event.mapsURL) {
+                UIApplication.shared.open(url)
+            }
+        }) {
+            Label("Open in Google Maps", systemImage: "map")
+                .foregroundColor(.pink)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(10)
+        }
+    }
+    
+    var aboutSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("About this Event")
+                .font(.headline)
+                .foregroundColor(.white)
+            Text(event.description)
+                .foregroundColor(.gray)
+        }
+    }
+
+    var actionButtonsSection: some View {
+        VStack(spacing: 16) {
+            photoGalleryButton
+            liveAttendanceButton
+            instagramButton
+            
+            // Event Chat button placed in a HStack to allow left alignment
+            HStack {
+                eventChatButton
+                Spacer()
+            }
+        }
+    }
+    
+    var photoGalleryButton: some View {
+        Button(action: { navigateToGallery = true }) {
+            HStack {
+                Image(systemName: "photo.on.rectangle.angled")
+                Text("Event Photos")
+                Spacer()
+                Image(systemName: "chevron.right")
+            }
+            .foregroundColor(.white)
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+        }
+    }
+    
+    var liveAttendanceButton: some View {
+        Button(action: { showAttendeesView = true }) {
+            HStack {
+                Image(systemName: "person.3.fill")
+                Text("Live Attendance")
+                Spacer()
+                Image(systemName: "chevron.right")
+            }
+            .foregroundColor(.white)
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+        }
+    }
+    
+    var ticketSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ticketHeader
+            ticketSelectionSection
+            genderSelectionList
+            formFields
+            purchaseSection
+        }
+    }
+    
+    var ticketHeader: some View {
+        Text("Select Ticket Tier")
+            .font(.headline)
+            .foregroundColor(.white)
+    }
+    
+    var ticketSelectionSection: some View {
+        VStack(spacing: 12) {
+            ticketPicker
+            ticketStepper
+        }
+    }
+    
+    var ticketPicker: some View {
+        Menu {
+            ForEach(tiers, id: \.self) { tier in
+                Button(tier) {
+                    selectedTier = tier
+                }
+            }
+        } label: {
+            HStack {
+                Text(selectedTier.isEmpty ? "Select a Tier" : selectedTier)
+                    .foregroundColor(selectedTier.isEmpty ? .gray : .white)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .foregroundColor(.white)
+            }
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+        }
+    }
+    
+    var ticketStepper: some View {
+        HStack {
+            Text("Total Tickets: \(ticketCount)")
+                .foregroundColor(.white)
+            Spacer()
+        }
+        .padding()
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(10)
+    }
+    
+    var genderSelectionList: some View {
+        VStack(spacing: 10) {
+            // Male counter
+            genderCounter(label: "Male", count: $maleCount)
+            
+            // Female counter
+            genderCounter(label: "Female", count: $femaleCount)
+            
+            // Non-Binary counter
+            genderCounter(label: "Non-Binary", count: $nonBinaryCount)
+        }
+    }
+    
+    func genderCounter(label: String, count: Binding<Int>) -> some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.white)
+            Spacer()
+            HStack(spacing: 20) {
+                Button(action: {
+                    if count.wrappedValue > 0 {
+                        count.wrappedValue -= 1
+                        updateTicketCount()
+                    }
+                }) {
+                    Image(systemName: "minus")
+                        .foregroundColor(.white)
+                }
+                
+                Text("\(count.wrappedValue)")
+                    .foregroundColor(.white)
+                    .frame(minWidth: 30)
+                
+                Button(action: {
+                    if ticketCount < 6 {
+                        count.wrappedValue += 1
+                        updateTicketCount()
+                    }
+                }) {
+                    Image(systemName: "plus")
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(8)
+        }
+        .padding()
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(10)
+    }
+    
+    var formFields: some View {
+        VStack(spacing: 12) {
+            customTextField(text: $instagramUsername, placeholder: "Instagram handle (optional)")
+            customTextField(text: $prCode, placeholder: "PR Code (optional)")
+        }
+    }
+    
+    func customTextField(text: Binding<String>, placeholder: String) -> some View {
+        TextField(placeholder, text: text)
+            .autocapitalization(.none)
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+            .foregroundColor(.white)
+    }
+    
+    var purchaseSection: some View {
+        VStack(spacing: 12) {
+            getTicketsButton
+            disclaimerText
+        }
+    }
+    
+    var getTicketsButton: some View {
+        Button(action: {
+            if shouldShowWarning() {
+                showPopup = true
+            } else {
+                preparePayment()
+            }
+        }) {
+            Text("Get Tickets")
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(isFormValid() ? Color.pink : Color.gray)
+                .cornerRadius(12)
+        }
+        .disabled(!isFormValid())
+    }
+    
+    var disclaimerText: some View {
+        Text("🎟️ All sales are final. No refunds or cancellations. Entry is at the club's discretion.")
+            .font(.footnote)
+            .foregroundColor(.gray)
+            .multilineTextAlignment(.center)
+            .padding(.top, 4)
     }
 }
 
