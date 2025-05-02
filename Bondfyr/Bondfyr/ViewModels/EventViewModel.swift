@@ -102,13 +102,15 @@ class EventViewModel: ObservableObject {
     }
     
     private func loadOfflineEvents() {
-        if let cachedEvents = OfflineDataManager.shared.getCachedEvents() {
+        if let cachedEvents = OfflineDataManager.shared.getCachedEvents(),
+           cachedEvents.allSatisfy({ $0.firestoreId != nil }) {
             events = cachedEvents
             isLoading = false
         } else {
-            // Fallback to sample events if no cached data
-            events = sampleEvents
+            // Do NOT use sampleEvents in production!
+            events = []
             isLoading = false
+            errorMessage = "No events available offline. Please connect to the internet."
         }
     }
     
@@ -128,13 +130,14 @@ class EventViewModel: ObservableObject {
                         let event = self.events[index]
                         let updatedEvent = Event(
                             firestoreId: event.firestoreId,
+                            eventName: event.eventName,
                             name: event.name,
+                            location: event.location,
                             description: event.description,
                             date: event.date,
                             time: event.time,
                             venueLogoImage: event.venueLogoImage,
                             eventPosterImage: event.eventPosterImage,
-                            location: event.location,
                             city: event.city,
                             mapsURL: event.mapsURL,
                             galleryImages: event.galleryImages,

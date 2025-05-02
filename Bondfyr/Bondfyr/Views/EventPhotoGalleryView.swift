@@ -1,8 +1,36 @@
+// ===========================================
+// TEMPORARY FIX FOR SDWEBIMAGESWIFTUI ISSUES
+// ===========================================
+// This file has been modified to use AsyncImage instead of WebImage
+// until SDWebImageSwiftUI can be properly added.
+//
+// Follow these EXACT steps to add SDWebImageSwiftUI:
+// 1. Close Xcode completely
+// 2. Delete the DerivedData folder by:
+//    - Going to Xcode menu > Preferences > Locations
+//    - Click the small arrow next to DerivedData path to open it
+//    - Delete the folder content or the entire folder
+// 3. Open Terminal and run:
+//    cd ~/Library/Caches && rm -rf org.swift.swiftpm
+// 4. Reopen Xcode and your project
+// 5. Go to File > Packages > Reset Package Caches
+// 6. Go to File > Add Packages...
+// 7. Enter URL: https://github.com/SDWebImage/SDWebImageSwiftUI.git
+// 8. Click "Add Package"
+// 9. When prompted, select BOTH "SDWebImageSwiftUI" and "SDWebImage" products
+// 10. Select your target "Bondfyr" in the dropdown
+// 11. Click "Add Package" again
+// 12. After package is added, clean build folder:
+//     Hold Option key and click Product > Clean Build Folder
+// 13. Once SDWebImageSwiftUI is properly added, replace all AsyncImage
+//     instances with WebImage
+// ===========================================
+
 import SwiftUI
 import Firebase
 import FirebaseFirestore
 import FirebaseAuth
-import SDWebImageSwiftUI
+import SDWebImage  // Changed to what's available for now
 
 struct EventPhotoGalleryView: View {
     let event: Event
@@ -56,13 +84,14 @@ struct EventPhotoGalleryView: View {
         // Create a properly initialized placeholder event with all required parameters
         self.event = Event(
             firestoreId: stringEventId,
+            eventName: "Photo Contest", // Placeholder event name
             name: "Photo Contest",
+            location: "Loading...",
             description: "Loading event details...",
             date: "Today",
             time: "Now",
             venueLogoImage: "placeholder",
             eventPosterImage: "placeholder",
-            location: "Loading...",
             city: "Loading...",
             mapsURL: "",
             galleryImages: [],
@@ -288,18 +317,38 @@ struct EventPhotoGalleryView: View {
                                 .font(.title)
                                 .foregroundColor(medalColor(for: index))
                             
-                            // Photo - using fixed approach
-                            WebImage(url: URL(string: photo.photoURL))
-                                .resizable()
-                                .indicator(.activity)
-                                .transition(.fade(duration: 0.5))
-                                .scaledToFill()
-                                .frame(width: 100, height: 100)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(medalColor(for: index), lineWidth: 2)
-                                )
+                            // Photo - using AsyncImage temporarily
+                            AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                                if let image = phase.image {
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(medalColor(for: index), lineWidth: 2)
+                                        )
+                                } else if phase.error != nil {
+                                    Image(systemName: "photo")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(medalColor(for: index), lineWidth: 2)
+                                        )
+                                } else {
+                                    ProgressView()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(medalColor(for: index), lineWidth: 2)
+                                        )
+                                }
+                            }
                             
                             // Like count
                             HStack(spacing: 5) {
@@ -332,14 +381,26 @@ struct EventPhotoGalleryView: View {
             if let userPhoto = photoManager.userPhoto {
                 // User already has a photo uploaded
                 HStack {
-                    // User photo thumbnail - fixed approach
-                    WebImage(url: URL(string: userPhoto.photoURL))
-                        .resizable()
-                        .indicator(.activity)
-                        .transition(.fade(duration: 0.5))
-                        .scaledToFill()
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
+                    // User photo thumbnail - AsyncImage temporarily
+                    AsyncImage(url: URL(string: userPhoto.photoURL)) { phase in
+                        if let image = phase.image {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                        } else if phase.error != nil {
+                            Image(systemName: "person.circle")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                        } else {
+                            ProgressView()
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                        }
+                    }
                     
                     VStack(alignment: .leading) {
                         Text("Your photo is live!")
@@ -383,20 +444,20 @@ struct EventPhotoGalleryView: View {
                     }
                     .padding(.horizontal)
                     
-                            Button(action: {
+                    Button(action: {
                         // Direct camera access only - no notifications
                         checkAndOpenCamera()
-                            }) {
-                                HStack {
-                                    Image(systemName: "camera.fill")
+                    }) {
+                        HStack {
+                            Image(systemName: "camera.fill")
                                 .font(.title2)
                             
                             Text("Capture a Contest Photo")
                                 .fontWeight(.semibold)
-                                }
-                                .foregroundColor(.white)
+                        }
+                        .foregroundColor(.white)
                         .frame(height: 50)
-                                .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity)
                         .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
                         .cornerRadius(12)
                         .padding(.horizontal)
@@ -408,7 +469,7 @@ struct EventPhotoGalleryView: View {
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.3))
                 .cornerRadius(12)
-                                .padding()
+                .padding()
             }
         }
     }
@@ -448,7 +509,7 @@ struct EventPhotoGalleryView: View {
             // Caption field
             TextField("Write a caption...", text: $caption)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.horizontal)
+                .padding(.horizontal)
             
             // Buttons
             HStack {
@@ -472,8 +533,8 @@ struct EventPhotoGalleryView: View {
             }
             
             Spacer()
-                            }
-                            .padding()
+        }
+        .padding()
     }
     
     // MARK: - Helper Functions
@@ -859,31 +920,40 @@ struct PhotoContestCard: View {
             // User info header
             userInfoHeader
             
-            // Photo - fixed implementation 
+            // Photo
             ZStack {
                 Rectangle()
                     .foregroundColor(.gray.opacity(0.3))
                     .frame(height: 200)
                 
-                WebImage(url: URL(string: photo.photoURL))
-                    .resizable()
-                    .indicator(.activity)
-                    .transition(.fade(duration: 0.5))
-                    .scaledToFit()
+                // Photo - using AsyncImage temporarily
+                AsyncImage(url: URL(string: photo.photoURL)) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    } else if phase.error != nil {
+                        Image(systemName: "photo")
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        ProgressView()
+                    }
+                }
             }
             .cornerRadius(12)
             
             // Caption
             if !photo.caption.isEmpty {
                 Text(photo.caption)
-                                    .foregroundColor(.white)
+                    .foregroundColor(.white)
                     .padding(.vertical, 4)
             }
             
             // Like button and expiration info
             likeAndExpirationRow
-                            }
-                            .padding()
+        }
+        .padding()
         .background(Color.black.opacity(0.3))
         .cornerRadius(15)
         .alert(isPresented: $showDeleteConfirmation) {

@@ -209,13 +209,15 @@ struct PhotoContestButton_Previews: PreviewProvider {
         VStack(spacing: 20) {
             PhotoContestButton(
                 event: Event(
+                    firestoreId: nil,
+                    eventName: "Summer Party",
                     name: "Summer Party",
+                    location: "Beach Club",
                     description: "A fun summer party",
                     date: "2023-08-15",
                     time: "8:00 PM",
                     venueLogoImage: "",
                     eventPosterImage: "",
-                    location: "Beach Club",
                     city: "Miami",
                     mapsURL: "",
                     galleryImages: [],
@@ -228,13 +230,15 @@ struct PhotoContestButton_Previews: PreviewProvider {
             
             PhotoContestButton(
                 event: Event(
+                    firestoreId: nil,
+                    eventName: "Summer Party",
                     name: "Summer Party",
+                    location: "Beach Club",
                     description: "A fun summer party",
                     date: "2023-08-15",
                     time: "8:00 PM",
                     venueLogoImage: "",
                     eventPosterImage: "",
-                    location: "Beach Club",
                     city: "Miami",
                     mapsURL: "",
                     galleryImages: [],
@@ -247,13 +251,15 @@ struct PhotoContestButton_Previews: PreviewProvider {
             
             PhotoContestButton(
                 event: Event(
+                    firestoreId: nil,
+                    eventName: "Summer Party",
                     name: "Summer Party",
+                    location: "Beach Club",
                     description: "A fun summer party",
                     date: "2023-08-15",
                     time: "8:00 PM",
                     venueLogoImage: "",
                     eventPosterImage: "",
-                    location: "Beach Club",
                     city: "Miami",
                     mapsURL: "",
                     galleryImages: [],

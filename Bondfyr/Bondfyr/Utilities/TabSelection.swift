@@ -13,6 +13,7 @@ class TabSelection: ObservableObject {
 
 enum Tab: Int, Hashable {
     case discover
+    case saved
     case chat
     case tickets
     case profile

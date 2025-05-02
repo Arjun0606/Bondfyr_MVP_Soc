@@ -47,11 +47,28 @@ struct EventDetailView: View {
     @State private var isAddingToCalendar = false
     @State private var showOfflineMessage = false
 
+    // New state variables for save functionality
+    @State private var isSettingReminder = false
+    @State private var showReminderAlert = false
+    @State private var reminderAlertTitle = ""
+    @State private var reminderAlertMessage = ""
+    @State private var showSaveError = false
+    @State private var errorMessage = ""
+
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var tabSelection: TabSelection
+    @StateObject private var savedEventsManager = SavedEventsManager.shared
 
     let tiers = ["Early Bird", "Standard", "VIP"]
     let genderOptions = ["Male", "Female", "Non-Binary"]
+
+    init(event: Event) {
+        self.event = event
+    }
+
+    private var isSaved: Bool {
+        savedEventsManager.savedEvents.contains(where: { ($0.firestoreId ?? $0.id.uuidString) == (event.firestoreId ?? event.id.uuidString) })
+    }
 
     var body: some View {
         ZStack {
@@ -79,6 +96,43 @@ struct EventDetailView: View {
                     #if DEBUG
                     debugButtonsSection
                     #endif
+                    
+                    // Add Save and Reminder buttons
+                    HStack(spacing: 20) {
+                        Button(action: toggleSave) {
+                            HStack {
+                                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                                    .foregroundColor(isSaved ? .blue : .gray)
+                                Text(isSaved ? "Saved" : "Save")
+                                    .foregroundColor(isSaved ? .blue : .gray)
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(Color.white)
+                            .cornerRadius(20)
+                            .shadow(radius: 2)
+                        }
+                        
+                        if isSaved {
+                            Button(action: {
+                                showCalendarActionSheet = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "bell")
+                                        .foregroundColor(.orange)
+                                    Text("Set Reminder")
+                                        .foregroundColor(.orange)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 16)
+                                .background(Color.white)
+                                .cornerRadius(20)
+                                .shadow(radius: 2)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 16)
                 }
                 .padding()
             }
@@ -170,6 +224,20 @@ struct EventDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(getConflictsMessage())
+        }
+        .alert(isPresented: $showReminderAlert) {
+            Alert(
+                title: Text(reminderAlertTitle),
+                message: Text(reminderAlertMessage),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(isPresented: $showSaveError) {
+            Alert(
+                title: Text("Error"),
+                message: Text(errorMessage),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
@@ -750,6 +818,52 @@ struct EventDetailView: View {
             .foregroundColor(.gray)
             .multilineTextAlignment(.center)
             .padding(.top, 4)
+    }
+
+    private func toggleSave() {
+        if isSaved {
+            savedEventsManager.unsaveEvent(event) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        break // No need to update isSaved, it's computed
+                    case .failure(let error):
+                        errorMessage = error.localizedDescription
+                        showSaveError = true
+                    }
+                }
+            }
+        } else {
+            savedEventsManager.saveEvent(event) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        break // No need to update isSaved, it's computed
+                    case .failure(let error):
+                        errorMessage = error.localizedDescription
+                        showSaveError = true
+                    }
+                }
+            }
+        }
+    }
+    
+    private func setReminder() {
+        isSettingReminder = true
+        savedEventsManager.setReminder(for: event) { result in
+            DispatchQueue.main.async {
+                isSettingReminder = false
+                switch result {
+                case .success:
+                    reminderAlertTitle = "Success"
+                    reminderAlertMessage = "Reminder set successfully! You'll be notified 1 day and 1 hour before the event."
+                case .failure(let error):
+                    reminderAlertTitle = "Error"
+                    reminderAlertMessage = error.localizedDescription
+                }
+                showReminderAlert = true
+            }
+        }
     }
 }
 

@@ -3,14 +3,20 @@ import SwiftUI
 struct EventCard: View {
     let event: Event
     @StateObject private var savedEventsManager = SavedEventsManager.shared
-    @State private var isSaved: Bool
     
-    init(event: Event) {
-        self.event = event
-        _isSaved = State(initialValue: event.isSaved)
+    private var isSaved: Bool {
+        guard let firestoreId = event.firestoreId else { return false }
+        return savedEventsManager.savedEvents.contains(where: { $0.firestoreId == firestoreId })
     }
     
     var body: some View {
+        // Debug print to check IDs
+        let _ = {
+            print("[EventCard] Current event: \(event.eventName), firestoreId: \(event.firestoreId ?? "nil")")
+            for saved in savedEventsManager.savedEvents {
+                print("[EventCard] Saved event: \(saved.eventName), firestoreId: \(saved.firestoreId ?? "nil")")
+            }
+        }()
         VStack(alignment: .leading, spacing: 8) {
             // Event name at the top, bold
             Text(event.eventName)
@@ -114,29 +120,9 @@ struct EventCard: View {
     
     private func toggleSave() {
         if isSaved {
-            savedEventsManager.unsaveEvent(event) { result in
-                DispatchQueue.main.async {
-                    switch result {
-                    case .success:
-                        isSaved = false
-                    case .failure:
-                        // Handle error if needed
-                        break
-                    }
-                }
-            }
+            savedEventsManager.unsaveEvent(event) { _ in }
         } else {
-            savedEventsManager.saveEvent(event) { result in
-                DispatchQueue.main.async {
-                    switch result {
-                    case .success:
-                        isSaved = true
-                    case .failure:
-                        // Handle error if needed
-                        break
-                    }
-                }
-            }
+            savedEventsManager.saveEvent(event) { _ in }
         }
     }
 } 

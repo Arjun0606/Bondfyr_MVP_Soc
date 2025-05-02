@@ -19,6 +19,8 @@
 		DC40AA952D91934800D78A39 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AA942D91934800D78A39 /* GoogleSignInSwift */; };
 		DC40AAB42D9AAD2500D78A39 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AAB32D9AAD2500D78A39 /* FirebaseStorage */; };
 		DC40AC872DA5790F00D78A39 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AC862DA5790F00D78A39 /* FirebaseMessaging */; };
+		DC9A4B752DB927C300A44426 /* SDWebImage in Frameworks */ = {isa = PBXBuildFile; productRef = DC9A4B742DB927C300A44426 /* SDWebImage */; };
+		DC9A4B772DB927C300A44426 /* SDWebImageMapKit in Frameworks */ = {isa = PBXBuildFile; productRef = DC9A4B762DB927C300A44426 /* SDWebImageMapKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -90,7 +92,9 @@
 				DC40AA8C2D918B5E00D78A39 /* FirebaseFirestore in Frameworks */,
 				DC40AA7F2D91860E00D78A39 /* FirebaseAuth in Frameworks */,
 				DC40AAB42D9AAD2500D78A39 /* FirebaseStorage in Frameworks */,
+				DC9A4B752DB927C300A44426 /* SDWebImage in Frameworks */,
 				DC40AA742D9185E000D78A39 /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
+				DC9A4B772DB927C300A44426 /* SDWebImageMapKit in Frameworks */,
 				DC40AA932D91934800D78A39 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -172,6 +176,8 @@
 				DC40AA942D91934800D78A39 /* GoogleSignInSwift */,
 				DC40AAB32D9AAD2500D78A39 /* FirebaseStorage */,
 				DC40AC862DA5790F00D78A39 /* FirebaseMessaging */,
+				DC9A4B742DB927C300A44426 /* SDWebImage */,
+				DC9A4B762DB927C300A44426 /* SDWebImageMapKit */,
 			);
 			productName = Bondfyr;
 			productReference = DCBA6B5C2D90FA0E00214DC5 /* Bondfyr.app */;
@@ -258,6 +264,7 @@
 			packageReferences = (
 				DC40AA702D91831000D78A39 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				DC40AA912D91933800D78A39 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				DC9A4B732DB927C300A44426 /* XCRemoteSwiftPackageReference "SDWebImage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DCBA6B5D2D90FA0E00214DC5 /* Products */;
@@ -638,6 +645,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		DC9A4B732DB927C300A44426 /* XCRemoteSwiftPackageReference "SDWebImage" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/SDWebImage.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.21.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -700,6 +715,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DC40AA702D91831000D78A39 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		DC9A4B742DB927C300A44426 /* SDWebImage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC9A4B732DB927C300A44426 /* XCRemoteSwiftPackageReference "SDWebImage" */;
+			productName = SDWebImage;
+		};
+		DC9A4B762DB927C300A44426 /* SDWebImageMapKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC9A4B732DB927C300A44426 /* XCRemoteSwiftPackageReference "SDWebImage" */;
+			productName = SDWebImageMapKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -25,13 +25,14 @@ class EventService {
                 let data = document.data()
                 let docId = document.documentID
                 
-                guard let name = data["name"] as? String,
+                guard let eventName = data["eventName"] as? String,
+                      let name = data["name"] as? String,
+                      let location = data["location"] as? String,
                       let description = data["description"] as? String,
                       let date = data["date"] as? String,
                       let time = data["time"] as? String,
                       let venueLogoImage = data["venueLogoImage"] as? String,
                       let eventPosterImage = data["eventPosterImage"] as? String,
-                      let location = data["location"] as? String,
                       let city = data["city"] as? String,
                       let mapsURL = data["mapsURL"] as? String,
                       let instagramHandle = data["instagramHandle"] as? String else {
@@ -43,13 +44,14 @@ class EventService {
                 
                 return Event(
                     firestoreId: docId,
+                    eventName: eventName,
                     name: name,
+                    location: location,
                     description: description,
                     date: date,
                     time: time,
                     venueLogoImage: venueLogoImage,
                     eventPosterImage: eventPosterImage,
-                    location: location,
                     city: city,
                     mapsURL: mapsURL,
                     galleryImages: galleryImages,
@@ -76,13 +78,14 @@ class EventService {
                 return
             }
             
-            guard let name = data["name"] as? String,
+            guard let eventName = data["eventName"] as? String,
+                  let name = data["name"] as? String,
+                  let location = data["location"] as? String,
                   let description = data["description"] as? String,
                   let date = data["date"] as? String,
                   let time = data["time"] as? String,
                   let venueLogoImage = data["venueLogoImage"] as? String,
                   let eventPosterImage = data["eventPosterImage"] as? String,
-                  let location = data["location"] as? String,
                   let city = data["city"] as? String,
                   let mapsURL = data["mapsURL"] as? String,
                   let instagramHandle = data["instagramHandle"] as? String else {
@@ -95,13 +98,14 @@ class EventService {
             
             let event = Event(
                 firestoreId: id,
+                eventName: eventName,
                 name: name,
+                location: location,
                 description: description,
                 date: date,
                 time: time,
                 venueLogoImage: venueLogoImage,
                 eventPosterImage: eventPosterImage,
-                location: location,
                 city: city,
                 mapsURL: mapsURL,
                 galleryImages: galleryImages,

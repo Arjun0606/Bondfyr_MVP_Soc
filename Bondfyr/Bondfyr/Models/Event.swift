@@ -10,72 +10,79 @@ import Foundation
 struct Event: Identifiable {
     let id = UUID()
     let firestoreId: String? // Firestore document ID
-    let name: String
+    let eventName: String      // Event name (e.g. "THE BIG FETE")
+    let name: String           // Venue/club name (e.g. "High Spirits")
+    let location: String       // Area (e.g. "Viman Nagar")
     let description: String
     let date: String
     let time: String
     let venueLogoImage: String // used in EventListView
     let eventPosterImage: String // used in EventDetailView top
-    let location: String
     let city: String
     let mapsURL: String
     let galleryImages: [String]?
     let instagramHandle: String
     let photoContestActive: Bool
+    var isSaved: Bool = false // New property for saved events
     
     // Constructor with Firestore ID
-    init(firestoreId: String? = nil, name: String, description: String, date: String, time: String, venueLogoImage: String, eventPosterImage: String, location: String, city: String, mapsURL: String, galleryImages: [String]?, instagramHandle: String, photoContestActive: Bool = false) {
+    init(firestoreId: String? = nil, eventName: String, name: String, location: String, description: String, date: String, time: String, venueLogoImage: String, eventPosterImage: String, city: String, mapsURL: String, galleryImages: [String]?, instagramHandle: String, photoContestActive: Bool = false, isSaved: Bool = false) {
         self.firestoreId = firestoreId
+        self.eventName = eventName
         self.name = name
+        self.location = location
         self.description = description
         self.date = date
         self.time = time
         self.venueLogoImage = venueLogoImage
         self.eventPosterImage = eventPosterImage
-        self.location = location
         self.city = city
         self.mapsURL = mapsURL
         self.galleryImages = galleryImages
         self.instagramHandle = instagramHandle
         self.photoContestActive = photoContestActive
+        self.isSaved = isSaved
     }
 }
 
 let sampleEvents: [Event] = [
     Event(
+        eventName: "The Big Fete",
         name: "High Spirits",
+        location: "Koregaon Park",
         description: "High Spirits Cafe in Pune, India, is a beloved nightlife hotspot that has been a fixture in Koregaon Park for over a decade. With its inviting open-air setting, adorned with fairy lights, it's a gathering place for both locals and visitors. The venue's eclectic music scene, ranging from live bands to DJ sets, ensures there's always something for every music lover.",
         date: "March 30, 2025",
         time: "9:00 PM onwards",
         venueLogoImage: "High_spirits",
         eventPosterImage: "Hs_e",
-        location: "Mundhwa, Pune",
         city: "Pune",
         mapsURL: "https://maps.app.goo.gl/92DFDF4oRGoVgFPs6?g_st=com.google.maps.preview.copy",
         galleryImages: ["Hs1", "Hs2", "Hs3"],
         instagramHandle: "thehighspirits"
     ),
     Event(
+        eventName: "Mixology Night",
         name: "Qora",
+        location: "Kalyani Nagar",
         description: "An elevated cocktail experience accompanied by Contemporary fare! Serving responsibly to individuals aged 25 and above.",
         date: "March 27, 2025",
         time: "8:00 PM onwards",
         venueLogoImage: "Qora",
         eventPosterImage: "Q_e",
-        location: "Koregaon Park, Pune",
         city: "Pune",
         mapsURL: "https://maps.app.goo.gl/PyuS1E19kp38bKwi9?g_st=com.google.maps.preview.copy",
         galleryImages: ["Q1", "Q2", "Q3"],
         instagramHandle: "qora_pune"
     ),
     Event(
+        eventName: "Underground Beats",
         name: "Vault",
+        location: "Baner",
         description: "Dive into the underground, dive into VAULT!🪩 Experience the best night life!✨",
         date: "March 28, 2025",
         time: "10:00 PM onwards",
         venueLogoImage: "Vault",
         eventPosterImage: "V_e",
-        location: "SB Road, Pune",
         city: "Pune",
         mapsURL: "https://maps.app.goo.gl/B37Ry8uMQueSSAfp7?g_st=com.google.maps.preview.copy",
         galleryImages: ["V1", "V2", "V3"],

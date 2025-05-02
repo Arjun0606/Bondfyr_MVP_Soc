@@ -30,6 +30,15 @@ struct MainTabView: View {
             .tag(Tab.discover)
             
             NavigationView {
+                SavedEventsView()
+            }
+            .tabItem {
+                Image(systemName: "bookmark.fill")
+                Text("Saved")
+            }
+            .tag(Tab.saved)
+            
+            NavigationView {
                 CityChatListView()
             }
             .tabItem {
