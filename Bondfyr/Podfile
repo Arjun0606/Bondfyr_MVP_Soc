@@ -1,0 +1,19 @@
+# Uncomment the next line to define a global platform for your project
+# platform :ios, '9.0'
+
+target 'Bondfyr' do
+  # Comment the next line if you don't want to use dynamic frameworks
+  use_frameworks!
+
+  # Pods for Bondfyr
+
+  target 'BondfyrTests' do
+    inherit! :search_paths
+    # Pods for testing
+  end
+
+  target 'BondfyrUITests' do
+    # Pods for testing
+  end
+
+end

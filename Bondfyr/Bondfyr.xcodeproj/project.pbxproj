@@ -41,9 +41,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		2C5AAA633663309B17B30515 /* Pods-Bondfyr-BondfyrUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bondfyr-BondfyrUITests.debug.xcconfig"; path = "Target Support Files/Pods-Bondfyr-BondfyrUITests/Pods-Bondfyr-BondfyrUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		2F0961C5CD25476A16E14C91 /* Pods-BondfyrTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BondfyrTests.debug.xcconfig"; path = "Target Support Files/Pods-BondfyrTests/Pods-BondfyrTests.debug.xcconfig"; sourceTree = "<group>"; };
+		5D9DAFA34C1519143CEAC8DE /* Pods-Bondfyr.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bondfyr.debug.xcconfig"; path = "Target Support Files/Pods-Bondfyr/Pods-Bondfyr.debug.xcconfig"; sourceTree = "<group>"; };
+		60DB508FE0ABBC0E2F3EA23D /* Pods-Bondfyr.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bondfyr.release.xcconfig"; path = "Target Support Files/Pods-Bondfyr/Pods-Bondfyr.release.xcconfig"; sourceTree = "<group>"; };
+		D97E2DE975BC865718374751 /* Pods-Bondfyr-BondfyrUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bondfyr-BondfyrUITests.release.xcconfig"; path = "Target Support Files/Pods-Bondfyr-BondfyrUITests/Pods-Bondfyr-BondfyrUITests.release.xcconfig"; sourceTree = "<group>"; };
 		DCBA6B5C2D90FA0E00214DC5 /* Bondfyr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bondfyr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBA6B6C2D90FA0F00214DC5 /* BondfyrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BondfyrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBA6B762D90FA0F00214DC5 /* BondfyrUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BondfyrUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1F431CD83BDB66673178850 /* Pods-BondfyrTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BondfyrTests.release.xcconfig"; path = "Target Support Files/Pods-BondfyrTests/Pods-BondfyrTests.release.xcconfig"; sourceTree = "<group>"; };
+		F6278F11241E352642B394BB /* Pods_Bondfyr.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bondfyr.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -116,9 +123,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		DC40AA7B2D91860300D78A39 /* Frameworks */ = {
+		5F505A10F4CE49960489D9F4 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
+				5D9DAFA34C1519143CEAC8DE /* Pods-Bondfyr.debug.xcconfig */,
+				60DB508FE0ABBC0E2F3EA23D /* Pods-Bondfyr.release.xcconfig */,
+				2C5AAA633663309B17B30515 /* Pods-Bondfyr-BondfyrUITests.debug.xcconfig */,
+				D97E2DE975BC865718374751 /* Pods-Bondfyr-BondfyrUITests.release.xcconfig */,
+				2F0961C5CD25476A16E14C91 /* Pods-BondfyrTests.debug.xcconfig */,
+				F1F431CD83BDB66673178850 /* Pods-BondfyrTests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		8CCA890ABC8C14DC346B7D74 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F6278F11241E352642B394BB /* Pods_Bondfyr.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -129,8 +150,9 @@
 				DCBA6B5E2D90FA0E00214DC5 /* Bondfyr */,
 				DCBA6B6F2D90FA0F00214DC5 /* BondfyrTests */,
 				DCBA6B792D90FA0F00214DC5 /* BondfyrUITests */,
-				DC40AA7B2D91860300D78A39 /* Frameworks */,
 				DCBA6B5D2D90FA0E00214DC5 /* Products */,
+				5F505A10F4CE49960489D9F4 /* Pods */,
+				8CCA890ABC8C14DC346B7D74 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -200,8 +222,6 @@
 				DCBA6B6F2D90FA0F00214DC5 /* BondfyrTests */,
 			);
 			name = BondfyrTests;
-			packageProductDependencies = (
-			);
 			productName = BondfyrTests;
 			productReference = DCBA6B6C2D90FA0F00214DC5 /* BondfyrTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -223,8 +243,6 @@
 				DCBA6B792D90FA0F00214DC5 /* BondfyrUITests */,
 			);
 			name = BondfyrUITests;
-			packageProductDependencies = (
-			);
 			productName = BondfyrUITests;
 			productReference = DCBA6B762D90FA0F00214DC5 /* BondfyrUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -471,7 +489,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Bondfyr/Info.plist;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Bondfyr needs calendar access to add events to your calendar and check for scheduling conflicts.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Bondfyr needs access to your camera to take photos for events and contests.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bondfyr may need access to your microphone when capturing video.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Bondfyr needs access to your photo library to save and share photos from events.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -501,7 +522,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Bondfyr/Info.plist;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Bondfyr needs calendar access to add events to your calendar and check for scheduling conflicts.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Bondfyr needs access to your camera to take photos for events and contests.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bondfyr may need access to your microphone when capturing video.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Bondfyr needs access to your photo library to save and share photos from events.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

@@ -19,6 +19,7 @@ class AuthViewModel: ObservableObject {
     
     // Track authentication state
     @Published var authStateKnown: Bool = false
+    @Published var isProfileComplete: Bool = false
 
     private let auth = Auth.auth()
     private let db = Firestore.firestore()
@@ -44,13 +45,24 @@ class AuthViewModel: ObservableObject {
                 
                 if let user = user {
                     print("🔥 Auth state changed: User is logged in with UID: \(user.uid)")
-                    self.isLoggedIn = true
                     
                     // Check if we need to refresh the token
                     self.checkAndRefreshTokenIfNeeded(user: user)
                     
-                    // Fetch the user profile
-                    self.fetchUserProfile { _ in }
+                    // Fetch the user profile and only set isLoggedIn if profile exists
+                    self.fetchUserProfile { success in
+                        DispatchQueue.main.async {
+                            if success {
+                                // Only set isLoggedIn if we have a valid profile
+                                self.isLoggedIn = true
+                            } else {
+                                // For new users, we still want them logged in but without a profile
+                                print("🔥 No user profile found, but keeping auth state")
+                                self.isLoggedIn = true
+                                self.currentUser = nil
+                            }
+                        }
+                    }
                 } else {
                     print("🔥 Auth state changed: User is logged out")
                     self.isLoggedIn = false
@@ -159,10 +171,6 @@ class AuthViewModel: ObservableObject {
                 } else {
                     print("✅ Firebase auth success")
                     
-                    DispatchQueue.main.async {
-                        self.isLoggedIn = true
-                    }
-                    
                     // After successful authentication, fetch the user profile
                     self.fetchUserProfile { success in
                         if success {
@@ -171,16 +179,23 @@ class AuthViewModel: ObservableObject {
                             // Save the last sign-in time
                             UserDefaults.standard.set(Date(), forKey: "lastSignInTime")
                             
-                            // Notify that user logged in
+                            // Set logged in state only after confirming profile exists
                             DispatchQueue.main.async {
+                                self.isLoggedIn = true
+                                // Notify that user logged in
                                 let userId = authResult?.user.uid
                                 NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: userId)
                             }
                         } else {
-                            print("⚠️ User profile not found, will need to create one")
+                            print("⚠️ User profile not found, proceeding with new user flow")
+                            DispatchQueue.main.async {
+                                // For new users, we still want to consider the sign-in successful
+                                self.isLoggedIn = true
+                            }
                         }
                         
-                        completion(success, nil)
+                        // Always complete with success if Firebase auth succeeded
+                        completion(true, nil)
                     }
                 }
             }
@@ -188,92 +203,58 @@ class AuthViewModel: ObservableObject {
     }
 
     func fetchUserProfile(completion: @escaping (Bool) -> Void) {
-        guard let uid = auth.currentUser?.uid else {
-            print("❌ No Firebase user found when trying to fetch profile")
-            
-            DispatchQueue.main.async {
-                self.currentUser = nil
-                self.isLoggedIn = false
-            }
-            
+        guard let uid = Auth.auth().currentUser?.uid else {
             completion(false)
             return
         }
-
-        print("Fetching user profile for UID: \(uid)")
         
-        DispatchQueue.main.async {
-            self.isLoading = true
-        }
-        
+        let db = Firestore.firestore()
         db.collection("users").document(uid).getDocument { [weak self] snapshot, error in
-            guard let self = self else {
-                completion(false)
-                return
-            }
-            
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
-            
             if let error = error {
                 print("Error fetching user profile: \(error.localizedDescription)")
-                
-                DispatchQueue.main.async {
-                    self.error = "Failed to fetch profile: \(error.localizedDescription)"
-                }
-                
-                if let nsError = error as NSError?, nsError.domain.contains("app_check") {
-                    // AppCheck error - this is likely a temporary issue, don't reset auth state
-                    print("⚠️ AppCheck error - this is likely a temporary issue")
-                    completion(false)
-                    return
-                }
-                
-                // Keep isLoggedIn true if we have a valid Firebase user but had error fetching profile
-                // This allows us to go to profile creation instead of sign-in loop
-                DispatchQueue.main.async {
-                    self.currentUser = nil
-                    self.isLoggedIn = self.auth.currentUser != nil
-                }
-                
                 completion(false)
                 return
             }
             
-            // Check if document exists and has data
             if let data = snapshot?.data(),
                let name = data["name"] as? String,
                let email = data["email"] as? String,
                let dobTimestamp = data["dob"] as? Timestamp,
                let phoneNumber = data["phoneNumber"] as? String {
-
-                let dob = dobTimestamp.dateValue()
                 
-                // Get role from user data or default to "user"
+                let dob = dobTimestamp.dateValue()
                 let roleString = data["role"] as? String ?? "user"
                 let role = AppUser.UserRole(rawValue: roleString) ?? .user
+                let instagramHandle = data["instagramHandle"] as? String
+                let snapchatHandle = data["snapchatHandle"] as? String
+                let avatarURL = data["avatarURL"] as? String
+                let googleID = data["googleID"] as? String
+                let city = data["city"] as? String
                 
-                let appUser = AppUser(uid: uid, name: name, email: email, dob: dob, phoneNumber: phoneNumber, role: role)
-
-                print("User profile loaded: \(name)")
+                let user = AppUser(
+                    uid: uid,
+                    name: name,
+                    email: email,
+                    dob: dob,
+                    phoneNumber: phoneNumber,
+                    role: role,
+                    instagramHandle: instagramHandle,
+                    snapchatHandle: snapchatHandle,
+                    avatarURL: avatarURL,
+                    googleID: googleID,
+                    city: city
+                )
                 
                 DispatchQueue.main.async {
-                    self.currentUser = appUser
-                    self.isLoggedIn = true
+                    self?.currentUser = user
+                    // Check if profile is complete (has either Instagram or Snapchat AND has city)
+                    let hasSocialHandle = (instagramHandle?.isEmpty == false) || (snapchatHandle?.isEmpty == false)
+                    let hasCity = city?.isEmpty == false
+                    self?.isProfileComplete = hasSocialHandle && hasCity
+                    completion(true)
                 }
-                
-                completion(true)
             } else {
                 print("User profile data incomplete or missing")
-                
-                DispatchQueue.main.async {
-                    self.currentUser = nil
-                    // Keep isLoggedIn true if we have a valid Firebase user but had error fetching profile
-                    // This allows us to go to profile creation instead of sign-in loop
-                    self.isLoggedIn = self.auth.currentUser != nil
-                }
-                
                 completion(false)
             }
         }

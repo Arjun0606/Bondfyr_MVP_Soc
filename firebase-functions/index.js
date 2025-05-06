@@ -1,62 +1,60 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const axios = require('axios');
+
 admin.initializeApp();
 
-// Import chat functions
-const chatFunctions = require('./chatFunctions');
+const GOOGLE_PLACES_API_KEY = functions.config().google.places_key; // Set this in Firebase env
 
-// Export chat functions
-exports.cleanupOldChatMessages = chatFunctions.cleanupOldChatMessages;
-exports.resetChatMemberCounts = chatFunctions.resetChatMemberCounts;
-exports.updateChatActivity = chatFunctions.updateChatActivity;
-exports.cleanupUserChatMessages = chatFunctions.cleanupUserChatMessages;
-exports.createTestEventChat = chatFunctions.createTestEventChat;
-exports.checkExpiredEventChats = chatFunctions.checkExpiredEventChats;
-
-// Cloud Function triggered when a user is deleted from Authentication
-exports.onUserDeleted = functions.auth.user().onDelete(async (user) => {
-  const userId = user.uid;
-  console.log(`User ${userId} was deleted from Authentication, cleaning up Firestore data`);
-  
-  try {
-    // Delete user document in the users collection
-    await admin.firestore().collection('users').doc(userId).delete();
-    console.log(`User document for ${userId} deleted successfully`);
-    
-    // Delete user tickets
-    const ticketsSnapshot = await admin.firestore()
-      .collection('tickets')
-      .where('userId', '==', userId)
-      .get();
-    
-    const ticketDeletePromises = [];
-    ticketsSnapshot.forEach(doc => {
-      ticketDeletePromises.push(doc.ref.delete());
-    });
-    await Promise.all(ticketDeletePromises);
-    console.log(`Deleted ${ticketDeletePromises.length} tickets for user ${userId}`);
-    
-    // Delete user photos
-    const photosSnapshot = await admin.firestore()
-      .collection('photo_contests')
-      .where('userId', '==', userId)
-      .get();
-    
-    const photoDeletePromises = [];
-    photosSnapshot.forEach(doc => {
-      // Mark as scheduled for deletion instead of hard delete
-      photoDeletePromises.push(doc.ref.update({
-        scheduledForDeletion: true
-      }));
-    });
-    await Promise.all(photoDeletePromises);
-    console.log(`Marked ${photoDeletePromises.length} photos for deletion for user ${userId}`);
-    
-    // Add more collections to clean up as needed
-    
-    return { success: true };
-  } catch (error) {
-    console.error(`Error cleaning up data for user ${userId}:`, error);
-    return { error: error.message };
+exports.scrapeVenuesForCity = functions.https.onCall(async (data, context) => {
+  const city = data.city;
+  if (!city) {
+    throw new functions.https.HttpsError('invalid-argument', 'City is required');
   }
-}); 
+
+  const types = ['night_club', 'bar'];
+  let venues = [];
+  let nextPageToken = null;
+  let page = 0;
+
+  do {
+    let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(types.join(' OR ') + ' in ' + city)}&key=${GOOGLE_PLACES_API_KEY}`;
+    if (nextPageToken) url += `&pagetoken=${nextPageToken}`;
+
+    const res = await axios.get(url);
+    if (res.data.status !== 'OK' && res.data.status !== 'ZERO_RESULTS') {
+      throw new functions.https.HttpsError('internal', `Google Places error: ${res.data.status}`);
+    }
+    venues = venues.concat(res.data.results);
+
+    nextPageToken = res.data.next_page_token;
+    page++;
+    if (nextPageToken) await new Promise(r => setTimeout(r, 2000)); // Google API requires delay
+  } while (nextPageToken && page < 3);
+
+  // Filter and map results
+  const venueDocs = venues
+    .filter(v => v.types.includes('night_club') || v.types.includes('bar'))
+    .map(v => ({
+      venueId: v.place_id,
+      venueName: v.name,
+      address: v.formatted_address,
+      placeId: v.place_id,
+      totalReviews: v.user_ratings_total || 0,
+      averageRating: v.rating || 0,
+      photoUrl: v.photos && v.photos[0] ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${v.photos[0].photo_reference}&key=${GOOGLE_PLACES_API_KEY}` : null,
+      location: v.geometry && v.geometry.location ? v.geometry.location : null,
+      types: v.types
+    }));
+
+  // Write to Firestore
+  const batch = admin.firestore().batch();
+  const cityKey = city.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const venuesRef = admin.firestore().collection('venues').doc(cityKey).collection('venueList');
+  venueDocs.forEach(venue => {
+    batch.set(venuesRef.doc(venue.venueId), venue, { merge: true });
+  });
+  await batch.commit();
+
+  return { count: venueDocs.length, city: cityKey };
+});

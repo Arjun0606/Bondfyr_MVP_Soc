@@ -14,19 +14,53 @@
 				<string>com.googleusercontent.apps.210827083189-fql89167uen2okrdhig3qd3qj0ft1ssi</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.arjunvarma.bondfyr</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bondfyr</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>snapchat</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bondfyr</string>
+			</array>
+		</dict>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>Bondfyr needs access to your camera to take photos for events and contests.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Bondfyr needs access to your photo library to save and share photos from events.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Bondfyr may need access to your microphone when capturing video.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Bondfyr needs calendar access to add events to your calendar and check for scheduling conflicts.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>snapchat</string>
+		<string>instagram</string>
+	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We use your location to show venues near you and sort by distance.</string>
 </dict>
 </plist>

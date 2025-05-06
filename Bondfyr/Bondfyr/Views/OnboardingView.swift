@@ -14,6 +14,7 @@ struct OnboardingView: View {
     @Binding var hasSeenOnboarding: Bool
     @State private var showSignIn = false
     @State private var backgroundOffset: CGFloat = 0
+    @State private var showCitySelection = false
     
     // Onboarding data
     let onboardingData = [
@@ -110,8 +111,7 @@ struct OnboardingView: View {
                         // Mark onboarding as seen
                         UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
                         hasSeenOnboarding = true
-                        
-                        // Navigate to sign in screen
+                        // Show Google Sign-In first
                         showSignIn = true
                     }
                 }) {
@@ -119,7 +119,6 @@ struct OnboardingView: View {
                         Text(currentPage < totalPages - 1 ? "Next" : "Get Started")
                             .font(.headline)
                             .fontWeight(.bold)
-                        
                         Image(systemName: currentPage < totalPages - 1 ? "chevron.right" : "arrow.right")
                             .font(.footnote)
                     }
@@ -128,15 +127,10 @@ struct OnboardingView: View {
                     .frame(maxWidth: .infinity)
                     .background(
                         ZStack {
-                            // Dark base
                             Color.black.opacity(0.7)
-                            
-                            // Subtle glow overlay
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(Color.pink.opacity(0.08))
                                 .blur(radius: 4)
-                            
-                            // Thin border
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(Color.pink.opacity(0.5), lineWidth: 1)
                         }
@@ -151,6 +145,12 @@ struct OnboardingView: View {
         }
         .fullScreenCover(isPresented: $showSignIn) {
             GoogleSignInView()
+        }
+        .fullScreenCover(isPresented: $showCitySelection) {
+            CitySelectionView { _ in
+                showCitySelection = false
+                showSignIn = true
+            }
         }
     }
 }

@@ -204,6 +204,12 @@ struct GoogleSignInView: View {
                     // Post notification that login succeeded
                     print("✅ Posting UserDidLogin notification")
                     NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
+                    // Force onboarding state update
+                    if let splash = UIApplication.shared.connectedScenes
+                        .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController as? UIHostingController<SplashView> })
+                        .first {
+                        splash.rootView.checkAuthStatus()
+                    }
                 }
             }
         }

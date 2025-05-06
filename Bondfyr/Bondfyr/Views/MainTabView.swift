@@ -21,40 +21,44 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $tabSelection.selectedTab) {
             NavigationView {
-                EventListView()
+                VenueListView()
             }
             .tabItem {
-                Image(systemName: "sparkles")
-                Text("Discover")
+                Image(systemName: "flame.fill")
+                Text("Hot Venues")
             }
             .tag(Tab.discover)
             
             NavigationView {
-                SavedEventsView()
+                AfterpartyTabView()
             }
             .tabItem {
-                Image(systemName: "bookmark.fill")
-                Text("Saved")
+                Image(systemName: "party.popper")
+                Text("Afterparty")
             }
-            .tag(Tab.saved)
+            .tag(Tab.afterparty)
+
+            NavigationView {
+                PlannerChatView()
+            }
+            .tabItem {
+                Image(systemName: "sparkles")
+                Text("Planner")
+            }
+            .tag(Tab.planner)
             
             NavigationView {
-                CityChatListView()
+                CityChatTabView()
             }
             .tabItem {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                Text("Chat")
+                Text("City Chat")
             }
-            .tag(Tab.chat)
+            .tag(Tab.citychat)
 
-            MyTicketsView()
-                .tabItem {
-                    Image(systemName: "qrcode.viewfinder")
-                    Text("Tickets")
-                }
-                .tag(Tab.tickets)
-
+            NavigationView {
             ProfileView()
+            }
                 .tabItem {
                     Image(systemName: "person.circle")
                     Text("Profile")

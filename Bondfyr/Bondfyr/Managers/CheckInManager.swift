@@ -139,4 +139,24 @@ class CheckInManager: ObservableObject {
         
         return checkIn.timestamp
     }
+    
+    // Venue-based check-in for Bondfyr 2.0
+    func checkInToVenue(venueId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            completion(.failure(NSError(domain: "CheckIn", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not logged in."])) )
+            return
+        }
+        let checkInData: [String: Any] = [
+            "userId": userId,
+            "venueId": venueId,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+        db.collection("checkIns").addDocument(data: checkInData) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
 } 
