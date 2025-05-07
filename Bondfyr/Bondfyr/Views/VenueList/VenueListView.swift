@@ -110,6 +110,18 @@ struct VenueListView: View {
                 }
                 await fetchGoogleVenuesForSelectedCity()
             }
+            .onChange(of: cityManager.selectedCity) { newCity in
+                print("📱 Selected city changed to: \(newCity ?? "nil")")
+                debugState(from: "city change")
+                // Reset state immediately
+                googleVenues = []
+                nextPageToken = nil
+                totalFetched = 0
+                // Then fetch new venues
+                Task {
+                    await fetchGoogleVenuesForSelectedCity()
+                }
+            }
             .onAppear {
                 print("📱 VenueListView root appeared")
                 debugState(from: "root onAppear")
@@ -120,13 +132,6 @@ struct VenueListView: View {
                 print("📱 City selected from picker: \(selectedCity)")
                 cityManager.selectedCity = selectedCity
                 showCityPicker = false
-            }
-        }
-        .onChange(of: cityManager.selectedCity) { newCity in
-            print("📱 Selected city changed to: \(newCity ?? "nil")")
-            debugState(from: "city change")
-            Task {
-                await fetchGoogleVenuesForSelectedCity()
             }
         }
     }
@@ -465,7 +470,9 @@ struct VenueListView: View {
                         types: place.types ?? [],
                         location: place.geometry?.location,
                         address: place.formatted_address ?? "",
-                        photos: place.photos?.map { $0.photo_reference } ?? []
+                        photos: place.photos?.map { $0.photo_reference } ?? [],
+                        priceLevel: place.price_level,
+                        isOpenNow: place.opening_hours?.open_now
                     )
                 }
                 
@@ -532,14 +539,26 @@ struct VenueListView: View {
                 let venues = response.results.filter { place in
                     guard let types = place.types else { return false }
                     
-                    let isNightlifeVenue = types.contains { type in
-                        ["bar", "night_club", "restaurant"].contains(type.lowercased())
+                    // Exclude unwanted venue types
+                    let excludedTypes = ["country_club", "sports_club", "golf_course", "gym", "fitness_center"]
+                    if types.contains(where: { excludedTypes.contains($0.lowercased()) }) {
+                        return false
                     }
                     
-                    let hasRating = place.rating ?? 0 > 0
-                    let hasReviews = (place.user_ratings_total ?? 0) > 0
+                    // Check for nightlife venue types
+                    let nightlifeTypes = ["bar", "night_club"]
+                    let isNightlifeVenue = types.contains { type in
+                        nightlifeTypes.contains(type.lowercased())
+                    }
                     
-                    return isNightlifeVenue && hasRating && hasReviews
+                    // Additional checks for name to exclude likely non-nightlife venues
+                    let excludedNameKeywords = ["country club", "sports club", "golf club", "fitness", "gym"]
+                    let containsExcludedKeyword = excludedNameKeywords.contains { place.name.lowercased().contains($0) }
+                    
+                    let hasRating = place.rating ?? 0 > 0
+                    let hasEnoughReviews = (place.user_ratings_total ?? 0) >= 50
+                    
+                    return isNightlifeVenue && hasRating && hasEnoughReviews && !containsExcludedKeyword
                 }.map { place in
                     SimpleVenue(
                         id: place.place_id,
@@ -549,7 +568,9 @@ struct VenueListView: View {
                         types: place.types ?? [],
                         location: place.geometry?.location,
                         address: place.formatted_address ?? "",
-                        photos: place.photos?.map { $0.photo_reference } ?? []
+                        photos: place.photos?.map { $0.photo_reference } ?? [],
+                        priceLevel: place.price_level,
+                        isOpenNow: place.opening_hours?.open_now
                     )
                 }
                 
@@ -560,7 +581,8 @@ struct VenueListView: View {
                     nextToken = token
                 }
                 
-                try await Task.sleep(nanoseconds: 2 * 1_000_000_000) // 2 seconds
+                // Reduced delay to 0.5 seconds
+                try await Task.sleep(nanoseconds: 500_000_000)
             } catch {
                 print("❌ Error fetching venues for strategy \(strategy): \(error.localizedDescription)")
                 continue
@@ -579,53 +601,6 @@ struct VenueListView: View {
     }
 }
 
-struct SimpleVenueRow: View {
-    let venue: VenueWithCrowd
-    var rating: Double { venue.busynessScore ?? Double.random(in: 3.0...5.0) }
-    var reviews: Int { Int.random(in: 10...100) }
-    var buzz: Double { venue.busynessScore ?? 0.0 }
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 54, height: 54)
-                Image(systemName: "building.2.crop.circle")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-                    .foregroundColor(.pink)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(venue.name)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                HStack(spacing: 8) {
-                    Text(venue.genre)
-                        .font(.subheadline)
-                        .foregroundColor(.pink)
-                    Text(String(format: "%.1f ★", rating))
-                        .font(.subheadline)
-                        .foregroundColor(.yellow)
-                    Text("(\(reviews))")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                HStack(spacing: 6) {
-                    Text("Buzz:")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    BuzzBar(score: buzz)
-                }
-            }
-            Spacer()
-        }
-        .padding(.vertical, 10)
-        .padding(.horizontal)
-        .background(Color.clear)
-    }
-}
-
 struct SimpleGoogleVenueRow: View {
     let venue: SimpleVenue
     let isBuzzing: Bool
@@ -637,8 +612,15 @@ struct SimpleGoogleVenueRow: View {
         return .yellow
     }
     
+    var buzzText: String {
+        if venue.buzz >= 0.66 { return "Hot" }
+        if venue.buzz >= 0.33 { return "Mid" }
+        return "Chill"
+    }
+    
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
+            // Venue Image
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.white.opacity(0.08))
@@ -663,24 +645,39 @@ struct SimpleGoogleVenueRow: View {
                         .foregroundColor(.pink)
                 }
             }
+            
+            // Venue Details
             VStack(alignment: .leading, spacing: 4) {
+                // Name and Badges
                 HStack(spacing: 6) {
                     Text(venue.name)
                         .font(.headline)
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    BuzzBadge(score: venue.buzz)
-                    if let rank = rank, rank < 3 {
-                        Text("Buzzing")
-                            .font(.caption2)
-                            .bold()
-                            .foregroundColor(buzzColor)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(buzzColor.opacity(0.15))
-                            .cornerRadius(6)
+                    if let isOpen = venue.isOpenNow {
+                        if isOpen {
+                            Text(buzzText)
+                                .font(.caption2)
+                                .bold()
+                                .foregroundColor(buzzColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(buzzColor.opacity(0.15))
+                                .cornerRadius(6)
+                        } else {
+                            Text("Closed")
+                                .font(.caption2)
+                                .bold()
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.15))
+                                .cornerRadius(6)
+                        }
                     }
                 }
+                
+                // Rating and Price
                 HStack(spacing: 8) {
                     Text(String(format: "%.1f ★", venue.rating))
                         .font(.subheadline)
@@ -694,62 +691,12 @@ struct SimpleGoogleVenueRow: View {
                             .foregroundColor(.white.opacity(0.7))
                     }
                 }
-                HStack(spacing: 6) {
-                    Text("Buzz:")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    BuzzBar(score: venue.buzz)
-                }
             }
             Spacer()
         }
         .padding(.vertical, 10)
         .padding(.horizontal)
         .background(Color.clear)
-    }
-}
-
-struct BuzzBar: View {
-    let score: Double // 0.0 to 1.0
-    var color: Color {
-        if score >= 0.66 { return .red }
-        if score >= 0.33 { return .orange }
-        return .yellow
-    }
-    var body: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .fill(color)
-            .frame(width: CGFloat(40 * max(score, 0.1)), height: 8)
-            .animation(.easeInOut(duration: 0.3), value: score)
-    }
-}
-
-struct BuzzBadge: View {
-    let score: Double
-    var color: Color {
-        if score >= 0.66 { return .red }
-        if score >= 0.33 { return .orange }
-        return .yellow
-    }
-    var label: String {
-        if score >= 0.66 { return "Hot" }
-        if score >= 0.33 { return "Mid" }
-        return "Chill"
-    }
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 12, height: 12)
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(color)
-                .bold()
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(color.opacity(0.12))
-        .cornerRadius(8)
     }
 }
 
@@ -849,6 +796,15 @@ struct SimpleVenue: Identifiable, Hashable {
     let buzz: Double
     let photoReference: String?
     let priceLevel: Int?
+    let isOpenNow: Bool?
+    
+    var effectiveBuzz: Double {
+        // If venue is closed, return a low buzz score
+        if let isOpen = isOpenNow, !isOpen {
+            return 0.1 // This will ensure it shows as "Chill"
+        }
+        return buzz
+    }
     
     init(
         id: String,
@@ -859,7 +815,8 @@ struct SimpleVenue: Identifiable, Hashable {
         location: GooglePlacesResponse.Place.Location?,
         address: String,
         photos: [String],
-        priceLevel: Int? = nil
+        priceLevel: Int? = nil,
+        isOpenNow: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -871,6 +828,7 @@ struct SimpleVenue: Identifiable, Hashable {
         self.photos = photos
         self.photoReference = photos.first
         self.priceLevel = priceLevel
+        self.isOpenNow = isOpenNow
         
         // Calculate buzz score based on rating × reviews
         let score = rating * Double(reviews)
@@ -946,6 +904,7 @@ struct GooglePlacesResponse: Decodable {
         let formatted_address: String?
         let photos: [Photo]?
         let price_level: Int?
+        let opening_hours: OpeningHours?
         
         struct Geometry: Decodable {
             let location: Location
