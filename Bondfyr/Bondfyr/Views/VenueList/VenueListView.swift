@@ -613,9 +613,9 @@ struct SimpleGoogleVenueRow: View {
     }
     
     var buzzText: String {
-        if venue.buzz >= 0.66 { return "Hot" }
-        if venue.buzz >= 0.33 { return "Mid" }
-        return "Chill"
+        if venue.buzz >= 0.66 { return "🔥 Hot" }
+        if venue.buzz >= 0.33 { return "☀️ Warm" }
+        return "😑 Meh"
     }
     
     var body: some View {
@@ -648,31 +648,39 @@ struct SimpleGoogleVenueRow: View {
             
             // Venue Details
             VStack(alignment: .leading, spacing: 4) {
-                // Name and Badges
+                // Name and Badge
                 HStack(spacing: 6) {
                     Text(venue.name)
                         .font(.headline)
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if let isOpen = venue.isOpenNow {
-                        if isOpen {
+                        if !isOpen {
+                            Text("🔒 Closed")
+                                .font(.caption2)
+                                .bold()
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.9))
+                                .cornerRadius(6)
+                                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        } else {
                             Text(buzzText)
                                 .font(.caption2)
                                 .bold()
                                 .foregroundColor(buzzColor)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(buzzColor.opacity(0.15))
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [buzzColor.opacity(0.2), buzzColor.opacity(0.1)]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                                 .cornerRadius(6)
-                        } else {
-                            Text("Closed")
-                                .font(.caption2)
-                                .bold()
-                                .foregroundColor(.red)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.15))
-                                .cornerRadius(6)
+                                .shadow(color: buzzColor.opacity(0.2), radius: 2, x: 0, y: 1)
                         }
                     }
                 }
@@ -722,9 +730,14 @@ extension VenueWithCrowd {
 struct VenueDetailView: View {
     let venue: SimpleVenue
     let onClose: () -> Void
+    @State private var isPlanning = false
+    @State private var showShareSheet = false
+    @State private var showPlanningSuccess = false
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // Header
                 HStack {
                     Text(venue.name)
                         .font(.largeTitle)
@@ -737,6 +750,8 @@ struct VenueDetailView: View {
                             .font(.title2)
                     }
                 }
+                
+                // Venue Image
                 if let ref = venue.photoReference {
                     AsyncImage(url: URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=600&photoreference=\(ref)&key=AIzaSyAuPBQCEYfG9C0wwH5MoHRbNe4xJ8Y_3zk")) { phase in
                         if let image = phase.image {
@@ -750,6 +765,8 @@ struct VenueDetailView: View {
                     .frame(height: 180)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                
+                // Stats
                 HStack(spacing: 8) {
                     Text(String(format: "%.1f ★", venue.rating))
                         .font(.title3)
@@ -763,7 +780,51 @@ struct VenueDetailView: View {
                             .foregroundColor(.white.opacity(0.7))
                     }
                 }
-                // Add more details here as needed
+                
+                // Planning and Share Buttons
+                VStack(spacing: 12) {
+                    Button(action: {
+                        isPlanning = true
+                        // Add planning logic here
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            showPlanningSuccess = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                showShareSheet = true
+                            }
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: isPlanning ? "checkmark.circle.fill" : "calendar.badge.plus")
+                            Text(isPlanning ? "Added to Plans!" : "I'm Planning")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(isPlanning ? Color.green : Color.pink)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        .shadow(color: (isPlanning ? Color.green : Color.pink).opacity(0.3), radius: 8)
+                    }
+                    .disabled(isPlanning)
+                    
+                    if showPlanningSuccess {
+                        Button(action: {
+                            showShareSheet = true
+                        }) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("Share Plans")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.purple)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                            .shadow(color: Color.purple.opacity(0.3), radius: 8)
+                        }
+                    }
+                }
+                .padding(.top, 8)
+                
                 Spacer()
             }
             .padding()
@@ -773,6 +834,119 @@ struct VenueDetailView: View {
             .shadow(radius: 16)
         }
         .background(Color.black.ignoresSafeArea())
+        .sheet(isPresented: $showShareSheet) {
+            SharePlanView(venue: venue)
+        }
+    }
+}
+
+struct SharePlanView: View {
+    let venue: SimpleVenue
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedPlatform: SocialPlatform = .instagram
+    
+    enum SocialPlatform: String, CaseIterable {
+        case instagram = "Instagram"
+        case snapchat = "Snapchat"
+        case messages = "Messages"
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                // Preview Card
+                VStack(spacing: 16) {
+                    if let ref = venue.photoReference {
+                        AsyncImage(url: URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=\(ref)&key=AIzaSyAuPBQCEYfG9C0wwH5MoHRbNe4xJ8Y_3zk")) { phase in
+                            if let image = phase.image {
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } else {
+                                Color.gray
+                            }
+                        }
+                        .frame(height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("I'm going to")
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                        Text(venue.name)
+                            .font(.title2)
+                            .bold()
+                            .foregroundColor(.white)
+                        HStack {
+                            if let isOpen = venue.isOpenNow {
+                                if isOpen {
+                                    Text(venue.buzz >= 0.66 ? "Hot" : (venue.buzz >= 0.33 ? "Mid" : "Chill"))
+                                        .font(.caption)
+                                        .bold()
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(venue.buzz >= 0.66 ? Color.red : (venue.buzz >= 0.33 ? Color.orange : Color.yellow))
+                                        .cornerRadius(12)
+                                }
+                            }
+                            Text("\(venue.rating, specifier: "%.1f") ★")
+                                .foregroundColor(.yellow)
+                            Text("(\(venue.reviews))")
+                                .foregroundColor(.gray)
+                        }
+                        Text("Join me on Bondfyr!")
+                            .font(.subheadline)
+                            .foregroundColor(.pink)
+                    }
+                    .padding()
+                }
+                .background(Color.black)
+                .cornerRadius(20)
+                .shadow(radius: 10)
+                .padding()
+                
+                // Platform Selection
+                Picker("Platform", selection: $selectedPlatform) {
+                    ForEach(SocialPlatform.allCases, id: \.self) { platform in
+                        Text(platform.rawValue).tag(platform)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                // Share Button
+                Button(action: {
+                    shareToSocialMedia()
+                }) {
+                    HStack {
+                        Image(systemName: "square.and.arrow.up")
+                        Text("Share to \(selectedPlatform.rawValue)")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.pink)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .padding()
+                
+                Spacer()
+            }
+            .navigationTitle("Share Plans")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func shareToSocialMedia() {
+        // Here we'll implement the actual sharing logic
+        // For now, we'll just dismiss the sheet
+        dismiss()
     }
 }
 
