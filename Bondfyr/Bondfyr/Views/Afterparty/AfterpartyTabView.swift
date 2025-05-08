@@ -44,6 +44,7 @@ struct CreateAfterpartyFlow: View {
     @State private var selectedVibeTags: Set<String> = []
     @State private var startTime = Date()
     @State private var isTomorrow = false
+    @State private var showError: String? = nil
     let onCreate: (String, String, String, String, Date) -> Void
     
     // Helper to get available hours (7 PM to 4 AM)
@@ -101,6 +102,13 @@ struct CreateAfterpartyFlow: View {
         return endComponents.hour! <= 13
     }
     
+    private var isValidForm: Bool {
+        !address.isEmpty && 
+        !googleMapsLink.isEmpty && 
+        !selectedVibeTags.isEmpty && 
+        isValidStartTime
+    }
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -127,7 +135,7 @@ struct CreateAfterpartyFlow: View {
                                         } else {
                                             selectedVibeTags.insert(vibe)
                                         }
-                                        vibeTag = selectedVibeTags.joined(separator: ", ")
+                                        vibeTag = Array(selectedVibeTags).joined(separator: ", ")
                                     }) {
                                         Text(vibe)
                                             .font(.system(size: 18))
@@ -250,18 +258,26 @@ struct CreateAfterpartyFlow: View {
                         
                         // Create Button
                         Button(action: {
-                            onCreate(vibeTag, address, description, googleMapsLink, startTime)
-                            dismiss()
+                            Task {
+                                do {
+                                    onCreate(vibeTag, address, description, googleMapsLink, startTime)
+                                    await MainActor.run {
+                                        dismiss()
+                                    }
+                                } catch {
+                                    showError = error.localizedDescription
+                                }
+                            }
                         }) {
                             Text(isCreating ? "Creating..." : "Create Afterparty")
                                 .font(.headline)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 56)
-                                .background(isCreating ? Color.gray : Color.pink)
+                                .background((!isValidForm || isCreating) ? Color.gray : Color.pink)
                                 .cornerRadius(28)
                         }
-                        .disabled(isCreating || address.isEmpty || googleMapsLink.isEmpty || selectedVibeTags.isEmpty || !isValidStartTime)
+                        .disabled(!isValidForm || isCreating)
                         .padding(.horizontal)
                         .padding(.bottom, 24)
                     }
@@ -276,6 +292,14 @@ struct CreateAfterpartyFlow: View {
                     }
                     .foregroundColor(.white)
                 }
+            }
+            .alert("Error", isPresented: .init(
+                get: { showError != nil },
+                set: { if !$0 { showError = nil } }
+            )) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(showError ?? "")
             }
         }
     }
@@ -314,6 +338,8 @@ private struct CityHeader: View {
 private struct ActiveAfterpartiesSection: View {
     let afterparties: [Afterparty]
     let cityName: String?
+    @EnvironmentObject var afterpartyService: AfterpartyService
+    
     var body: some View {
         VStack(spacing: 16) {
             Text("Active Afterparties")
@@ -334,6 +360,7 @@ private struct ActiveAfterpartiesSection: View {
                     LazyVStack(spacing: 16) {
                         ForEach(afterparties) { party in
                             AfterpartyCard(afterparty: party)
+                                .environmentObject(afterpartyService)
                                 .padding(.horizontal)
                         }
                     }
@@ -347,10 +374,10 @@ private struct ActiveAfterpartiesSection: View {
 struct AfterpartyTabView: View {
     @ObservedObject var cityManager = CityManager.shared
     @StateObject private var locationManager = AfterpartyLocationManager.shared
-    @State private var radius: Double = 100.0
+    @StateObject private var afterpartyService = AfterpartyService()
+    @State private var radius: Double = 0.5 // Starting with 0.5 miles
     @State private var isCreating: Bool = false
     @State private var createError: String? = nil
-    @State private var afterparties: [Afterparty] = []
     @State private var isLoading: Bool = false
     @State private var showCityPicker = false
     @State private var selectedVibeTag = "Chill"
@@ -361,8 +388,13 @@ struct AfterpartyTabView: View {
             VStack(spacing: 24) {
                 CityHeader(cityName: cityManager.selectedCity, onTap: { showCityPicker = true })
                 RadiusSlider(radius: $radius)
-                CreateAfterpartyButton(locationManager: locationManager, showVibeSelection: $showVibeSelection)
-                ActiveAfterpartiesSection(afterparties: afterparties, cityName: cityManager.selectedCity)
+                CreateAfterpartyButton(
+                    locationManager: locationManager,
+                    afterpartyService: afterpartyService,
+                    showVibeSelection: $showVibeSelection
+                )
+                ActiveAfterpartiesSection(afterparties: afterpartyService.activeAfterparties, cityName: cityManager.selectedCity)
+                    .environmentObject(afterpartyService)
                 Spacer()
             }
             .sheet(isPresented: $showCityPicker) {
@@ -388,7 +420,7 @@ struct AfterpartyTabView: View {
                         isCreating = true
                         Task {
                             do {
-                                let afterparty = try await AfterpartyService().createAfterparty(
+                                let afterparty = try await afterpartyService.createAfterparty(
                                     hostHandle: userHandle,
                                     startTime: startTime,
                                     vibeTag: vibe,
@@ -397,12 +429,14 @@ struct AfterpartyTabView: View {
                                     googleMapsLink: googleMapsLink,
                                     locationName: city
                                 )
-                                fetchAfterparties()
-                                showVibeSelection = false
+                                await MainActor.run {
+                                    showVibeSelection = false
+                                    isCreating = false
+                                }
                             } catch {
                                 createError = "Failed to create afterparty: \(error.localizedDescription)"
+                                isCreating = false
                             }
-                            isCreating = false
                         }
                     }
                 )
@@ -425,8 +459,7 @@ struct AfterpartyTabView: View {
     func fetchAfterparties() {
         guard let city = cityManager.selectedCity else { return }
         isLoading = true
-        AfterpartyService().fetchActiveAfterparties(for: city)
-        // You may want to update afterparties array here if using a callback
+        afterpartyService.fetchActiveAfterparties(for: city)
         isLoading = false
     }
 }
@@ -438,48 +471,436 @@ struct ErrorAlert: Identifiable {
 
 struct AfterpartyCard: View {
     let afterparty: Afterparty
+    @State private var showGuestList = false
+    @State private var showShareSheet = false
+    @State private var isRequestingToJoin = false
+    @State private var showConfirmClose = false
+    @State private var showEditSheet = false
+    @EnvironmentObject var afterpartyService: AfterpartyService
+    
+    private var isHost: Bool {
+        UserDefaults.standard.string(forKey: "userHandle") == afterparty.hostHandle
+    }
+    
+    private var isGuest: Bool {
+        guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else { return false }
+        return afterparty.activeUsers.contains(userHandle)
+    }
+    
+    private var hasPendingRequest: Bool {
+        guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else { return false }
+        return afterparty.pendingRequests.contains(userHandle)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Header with host info and buttons
             HStack {
                 Text("@\(afterparty.hostHandle)")
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
-                Text("\(Int(afterparty.locationRadius))m")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
+                if isHost {
+                    Button(action: { showEditSheet = true }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.pink)
+                    }
+                    .padding(.trailing, 8)
+                }
+                Button(action: { showShareSheet = true }) {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundColor(.pink)
+                }
             }
-            Text(afterparty.locationName)
-                .font(.subheadline)
-                .foregroundColor(.gray)
+            
+            // Vibe tags
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
+                        Text(vibe)
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.pink.opacity(0.2))
+                            .foregroundColor(.pink)
+                            .cornerRadius(12)
+                    }
+                }
+            }
+            
+            // Time and guest count
             HStack {
-                Image(systemName: "person.2.fill")
-                Text("\(afterparty.guestCount) going")
-                Spacer()
+                Image(systemName: "clock")
                 Text(afterparty.startTime.formatted(date: .omitted, time: .shortened))
+                Spacer()
+                Image(systemName: "person.2.fill")
+                Text("\(afterparty.activeUsers.count) going")
             }
             .font(.caption)
             .foregroundColor(.gray)
+            
             if !afterparty.description.isEmpty {
                 Text(afterparty.description)
                     .font(.body)
                     .foregroundColor(.white)
             }
+            
+            // Location info
             if !afterparty.address.isEmpty {
-                Text("Address: \(afterparty.address)")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
+                HStack {
+                    Image(systemName: "location.fill")
+                        .foregroundColor(.gray)
+                    Text(afterparty.address)
+                        .font(.footnote)
+                        .foregroundColor(.gray)
+                }
             }
+            
             if !afterparty.googleMapsLink.isEmpty {
-                Link("Google Maps", destination: URL(string: afterparty.googleMapsLink)!)
+                Link(destination: URL(string: afterparty.googleMapsLink)!) {
+                    HStack {
+                        Image(systemName: "map.fill")
+                        Text("Open in Maps")
+                    }
                     .font(.footnote)
                     .foregroundColor(.blue)
+                }
+            }
+            
+            Divider()
+                .background(Color.gray.opacity(0.3))
+            
+            // Host Controls
+            if isHost {
+                HStack(spacing: 16) {
+                    Button(action: { showGuestList = true }) {
+                        HStack {
+                            Image(systemName: "list.bullet.rectangle.portrait.fill")
+                            Text("Manage Guest List")
+                        }
+                        .foregroundColor(.pink)
+                    }
+                    
+                    Button(action: { showConfirmClose = true }) {
+                        HStack {
+                            Image(systemName: "xmark.circle.fill")
+                            Text("Close Early")
+                        }
+                        .foregroundColor(.red)
+                    }
+                }
+                .font(.subheadline)
+            }
+            // Guest Controls
+            else if !isGuest && !hasPendingRequest {
+                Button(action: {
+                    isRequestingToJoin = true
+                    Task {
+                        guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else { return }
+                        do {
+                            try await afterpartyService.requestToJoin(afterpartyId: afterparty.id, userHandle: userHandle)
+                        } catch {
+                            print("Failed to request join: \(error)")
+                        }
+                        isRequestingToJoin = false
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "person.badge.plus")
+                        Text("Join Waitlist")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.pink)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .disabled(isRequestingToJoin)
+            }
+            else if hasPendingRequest {
+                HStack {
+                    Image(systemName: "clock.fill")
+                    Text("Request Pending")
+                }
+                .foregroundColor(.gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            else if isGuest {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("You're on the list!")
+                }
+                .foregroundColor(.green)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
         }
         .padding()
         .background(Color.white.opacity(0.05))
         .cornerRadius(12)
+        .sheet(isPresented: $showGuestList) {
+            GuestListView(afterparty: afterparty)
+                .environmentObject(afterpartyService)
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(
+                items: [
+                    afterparty.shareText,
+                    afterparty.deepLinkURL
+                ]
+            )
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditAfterpartyView(afterparty: afterparty)
+                .environmentObject(afterpartyService)
+        }
+        .alert("Close Afterparty", isPresented: $showConfirmClose) {
+            Button("Cancel", role: .cancel) { }
+            Button("Close", role: .destructive) {
+                Task {
+                    do {
+                        try await afterpartyService.closeAfterparty(afterpartyId: afterparty.id)
+                        // The UI will automatically update through the Firestore listener
+                    } catch {
+                        print("Failed to close afterparty: \(error)")
+                    }
+                }
+            }
+        } message: {
+            Text("Are you sure you want to close this afterparty? This cannot be undone.")
+        }
+    }
+}
+
+struct EditAfterpartyView: View {
+    let afterparty: Afterparty
+    @Environment(\.dismiss) var dismiss
+    @State private var description: String
+    @State private var address: String
+    @State private var googleMapsLink: String
+    @State private var selectedVibeTags: Set<String>
+    @State private var isUpdating = false
+    @State private var showError: String? = nil
+    @EnvironmentObject var afterpartyService: AfterpartyService
+    
+    init(afterparty: Afterparty) {
+        self.afterparty = afterparty
+        _description = State(initialValue: afterparty.description)
+        _address = State(initialValue: afterparty.address)
+        _googleMapsLink = State(initialValue: afterparty.googleMapsLink)
+        _selectedVibeTags = State(initialValue: Set(afterparty.vibeTag.components(separatedBy: ", ")))
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Vibe Selection
+                        VStack(alignment: .leading) {
+                            Text("Update Vibes")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                                ForEach(Afterparty.vibeOptions, id: \.self) { vibe in
+                                    Button(action: {
+                                        if selectedVibeTags.contains(vibe) {
+                                            selectedVibeTags.remove(vibe)
+                                        } else {
+                                            selectedVibeTags.insert(vibe)
+                                        }
+                                    }) {
+                                        Text(vibe)
+                                            .font(.system(size: 18))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 48)
+                                            .background(selectedVibeTags.contains(vibe) ? Color.pink : Color(white: 0.15))
+                                            .foregroundColor(.white)
+                                            .cornerRadius(24)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Address
+                        VStack(alignment: .leading) {
+                            Text("Address")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            TextField("", text: $address)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                        }
+                        
+                        // Google Maps Link
+                        VStack(alignment: .leading) {
+                            Text("Google Maps Link")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            TextField("", text: $googleMapsLink)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                        }
+                        
+                        // Description
+                        VStack(alignment: .leading) {
+                            Text("Description")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            TextEditor(text: $description)
+                                .frame(height: 100)
+                                .cornerRadius(8)
+                                .foregroundColor(.white)
+                        }
+                        
+                        Button(action: {
+                            Task {
+                                await updateAfterparty()
+                            }
+                        }) {
+                            Text(isUpdating ? "Updating..." : "Update Afterparty")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(isUpdating ? Color.gray : Color.pink)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                        }
+                        .disabled(isUpdating)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Edit Afterparty")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+            .alert("Error", isPresented: .init(
+                get: { showError != nil },
+                set: { if !$0 { showError = nil } }
+            )) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(showError ?? "")
+            }
+        }
+    }
+    
+    private func updateAfterparty() async {
+        isUpdating = true
+        do {
+            try await afterpartyService.updateAfterparty(
+                id: afterparty.id,
+                description: description,
+                address: address,
+                googleMapsLink: googleMapsLink,
+                vibeTag: Array(selectedVibeTags).joined(separator: ", ")
+            )
+            await MainActor.run {
+                dismiss()
+            }
+        } catch {
+            showError = error.localizedDescription
+        }
+        isUpdating = false
+    }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct GuestListView: View {
+    let afterparty: Afterparty
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedTab = 0
+    @EnvironmentObject var afterpartyService: AfterpartyService
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                Picker("", selection: $selectedTab) {
+                    Text("Going (\(afterparty.activeUsers.count))").tag(0)
+                    Text("Requests (\(afterparty.pendingRequests.count))").tag(1)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                if selectedTab == 0 {
+                    // Active Users List
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(afterparty.activeUsers, id: \.self) { userHandle in
+                                HStack {
+                                    Text("@\(userHandle)")
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                }
+                                .padding()
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(8)
+                            }
+                        }
+                        .padding()
+                    }
+                } else {
+                    // Pending Requests List
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(afterparty.pendingRequests, id: \.self) { userHandle in
+                                HStack {
+                                    Text("@\(userHandle)")
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Button(action: {
+                                        Task {
+                                            try? await afterpartyService.acceptRequest(afterpartyId: afterparty.id, userHandle: userHandle)
+                                        }
+                                    }) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                    }
+                                    Button(action: {
+                                        Task {
+                                            try? await afterpartyService.rejectRequest(afterpartyId: afterparty.id, userHandle: userHandle)
+                                        }
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                                .padding()
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(8)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle("Guest List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .background(Color.black.edgesIgnoringSafeArea(.all))
     }
 }
 
@@ -600,7 +1021,17 @@ class AfterpartyService: ObservableObject {
     }
     func closeAfterparty(afterpartyId: String) async throws {
         let ref = db.collection("afterparties").document(afterpartyId)
-        try await ref.updateData(["isActive": false])
+        try await ref.updateData([
+            "isActive": false,
+            "isAcceptingRequests": false
+        ])
+        
+        // Update local state
+        await MainActor.run {
+            activeAfterparties.removeAll { $0.id == afterpartyId }
+            joinedAfterparties.remove(afterpartyId)
+            UserDefaults.standard.set(Array(joinedAfterparties), forKey: "joinedAfterparties")
+        }
     }
     func fetchActiveAfterparties(for city: String) {
         db.collection("afterparties")
@@ -636,6 +1067,15 @@ class AfterpartyService: ObservableObject {
             .getDocuments()
         return try snapshot.documents.first?.data(as: Afterparty.self)
     }
+    func updateAfterparty(id: String, description: String, address: String, googleMapsLink: String, vibeTag: String) async throws {
+        let ref = db.collection("afterparties").document(id)
+        try await ref.updateData([
+            "description": description,
+            "address": address,
+            "googleMapsLink": googleMapsLink,
+            "vibeTag": vibeTag
+        ])
+    }
 }
 
 enum AfterpartyError: LocalizedError {
@@ -658,11 +1098,38 @@ enum AfterpartyError: LocalizedError {
 // Add missing subviews for RadiusSlider and CreateAfterpartyButton
 private struct RadiusSlider: View {
     @Binding var radius: Double
+    
+    // Available radius values in 0.5 mile increments
+    private let radiusValues: [Double] = Array(stride(from: 0.5, through: 15.0, by: 0.5))
+    
+    // Convert miles to display format
+    private func formatRadius(_ miles: Double) -> String {
+        let validMiles = radiusValues.contains(miles) ? miles : radiusValues[0]
+        if validMiles == 0.5 {
+            return "0.5 mile"
+        }
+        if validMiles == 1.0 {
+            return "1.0 mile"
+        }
+        return String(format: "%.1f miles", validMiles)
+    }
+    
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Radius: \(Int(radius))m")
+            Text("Radius: \(formatRadius(radius))")
                 .foregroundColor(.white)
-            Slider(value: $radius, in: 50...500, step: 50)
+            Slider(value: Binding(
+                get: { 
+                    // Find closest valid value
+                    let index = radiusValues.firstIndex { $0 >= radius } ?? 0
+                    return radiusValues[index]
+                },
+                set: { newValue in
+                    // Ensure value is exactly on 0.5 increment
+                    let index = radiusValues.firstIndex { $0 >= newValue } ?? 0
+                    radius = radiusValues[index]
+                }
+            ), in: 0.5...15.0, step: 0.5)
                 .accentColor(.pink)
         }
         .padding(.horizontal)
@@ -671,7 +1138,14 @@ private struct RadiusSlider: View {
 
 private struct CreateAfterpartyButton: View {
     @ObservedObject var locationManager: AfterpartyLocationManager
+    @ObservedObject var afterpartyService: AfterpartyService
     @Binding var showVibeSelection: Bool
+    
+    private var hasActiveAfterparty: Bool {
+        guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else { return false }
+        return afterpartyService.activeAfterparties.contains { $0.hostHandle == userHandle }
+    }
+    
     var body: some View {
         Button(action: {
             if locationManager.currentLocation == nil {
@@ -679,13 +1153,14 @@ private struct CreateAfterpartyButton: View {
             }
             showVibeSelection = true
         }) {
-            Text("Create Afterparty")
+            Text(hasActiveAfterparty ? "You already have an active afterparty" : "Create Afterparty")
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.pink)
+                .background(hasActiveAfterparty ? Color.gray : Color.pink)
                 .cornerRadius(12)
         }
+        .disabled(hasActiveAfterparty)
         .padding(.horizontal)
     }
 }
@@ -695,3 +1170,4 @@ private struct CreateAfterpartyButton: View {
 
 // If Afterparty is not found, add a typealias to ensure the correct model is used
 // typealias Afterparty = <full path to model>.Afterparty 
+ 
