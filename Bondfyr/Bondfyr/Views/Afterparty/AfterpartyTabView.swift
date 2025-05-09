@@ -51,33 +51,37 @@ struct CreateAfterpartyFlow: View {
     private var availableHours: [Date] {
         let calendar = Calendar.current
         var hours: [Date] = []
-        let baseDate = isTomorrow ? calendar.date(byAdding: .day, value: 1, to: Date())! : Date()
+        let now = Date()
+        let currentHour = calendar.component(.hour, from: now)
+        let baseDate = isTomorrow ? calendar.date(byAdding: .day, value: 1, to: now)! : now
         
-        // Start from 7 PM today or tomorrow
-        var components = calendar.dateComponents([.year, .month, .day], from: baseDate)
-        components.hour = 19 // 7 PM
-        components.minute = 0
-        var date = calendar.date(from: components)!
-        
-        // Add hours until 11 PM
-        while components.hour! <= 23 {
-            // Only add future times
-            if date > Date() {
-                hours.append(date)
+        if !isTomorrow {
+            // For today, show remaining hours until 11 PM
+            let startHour = currentHour + 1
+            let endHour = 23 // 11 PM
+            
+            for hour in startHour...endHour {
+                if let date = calendar.date(
+                    bySettingHour: hour,
+                    minute: 0,
+                    second: 0,
+                    of: baseDate
+                ), date > now {
+                    hours.append(date)
+                }
             }
-            date = calendar.date(byAdding: .hour, value: 1, to: date)!
-            components.hour! += 1
-        }
-        
-        // Add hours from 12 AM to 4 AM
-        components.hour = 0
-        components.day! += 1
-        date = calendar.date(from: components)!
-        
-        for hour in 0...4 {
-            components.hour = hour
-            date = calendar.date(from: components)!
-            hours.append(date)
+        } else {
+            // For tomorrow, only show 12 AM to 4 AM
+            for hour in 0...4 {
+                if let date = calendar.date(
+                    bySettingHour: hour,
+                    minute: 0,
+                    second: 0,
+                    of: baseDate
+                ) {
+                    hours.append(date)
+                }
+            }
         }
         
         return hours
@@ -382,72 +386,155 @@ struct AfterpartyTabView: View {
     @State private var showCityPicker = false
     @State private var selectedVibeTag = "Chill"
     @State private var showVibeSelection = false
+    @State private var searchText = ""
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // City header
                 CityHeader(cityName: cityManager.selectedCity, onTap: { showCityPicker = true })
-                RadiusSlider(radius: $radius)
-                CreateAfterpartyButton(
-                    locationManager: locationManager,
-                    afterpartyService: afterpartyService,
-                    showVibeSelection: $showVibeSelection
-                )
-                ActiveAfterpartiesSection(afterparties: afterpartyService.activeAfterparties, cityName: cityManager.selectedCity)
-                    .environmentObject(afterpartyService)
-                Spacer()
-            }
-            .sheet(isPresented: $showCityPicker) {
-                CitySelectionView { selectedCity in
-                    cityManager.selectedCity = selectedCity
-                    showCityPicker = false
-                    fetchAfterparties()
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.pink)
+                    TextField("Search afterparties...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .foregroundColor(.white)
+                        .autocapitalization(.none)
                 }
-            }
-            .sheet(isPresented: $showVibeSelection) {
-                CreateAfterpartyFlow(
-                    vibeTag: $selectedVibeTag,
-                    isCreating: $isCreating,
-                    onCreate: { vibe, address, description, googleMapsLink, startTime in
-                        guard let city = cityManager.selectedCity else {
-                            createError = "Please select a city."
-                            return
+                .padding(12)
+                .background(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.purple.opacity(0.5), lineWidth: 1.2)
+                        .shadow(color: .purple.opacity(0.3), radius: 6, x: 0, y: 0)
+                )
+                .cornerRadius(12)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                // Radius slider
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Distance: \(String(format: "%.1f", radius)) miles")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                    
+                    Slider(value: $radius, in: 0.5...15.0)
+                        .accentColor(.pink)
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                // Create afterparty button
+                Button(action: { showVibeSelection = true }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                        Text("Create Afterparty")
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.pink, Color.purple]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(12)
+                    .shadow(color: .pink.opacity(0.3), radius: 8, x: 0, y: 0)
+                }
+                .padding(.horizontal)
+                .padding(.top, 16)
+                
+                // Active afterparties
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        let filteredAfterparties = afterpartyService.activeAfterparties.filter {
+                            searchText.isEmpty || 
+                            $0.hostHandle.localizedCaseInsensitiveContains(searchText) ||
+                            $0.vibeTag.localizedCaseInsensitiveContains(searchText)
                         }
-                        guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else {
-                            createError = "Please set up your profile first."
-                            return
-                        }
-                        isCreating = true
-                        Task {
-                            do {
-                                let afterparty = try await afterpartyService.createAfterparty(
-                                    hostHandle: userHandle,
-                                    startTime: startTime,
-                                    vibeTag: vibe,
-                                    address: address,
-                                    description: description,
-                                    googleMapsLink: googleMapsLink,
-                                    locationName: city
-                                )
-                                await MainActor.run {
-                                    showVibeSelection = false
-                                    isCreating = false
-                                }
-                            } catch {
-                                createError = "Failed to create afterparty: \(error.localizedDescription)"
-                                isCreating = false
+                        
+                        if filteredAfterparties.isEmpty {
+                            VStack(spacing: 16) {
+                                Image(systemName: "party.popper.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.gray)
+                                Text("No afterparties yet in \(cityManager.selectedCity?.components(separatedBy: ",").first ?? "your city").")
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(.top, 40)
+                        } else {
+                            ForEach(filteredAfterparties) { party in
+                                AfterpartyCard(afterparty: party)
+                                    .environmentObject(afterpartyService)
+                                    .padding(.horizontal)
                             }
                         }
                     }
-                )
+                    .padding(.top, 16)
+                }
             }
-            .background(Color.black.edgesIgnoringSafeArea(.all))
-            .alert(item: Binding(
-                get: { createError.map { ErrorAlert(message: $0) } },
-                set: { _ in createError = nil }
-            )) { error in
-                Alert(title: Text("Error"), message: Text(error.message))
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showCityPicker) {
+            CitySelectionView { selectedCity in
+                cityManager.selectedCity = selectedCity
+                showCityPicker = false
+                fetchAfterparties()
             }
+        }
+        .sheet(isPresented: $showVibeSelection) {
+            CreateAfterpartyFlow(
+                vibeTag: $selectedVibeTag,
+                isCreating: $isCreating,
+                onCreate: { vibe, address, description, googleMapsLink, startTime in
+                    guard let city = cityManager.selectedCity else {
+                        createError = "Please select a city."
+                        return
+                    }
+                    guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else {
+                        createError = "Please set up your profile first."
+                        return
+                    }
+                    isCreating = true
+                    Task {
+                        do {
+                            let afterparty = try await afterpartyService.createAfterparty(
+                                hostHandle: userHandle,
+                                startTime: startTime,
+                                vibeTag: vibe,
+                                address: address,
+                                description: description,
+                                googleMapsLink: googleMapsLink,
+                                locationName: city
+                            )
+                            await MainActor.run {
+                                showVibeSelection = false
+                                isCreating = false
+                            }
+                        } catch {
+                            createError = "Failed to create afterparty: \(error.localizedDescription)"
+                            isCreating = false
+                        }
+                    }
+                }
+            )
+        }
+        .alert(item: Binding(
+            get: { createError.map { ErrorAlert(message: $0) } },
+            set: { _ in createError = nil }
+        )) { error in
+            Alert(title: Text("Error"), message: Text(error.message))
         }
         .onAppear {
             locationManager.requestLocation()
@@ -455,8 +542,7 @@ struct AfterpartyTabView: View {
         }
     }
     
-    // MARK: - Fetch
-    func fetchAfterparties() {
+    private func fetchAfterparties() {
         guard let city = cityManager.selectedCity else { return }
         isLoading = true
         afterpartyService.fetchActiveAfterparties(for: city)
@@ -476,6 +562,8 @@ struct AfterpartyCard: View {
     @State private var isRequestingToJoin = false
     @State private var showConfirmClose = false
     @State private var showEditSheet = false
+    @State private var timeLeft: String = ""
+    @State private var timer: Timer? = nil
     @EnvironmentObject var afterpartyService: AfterpartyService
     
     private var isHost: Bool {
@@ -490,6 +578,21 @@ struct AfterpartyCard: View {
     private var hasPendingRequest: Bool {
         guard let userHandle = UserDefaults.standard.string(forKey: "userHandle") else { return false }
         return afterparty.pendingRequests.contains(userHandle)
+    }
+    
+    private func updateTimeLeft() {
+        let now = Date()
+        let endTime = afterparty.createdAt.addingTimeInterval(9 * 3600) // 9 hours from creation time
+        let diff = endTime.timeIntervalSince(now)
+        
+        if diff <= 0 {
+            timeLeft = "Expired"
+            timer?.invalidate()
+        } else {
+            let hours = Int(diff) / 3600
+            let minutes = (Int(diff) % 3600) / 60
+            timeLeft = "Closes in \(hours)h \(minutes)m"
+        }
     }
     
     var body: some View {
@@ -528,16 +631,25 @@ struct AfterpartyCard: View {
                 }
             }
             
-            // Time and guest count
-            HStack {
-                Image(systemName: "clock")
-                Text(afterparty.startTime.formatted(date: .omitted, time: .shortened))
-                Spacer()
-                Image(systemName: "person.2.fill")
-                Text("\(afterparty.activeUsers.count) going")
+            // Time, guest count, and closes in
+            VStack(spacing: 4) {
+                HStack {
+                    Image(systemName: "clock")
+                    Text(afterparty.startTime.formatted(date: .omitted, time: .shortened))
+                    Spacer()
+                    Image(systemName: "person.2.fill")
+                    Text("\(afterparty.activeUsers.count) going")
+                }
+                .font(.caption)
+                .foregroundColor(.gray)
+                
+                HStack {
+                    Spacer()
+                    Text(timeLeft)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
-            .font(.caption)
-            .foregroundColor(.gray)
             
             if !afterparty.description.isEmpty {
                 Text(afterparty.description)
@@ -669,6 +781,17 @@ struct AfterpartyCard: View {
             }
         } message: {
             Text("Are you sure you want to close this afterparty? This cannot be undone.")
+        }
+        .onAppear {
+            updateTimeLeft()
+            // Start timer to update countdown
+            timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+                updateTimeLeft()
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
     }
 }
