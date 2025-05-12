@@ -122,8 +122,8 @@ struct Afterparty: Identifiable, Codable {
             startTime = startTimestamp.dateValue()
         } else {
             startTime = try container.decode(Date.self, forKey: .startTime)
-        }
-        
+    }
+    
         if let endTimestamp = try? container.decode(Timestamp.self, forKey: .endTime) {
             endTime = endTimestamp.dateValue()
         } else {

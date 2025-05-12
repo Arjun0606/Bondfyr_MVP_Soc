@@ -13,12 +13,9 @@ class TabSelection: ObservableObject {
 
 enum Tab: Int, Hashable {
     case discover
-    case saved
+    case photos
     case afterparty
     case citychat
-    case chat
-    case tickets
-    case planner
-    case pregame
     case profile
+    case tickets
 }

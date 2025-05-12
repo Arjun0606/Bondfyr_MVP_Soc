@@ -38,6 +38,22 @@ class AfterpartyManager: NSObject, ObservableObject {
         }
     }
     
+    func hasActiveAfterparty() async throws -> Bool {
+        guard let userId = Auth.auth().currentUser?.uid else { return false }
+        
+        let snapshot = try await db.collection("afterparties")
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+            
+        // Check if any of the user's afterparties are still active
+        return snapshot.documents.contains { doc in
+            guard let endTime = (doc.data()["endTime"] as? Timestamp)?.dateValue() else {
+                return false
+            }
+            return endTime > Date()
+        }
+    }
+    
     func createAfterparty(
         hostHandle: String,
         coordinate: CLLocationCoordinate2D,
@@ -55,19 +71,33 @@ class AfterpartyManager: NSObject, ObservableObject {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
         }
         
+        // Check if user already has an active afterparty
+        if try await hasActiveAfterparty() {
+            throw NSError(
+                domain: "AfterpartyError",
+                code: 403,
+                userInfo: [NSLocalizedDescriptionKey: "You can only host one afterparty at a time. Please wait for your current afterparty to end or cancel it before creating a new one."]
+            )
+        }
+        
+        // Set creation time and calculate end time (9 hours from creation)
+        let creationTime = Date()
+        let nineHoursFromNow = Calendar.current.date(byAdding: .hour, value: 9, to: creationTime) ?? Date()
+        
         let afterparty = Afterparty(
             userId: userId,
             hostHandle: hostHandle,
             coordinate: coordinate,
             radius: radius,
             startTime: startTime,
-            endTime: endTime,
+            endTime: nineHoursFromNow,
             city: city,
             locationName: locationName,
             description: description,
             address: address,
             googleMapsLink: googleMapsLink,
-            vibeTag: vibeTag
+            vibeTag: vibeTag,
+            createdAt: creationTime
         )
         
         let data = try Firestore.Encoder().encode(afterparty)
@@ -80,7 +110,7 @@ class AfterpartyManager: NSObject, ObservableObject {
     func fetchNearbyAfterparties() async {
         guard let location = currentLocation else { 
             print("No current location available")
-            return 
+            return
         }
         
         isLoading = true
@@ -181,7 +211,39 @@ class AfterpartyManager: NSObject, ObservableObject {
         guard let userId = Auth.auth().currentUser?.uid,
               afterparty.userId == userId else { return }
         
+        // Delete the afterparty
         try await db.collection("afterparties").document(afterparty.id).delete()
+        
+        // Update the UI by removing the deleted afterparty
+        await MainActor.run {
+            self.nearbyAfterparties.removeAll { $0.id == afterparty.id }
+        }
+    }
+    
+    func addGuest(afterpartyId: String, guestHandle: String) async throws {
+        // First, find the user ID from the handle
+        let snapshot = try await db.collection("users")
+            .whereField("handle", isEqualTo: guestHandle.lowercased())
+            .limit(to: 1)
+            .getDocuments()
+        
+        guard let userDoc = snapshot.documents.first,
+              let userId = userDoc.data()["uid"] as? String else {
+            throw NSError(domain: "AfterpartyError", 
+                         code: 404, 
+                         userInfo: [NSLocalizedDescriptionKey: "User not found"])
+        }
+        
+        // Add user directly to activeUsers
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "activeUsers": FieldValue.arrayUnion([userId])
+        ])
+    }
+    
+    func removeGuest(afterpartyId: String, userId: String) async throws {
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "activeUsers": FieldValue.arrayRemove([userId])
+        ])
     }
     
     deinit {

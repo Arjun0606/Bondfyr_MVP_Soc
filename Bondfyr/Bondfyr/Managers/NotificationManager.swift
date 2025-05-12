@@ -451,6 +451,87 @@ class NotificationManager: NSObject {
         self.notificationCenter.removeAllPendingNotificationRequests()
         self.notificationCenter.removeAllDeliveredNotifications()
     }
+
+    func scheduleAfterpartyReminder(afterparty: Afterparty) {
+        let content = UNMutableNotificationContent()
+        content.title = "Afterparty Starting Soon! 🎉"
+        content.body = "The afterparty at \(afterparty.locationName) starts in 30 minutes!"
+        content.sound = .default
+        
+        // Schedule for 30 minutes before start time
+        let triggerDate = afterparty.startTime.addingTimeInterval(-30 * 60)
+        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        
+        let request = UNNotificationRequest(
+            identifier: "afterparty-reminder-\(afterparty.id)",
+            content: content,
+            trigger: trigger
+        )
+        
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("Failed to schedule afterparty reminder: \(error)")
+            }
+        }
+    }
+    
+    func sendJoinRequestNotification(afterparty: Afterparty) {
+        let content = UNMutableNotificationContent()
+        content.title = "New Join Request 👋"
+        content.body = "Someone wants to join your afterparty at \(afterparty.locationName)!"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "join-request-\(afterparty.id)-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("Failed to send join request notification: \(error)")
+            }
+        }
+    }
+    
+    func sendRequestAcceptedNotification(afterparty: Afterparty) {
+        let content = UNMutableNotificationContent()
+        content.title = "Join Request Accepted! 🎉"
+        content.body = "You've been accepted to join the afterparty at \(afterparty.locationName)!"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "request-accepted-\(afterparty.id)-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("Failed to send request accepted notification: \(error)")
+            }
+        }
+    }
+    
+    func sendAfterpartyJoinNotification(afterparty: Afterparty) {
+        let content = UNMutableNotificationContent()
+        content.title = "New Afterparty Member! 🎉"
+        content.body = "Someone new has joined your afterparty at \(afterparty.locationName)!"
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "afterparty-join-\(afterparty.id)-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        notificationCenter.add(request) { error in
+            if let error = error {
+                print("Failed to send afterparty join notification: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - UNUserNotificationCenterDelegate

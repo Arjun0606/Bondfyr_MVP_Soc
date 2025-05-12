@@ -221,47 +221,63 @@ class ChatManager: ObservableObject {
         // Create a series of mock messages for testing when offline
         let mockMessages = [
             ChatMessage(
-                cityId: cityId,
-                userId: "system",
-                displayName: "System",
+                id: UUID().uuidString,
                 text: "Welcome to the chat! This is a fallback mode when the server is unavailable.",
+                userHandle: "System",
+                userId: "system",
                 timestamp: Date().addingTimeInterval(-3600),
+                city: cityId,
+                eventId: nil,
                 isSystemMessage: true
             ),
             ChatMessage(
-                cityId: cityId,
-                userId: "user1",
-                displayName: "DancingPhoenix",
+                id: UUID().uuidString,
                 text: "Hey everyone! What's happening tonight?",
-                timestamp: Date().addingTimeInterval(-2700)
-            ),
-            ChatMessage(
-                cityId: cityId,
-                userId: "user2",
-                displayName: "CosmicTiger",
-                text: "I heard there's a great event at High Spirits!",
-                timestamp: Date().addingTimeInterval(-2400)
-            ),
-            ChatMessage(
-                cityId: cityId,
-                userId: "user3",
-                displayName: "MidnightWolf",
-                text: "Anyone going to the concert at Pune this weekend?",
-                timestamp: Date().addingTimeInterval(-1800)
-            ),
-            ChatMessage(
-                cityId: cityId,
+                userHandle: "DancingPhoenix",
                 userId: "user1",
-                displayName: "DancingPhoenix",
-                text: "Yes! I already got my tickets. It's going to be amazing!",
-                timestamp: Date().addingTimeInterval(-1500)
+                timestamp: Date().addingTimeInterval(-2700),
+                city: cityId,
+                eventId: nil,
+                isSystemMessage: false
             ),
             ChatMessage(
-                cityId: cityId,
-                userId: "system",
-                displayName: "System",
+                id: UUID().uuidString,
+                text: "I heard there's a great event at High Spirits!",
+                userHandle: "CosmicTiger",
+                userId: "user2",
+                timestamp: Date().addingTimeInterval(-2400),
+                city: cityId,
+                eventId: nil,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                text: "Anyone going to the concert at Pune this weekend?",
+                userHandle: "MidnightWolf",
+                userId: "user3",
+                timestamp: Date().addingTimeInterval(-1800),
+                city: cityId,
+                eventId: nil,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                text: "Yes! I already got my tickets. It's going to be amazing!",
+                userHandle: "DancingPhoenix",
+                userId: "user1",
+                timestamp: Date().addingTimeInterval(-1500),
+                city: cityId,
+                eventId: nil,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
                 text: "Internet connection appears to be limited. Some features may not be available.",
+                userHandle: "System",
+                userId: "system",
                 timestamp: Date().addingTimeInterval(-900),
+                city: cityId,
+                eventId: nil,
                 isSystemMessage: true
             )
         ]
@@ -308,11 +324,13 @@ class ChatManager: ObservableObject {
     private func sendMessageImpl(text: String, cityId: String, userId: String) {
         let message = ChatMessage(
             id: UUID().uuidString,
-            cityId: cityId,
-            userId: userId,
-            displayName: userDisplayName,
             text: text,
-            timestamp: Date()
+            userHandle: userDisplayName,
+            userId: userId,
+            timestamp: Date(),
+            city: cityId,
+            eventId: nil,
+            isSystemMessage: false
         )
         
         // Save to Firestore
@@ -442,63 +460,63 @@ class ChatManager: ObservableObject {
         let mockMessages = [
             ChatMessage(
                 id: UUID().uuidString,
-                cityId: "",
-                userId: "system",
-                displayName: "System",
                 text: "Welcome to the \(eventName) chat! This is offline mode.",
-                timestamp: Date().addingTimeInterval(-3600),
-                isSystemMessage: true,
-                eventId: eventId
-            ),
-            ChatMessage(
-                id: UUID().uuidString,
-                cityId: "",
-                userId: "user1",
-                displayName: "GlitterFalcon",
-                text: "I just arrived! Where's everyone sitting?",
-                timestamp: Date().addingTimeInterval(-2700),
-                isSystemMessage: false,
-                eventId: eventId
-            ),
-            ChatMessage(
-                id: UUID().uuidString,
-                cityId: "",
-                userId: "user2",
-                displayName: "ElectricPanther",
-                text: "We're near the front, by the stage!",
-                timestamp: Date().addingTimeInterval(-2400),
-                isSystemMessage: false,
-                eventId: eventId
-            ),
-            ChatMessage(
-                id: UUID().uuidString,
-                cityId: "",
-                userId: "user3",
-                displayName: "RetroEagle",
-                text: "The drinks here are amazing! Try the signature cocktail.",
-                timestamp: Date().addingTimeInterval(-1800),
-                isSystemMessage: false,
-                eventId: eventId
-            ),
-            ChatMessage(
-                id: UUID().uuidString,
-                cityId: "",
-                userId: "user1",
-                displayName: "GlitterFalcon",
-                text: "Has anyone seen when the main act starts?",
-                timestamp: Date().addingTimeInterval(-1500),
-                isSystemMessage: false,
-                eventId: eventId
-            ),
-            ChatMessage(
-                id: UUID().uuidString,
-                cityId: "",
+                userHandle: "System",
                 userId: "system",
-                displayName: "System",
+                timestamp: Date().addingTimeInterval(-3600),
+                city: "",
+                eventId: eventId,
+                isSystemMessage: true
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                text: "I just arrived! Where's everyone sitting?",
+                userHandle: "GlitterFalcon",
+                userId: "user1",
+                timestamp: Date().addingTimeInterval(-2700),
+                city: "",
+                eventId: eventId,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                text: "We're near the front, by the stage!",
+                userHandle: "ElectricPanther",
+                userId: "user2",
+                timestamp: Date().addingTimeInterval(-2400),
+                city: "",
+                eventId: eventId,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                text: "The drinks here are amazing! Try the signature cocktail.",
+                userHandle: "RetroEagle",
+                userId: "user3",
+                timestamp: Date().addingTimeInterval(-1800),
+                city: "",
+                eventId: eventId,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                text: "Has anyone seen when the main act starts?",
+                userHandle: "GlitterFalcon",
+                userId: "user1",
+                timestamp: Date().addingTimeInterval(-1500),
+                city: "",
+                eventId: eventId,
+                isSystemMessage: false
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
                 text: "Internet connection appears to be limited. Some features may not be available.",
+                userHandle: "System",
+                userId: "system",
                 timestamp: Date().addingTimeInterval(-900),
-                isSystemMessage: true,
-                eventId: eventId
+                city: "",
+                eventId: eventId,
+                isSystemMessage: true
             )
         ]
         
@@ -545,13 +563,13 @@ class ChatManager: ObservableObject {
     private func sendEventMessageImpl(text: String, eventId: String, userId: String) {
         let message = ChatMessage(
             id: UUID().uuidString,
-            cityId: "",  // Empty for event chats
-            userId: userId,
-            displayName: userDisplayName,
             text: text,
+            userHandle: userDisplayName,
+            userId: userId,
             timestamp: Date(),
-            isSystemMessage: false,
-            eventId: eventId
+            city: "",  // Empty for event chats
+            eventId: eventId,
+            isSystemMessage: false
         )
         
         // Save to Firestore

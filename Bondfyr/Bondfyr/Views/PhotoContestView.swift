@@ -43,7 +43,7 @@ struct PhotoContestView: View {
                 ContestPhotoCaptureView(eventId: eventId)
             }
             .sheet(item: $selectedPhoto) { photo in
-                PhotoDetailView(photo: photo)
+                ContestPhotoDetailView(photo: photo)
             }
             .onAppear {
                 loadPhotos()
@@ -190,7 +190,7 @@ struct ContestPhoto: Identifiable, Equatable {
 }
 
 // View for displaying a photo in detail
-struct PhotoDetailView: View {
+struct ContestPhotoDetailView: View {
     let photo: ContestPhoto
     @State private var hasLiked = false
     @Environment(\.presentationMode) var presentationMode

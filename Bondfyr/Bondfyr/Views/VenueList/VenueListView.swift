@@ -194,7 +194,7 @@ struct VenueListView: View {
             Button(action: { 
                 selectedSort = .distance
                 // Check location permission when switching to distance
-                if locationManager.userLocation == nil {
+                if locationManager.location == nil {
                     locationDenied = true
                 }
             }) {
@@ -336,7 +336,7 @@ struct VenueListView: View {
             await fetchGoogleVenuesForSelectedCity()
         }
         .sheet(item: $selectedVenue) { venue in
-            VenueDetailView(venue: venue) {
+            SimpleVenueDetailView(venue: venue) {
                 selectedVenue = nil
             }
         }
@@ -361,7 +361,7 @@ struct VenueListView: View {
                 
             case .distance:
                 // Pure distance-based sorting
-                guard let userLocation = locationManager.userLocation,
+                guard let userLocation = locationManager.location,
                       let loc1 = v1.location,
                       let loc2 = v2.location else {
                     // If we can't calculate distance, put this venue last
@@ -727,7 +727,7 @@ extension VenueWithCrowd {
     }
 }
 
-struct VenueDetailView: View {
+struct SimpleVenueDetailView: View {
     let venue: SimpleVenue
     let onClose: () -> Void
     @State private var isPlanning = false

@@ -2,17 +2,24 @@ import Foundation
 import FirebaseFirestore
 import CoreLocation
 import Combine
+import SwiftUI
 
 class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     static let shared = CityManager()
+    
+    // MARK: - Published Properties
     @Published var cities: [String] = []
     @Published var selectedCity: String? = nil
+    @Published var selectedCountry: String? = nil
     @Published var userLocation: CLLocation? = nil
     @Published var isLoading: Bool = false
     @Published var error: String? = nil
+    @Published var location: CLLocation?
     
+    // MARK: - Private Properties
     private let db = Firestore.firestore()
     private let locationManager = CLLocationManager()
+    private let defaults = UserDefaults.standard
     private var cancellables = Set<AnyCancellable>()
     
     // Major Indian cities with nightlife
@@ -31,8 +38,27 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     private func setupInitialData() {
-        // Do not set preset cities or default city
-        // Only onboarding should set selectedCity
+        // Load saved city and country from UserDefaults
+        selectedCity = defaults.string(forKey: "selectedCity")
+        selectedCountry = defaults.string(forKey: "selectedCountry")
+    }
+
+    // MARK: - City Selection Methods
+    func setCity(_ city: String) {
+        selectedCity = city
+        defaults.set(city, forKey: "selectedCity")
+    }
+    
+    func setCountry(_ country: String) {
+        selectedCountry = country
+        defaults.set(country, forKey: "selectedCountry")
+    }
+    
+    func clearSelection() {
+        selectedCity = nil
+        selectedCountry = nil
+        defaults.removeObject(forKey: "selectedCity")
+        defaults.removeObject(forKey: "selectedCountry")
     }
 
     func fetchCities() {
@@ -190,5 +216,13 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             let bestMatch = cityCounts.max { $0.value < $1.value }?.key
             completion(bestMatch)
         }
+    }
+
+    func updateCity(_ city: String) {
+        setCity(city)
+    }
+    
+    func updateLocation(_ newLocation: CLLocation) {
+        location = newLocation
     }
 } 

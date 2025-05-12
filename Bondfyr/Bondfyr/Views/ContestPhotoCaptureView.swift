@@ -17,17 +17,40 @@ struct ContestPhotoCaptureView: View {
     @State private var errorMessage = "An error occurred"
     @State private var isPhotoTaken = false
     @State private var capturedImage: UIImage? = nil
-    @State private var timeRemaining = 0
-    @State private var timer: Timer?
     @State private var isUploading = false
     @State private var showScreenshotWarning = false
     @State private var isShowingCamera = true
     @State private var uploadComplete = false
+    @State private var timer: Timer?
+    
+    private var isEligible: Bool {
+        photoManager.isEligibleForContest
+    }
+    
+    private var timeRemaining: TimeInterval {
+        photoManager.contestTimeRemaining
+    }
     
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
             
+            if !isEligible {
+                VStack {
+                    Text("You've already submitted a photo for today's contest")
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                    
+                    Button("Close") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.pink)
+                    .cornerRadius(10)
+                }
+            } else {
             VStack {
                 // Header with back button
                 if !isShowingCamera && !isUploading && capturedImage == nil {
@@ -120,12 +143,19 @@ struct ContestPhotoCaptureView: View {
                     }
                 }
             }
-            .alert(isPresented: $showErrorAlert) {
-                Alert(
-                    title: Text("Error"),
-                    message: Text(errorMessage),
-                    dismissButton: .default(Text("OK"))
-                )
+            }
+        }
+        .alert("Error", isPresented: $showErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
+        .alert("Success", isPresented: $showSuccessAlert) {
+            Button("View Contest", role: .cancel) {
+                dismissToGallery()
+            }
+        } message: {
+            Text("Your retro photo has been submitted to the contest!")
             }
             .onAppear {
                 print("ContestPhotoCaptureView appeared, will open camera")
@@ -137,6 +167,10 @@ struct ContestPhotoCaptureView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     isShowingCamera = true
                 }
+            
+            Task {
+                await photoManager.checkContestEligibility()
+            }
             }
             .onDisappear {
                 // Cleanup all resources
@@ -144,14 +178,6 @@ struct ContestPhotoCaptureView: View {
                 capturedImage = nil
                 timer?.invalidate()
                 removeScreenshotDetection()
-            }
-            .alert("Success", isPresented: $showSuccessAlert) {
-                Button("View Contest", role: .cancel) {
-                    dismissToGallery()
-                }
-            } message: {
-                Text("Your retro photo has been submitted to the contest!")
-            }
         }
     }
     
@@ -249,23 +275,19 @@ struct ContestPhotoCaptureView: View {
     }
     
     private func startTimer() {
-        // Get remaining time from PhotoManager if a contest is active
-        if let remaining = photoManager.getContestTimeRemaining() {
-            timeRemaining = Int(remaining)
-        }
-        
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             if timeRemaining > 0 {
-                timeRemaining -= 1
-            } else {
+                // The timeRemaining will be automatically updated by PhotoManager
+                if timeRemaining == 0 {
                 timer?.invalidate()
                 dismissView()
+                }
             }
         }
     }
     
     private func checkEligibility() {
-        if !photoManager.isUserEligibleForContest() {
+        if !photoManager.isEligibleForContest {
             errorMessage = "You are not eligible for this contest. You must be checked in at the event."
             showErrorAlert = true
             

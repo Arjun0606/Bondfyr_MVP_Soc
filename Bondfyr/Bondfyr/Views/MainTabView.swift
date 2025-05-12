@@ -24,10 +24,19 @@ struct MainTabView: View {
                 VenueListView()
             }
             .tabItem {
-                Image(systemName: "flame.fill")
+                Image(systemName: "flame")
                 Text("Hot Venues")
             }
             .tag(Tab.discover)
+            
+            NavigationView {
+                PhotoFeedView()
+            }
+            .tabItem {
+                Image(systemName: "camera")
+                Text("Daily Photos")
+            }
+            .tag(Tab.photos)
             
             NavigationView {
                 AfterpartyTabView()
@@ -37,21 +46,12 @@ struct MainTabView: View {
                 Text("Afterparty")
             }
             .tag(Tab.afterparty)
-
-            NavigationView {
-                PlannerChatView()
-            }
-            .tabItem {
-                Image(systemName: "sparkles")
-                Text("Planner")
-            }
-            .tag(Tab.planner)
             
             NavigationView {
                 CityChatTabView()
             }
             .tabItem {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
+                Image(systemName: "bubble.left.and.bubble.right")
                 Text("City Chat")
             }
             .tag(Tab.citychat)

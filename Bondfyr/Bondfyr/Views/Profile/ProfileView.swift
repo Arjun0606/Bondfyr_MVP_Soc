@@ -3,133 +3,152 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct ProfileView: View {
-    @State private var instagramHandle: String = ""
-    @State private var avatarURL: String? = nil
-    @State private var isLoading = true
-    @State private var error: String? = nil
-    @State private var badges: [String] = [] // Placeholder for badge codes
-    @State private var leaderboard: [(String, Int)] = [] // Placeholder for leaderboard (handle, score)
+    @EnvironmentObject private var authViewModel: AuthViewModel
+    @State private var showingLogoutAlert = false
+    @State private var showingDeleteAccountAlert = false
     
     var body: some View {
         NavigationView {
+            ScrollView {
             VStack(spacing: 24) {
-                if isLoading {
-                    ProgressView()
-                } else if let error = error {
-                    Text(error).foregroundColor(.red)
-                } else {
-                    // IG avatar
-                    if let url = avatarURL, let imgURL = URL(string: url) {
-                        AsyncImage(url: imgURL) { img in
-                            img.resizable().scaledToFill()
+                    // Profile Info
+                    VStack(spacing: 16) {
+                        if let avatarURL = authViewModel.currentUser?.avatarURL,
+                           let url = URL(string: avatarURL) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
                         } placeholder: {
-                            Color.gray.opacity(0.3)
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
                         }
                         .frame(width: 100, height: 100)
                         .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.pink, lineWidth: 3))
-                        .onTapGesture { openInstagram() }
+                            .overlay(Circle().stroke(Color.pink, lineWidth: 2))
                     } else {
-                        Circle().fill(Color.gray.opacity(0.2)).frame(width: 100, height: 100)
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 100, height: 100)
                     }
-                    // IG handle
-                    Button(action: openInstagram) {
-                        Text("@\(instagramHandle)")
+                        
+                        Text("@\(authViewModel.currentUser?.name ?? "capedpotato")")
                             .font(.title2)
-                            .foregroundColor(.pink)
+                            .foregroundColor(.white)
+                        
+                        Text(authViewModel.currentUser?.city ?? "Pune, Maharashtra, India")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
                     }
-                    // Badges (placeholder)
-                    if !badges.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Badges")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                    
+                    // Stats
+                    HStack(spacing: 40) {
+                        StatView(value: "0", label: "Attended")
+                        StatView(value: "0", label: "Hosted")
+                        StatView(value: "0", label: "Max Likes")
+                        StatView(value: "0", label: "Badges")
+                    }
+                    .padding(.vertical)
+                    
+                    // Settings
+                    VStack(spacing: 16) {
+                        NavigationButton(icon: "gearshape.fill", text: "Settings")
+                        NavigationButton(icon: "questionmark.circle.fill", text: "Help & Support")
+                        Button(action: { showingLogoutAlert = true }) {
                             HStack {
-                                ForEach(badges, id: \ .self) { badge in
-                                    Text(badge)
-                                        .padding(6)
-                                        .background(Color.purple)
+                                Image(systemName: "arrow.right.square.fill")
+                                    .foregroundColor(.pink)
+                                Text("Logout")
                                         .foregroundColor(.white)
-                                        .cornerRadius(8)
-                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.gray)
                             }
-                        }
-                    }
-                    // Leaderboard (placeholder)
-                    if !leaderboard.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Leaderboard")
-                                .font(.headline)
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(10)
+                                }
+                        Button(action: { showingDeleteAccountAlert = true }) {
+                            HStack {
+                                Image(systemName: "trash.fill")
+                                    .foregroundColor(.red)
+                                Text("Delete Account")
                                 .foregroundColor(.white)
-                            ForEach(leaderboard, id: \ .0) { (handle, score) in
-                                HStack {
-                                    Text("@\(handle)")
-                                        .foregroundColor(.pink)
                                     Spacer()
-                                    Text("\(score) pts")
-                                        .foregroundColor(.white)
-                                }
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.gray)
                             }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(10)
                         }
                     }
-                    // Leaderboard link
-                    NavigationLink(destination: LeaderboardView()) {
-                        HStack {
-                            Image(systemName: "crown.fill").foregroundColor(.yellow)
-                            Text("Leaderboard")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Spacer()
-                            Image(systemName: "chevron.right").foregroundColor(.gray)
+                    .padding(.horizontal)
                         }
                         .padding()
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(10)
-                    }
-                    // Pre-Game link
-                    NavigationLink(destination: PreGameView()) {
-                        HStack {
-                            Image(systemName: "cart.fill").foregroundColor(.green)
-                            Text("Pre-Game")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Spacer()
-                            Image(systemName: "chevron.right").foregroundColor(.gray)
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(10)
+            }
+            .background(Color.black.edgesIgnoringSafeArea(.all))
+            .alert("Logout", isPresented: $showingLogoutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Logout", role: .destructive) {
+                    Task {
+                        await authViewModel.logout()
                     }
                 }
-                Spacer()
+            } message: {
+                Text("Are you sure you want to logout?")
+                        }
+            .alert("Delete Account", isPresented: $showingDeleteAccountAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    Task {
+                        await authViewModel.deleteAccount { error in
+                            if let error = error {
+                                print("Error deleting account: \(error)")
+                            }
+                        }
+                    }
+                }
+            } message: {
+                Text("This action cannot be undone. All your data will be permanently deleted.")
             }
-            .padding()
-            .background(BackgroundGradientView())
-            .navigationTitle("Profile")
-            .onAppear { fetchProfile() }
         }
     }
-    func fetchProfile() {
-        isLoading = true
-        error = nil
-        guard let userId = Auth.auth().currentUser?.uid else {
-            error = "Not logged in"; isLoading = false; return
-        }
-        Firestore.firestore().collection("users").document(userId).getDocument { doc, err in
-            isLoading = false
-            if let err = err {
-                error = err.localizedDescription
-                return
-            }
-            let data = doc?.data() ?? [:]
-            instagramHandle = data["instagramHandle"] as? String ?? "unknown"
-            avatarURL = data["avatarURL"] as? String
-            badges = data["badges"] as? [String] ?? []
-            // Optionally fetch leaderboard here
+}
+
+struct StatView: View {
+    let value: String
+    let label: String
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.gray)
         }
     }
-    func openInstagram() {
-        let url = URL(string: "https://instagram.com/\(instagramHandle)")!
-        UIApplication.shared.open(url)
+}
+
+struct NavigationButton: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.pink)
+            Text(text)
+                .foregroundColor(.white)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .foregroundColor(.gray)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
     }
 } 

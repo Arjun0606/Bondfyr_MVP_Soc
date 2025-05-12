@@ -2,24 +2,69 @@ import Foundation
 import FirebaseFirestore
 
 struct ChatMessage: Identifiable, Codable {
-    var id: String = UUID().uuidString
-    var cityId: String
-    var userId: String
-    var displayName: String // Anonymous username
-    var text: String
-    var timestamp: Date
-    var isSystemMessage: Bool = false
-    var eventId: String? // Optional field for event-specific messages
+    let id: String
+    let text: String
+    let userHandle: String
+    let userId: String
+    let timestamp: Date
+    let city: String
+    let eventId: String?
+    let isSystemMessage: Bool
+    
+    var displayName: String { userHandle }
+    
+    var isCurrentUser: Bool {
+        // We'll set this when fetching from Firestore
+        false
+    }
     
     enum CodingKeys: String, CodingKey {
         case id
-        case cityId
-        case userId
-        case displayName
         case text
+        case userHandle
+        case userId
         case timestamp
-        case isSystemMessage
+        case city
         case eventId
+        case isSystemMessage
+    }
+    
+    init(id: String = UUID().uuidString,
+         text: String,
+         userHandle: String,
+         userId: String,
+         timestamp: Date = Date(),
+         city: String,
+         eventId: String? = nil,
+         isSystemMessage: Bool = false) {
+        self.id = id
+        self.text = text
+        self.userHandle = userHandle
+        self.userId = userId
+        self.timestamp = timestamp
+        self.city = city
+        self.eventId = eventId
+        self.isSystemMessage = isSystemMessage
+    }
+    
+    init?(document: QueryDocumentSnapshot) {
+        let data = document.data()
+        
+        guard let text = data["text"] as? String,
+              let userHandle = data["userHandle"] as? String,
+              let userId = data["userId"] as? String,
+              let city = data["city"] as? String else {
+            return nil
+        }
+        
+        self.id = document.documentID
+        self.text = text
+        self.userHandle = userHandle
+        self.userId = userId
+        self.timestamp = (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+        self.city = city
+        self.eventId = data["eventId"] as? String
+        self.isSystemMessage = (data["isSystemMessage"] as? Bool) ?? false
     }
 }
 
