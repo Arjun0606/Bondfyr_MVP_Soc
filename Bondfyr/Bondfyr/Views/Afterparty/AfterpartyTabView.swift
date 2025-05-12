@@ -50,15 +50,35 @@ struct SearchBarView: View {
 struct DistanceSliderView: View {
     @Binding var selectedRadius: Double
     let onRadiusChange: (Double) -> Void
+    @State private var isEditing = false
+    
+    private var formattedDistance: String {
+        if selectedRadius == 0 {
+            return "Current location"
+        } else if selectedRadius.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(selectedRadius)) miles"
+        } else {
+            return String(format: "%.1f miles", selectedRadius)
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Distance: \(Int(selectedRadius)) miles")
+            Text("Distance: \(formattedDistance)")
                 .font(.subheadline)
                 .foregroundColor(.gray)
-            Slider(value: $selectedRadius, in: 1...20) { _ in
-                onRadiusChange(selectedRadius)
-            }
+            Slider(
+                value: $selectedRadius,
+                in: 0...15,
+                step: 0.5,
+                onEditingChanged: { editing in
+                    isEditing = editing
+                    if !editing {
+                        // Only update when user finishes sliding
+                        onRadiusChange(selectedRadius)
+                    }
+                }
+            )
         }
         .padding(.horizontal)
     }
@@ -116,6 +136,27 @@ struct AfterpartyTabView: View {
     @State private var showLocationDeniedAlert = false
     @State private var showingActivePartyAlert = false
     @State private var hasActiveParty = false
+    @State private var isUpdatingRadius = false
+    @State private var lastFetchRadius: Double = 15.0 // Track the radius used for last fetch
+    
+    private var filteredAfterparties: [Afterparty] {
+        guard let userLocation = locationManager.location?.coordinate else {
+            return afterpartyManager.nearbyAfterparties
+        }
+        
+        return afterpartyManager.nearbyAfterparties.filter { afterparty in
+            let afterpartyLocation = CLLocation(
+                latitude: afterparty.coordinate.latitude,
+                longitude: afterparty.coordinate.longitude
+            )
+            let userCLLocation = CLLocation(
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude
+            )
+            let distance = afterpartyLocation.distance(from: userCLLocation) / 1609.34 // Convert meters to miles
+            return distance <= selectedRadius
+        }
+    }
     
     var body: some View {
         NavigationView {
@@ -134,8 +175,14 @@ struct AfterpartyTabView: View {
                     DistanceSliderView(
                         selectedRadius: $selectedRadius,
                         onRadiusChange: { radius in
-                            if let location = locationManager.location?.coordinate {
-                                afterpartyManager.updateLocation(location)
+                            // Only fetch new data if we need to expand our search radius
+                            if radius > lastFetchRadius {
+                                if let location = locationManager.location?.coordinate {
+                                    Task {
+                                        await afterpartyManager.updateLocation(location)
+                                        lastFetchRadius = radius
+                                    }
+                                }
                             }
                         }
                     )
@@ -156,7 +203,7 @@ struct AfterpartyTabView: View {
                     if afterpartyManager.isLoading {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
-                    } else if afterpartyManager.nearbyAfterparties.isEmpty {
+                    } else if filteredAfterparties.isEmpty {
                         VStack {
                             Image(systemName: "party.popper.fill")
                                 .font(.system(size: 50))
@@ -165,16 +212,16 @@ struct AfterpartyTabView: View {
                                 .foregroundColor(.gray)
                                 .multilineTextAlignment(.center)
                         }
-                                .padding()
+                        .padding()
                         Spacer()
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 16) {
-                                ForEach(afterpartyManager.nearbyAfterparties) { afterparty in
+                                ForEach(filteredAfterparties) { afterparty in
                                     AfterpartyCard(afterparty: afterparty)
                                 }
                             }
-                                .padding()
+                            .padding()
                         }
                     }
                 }
@@ -190,7 +237,10 @@ struct AfterpartyTabView: View {
         }
         .onChange(of: locationManager.location) { newLocation in
             if let location = newLocation?.coordinate {
-                afterpartyManager.updateLocation(location)
+                Task {
+                    await afterpartyManager.updateLocation(location)
+                    lastFetchRadius = 15.0 // Reset fetch radius when location changes
+                }
             }
         }
         .onChange(of: afterpartyManager.nearbyAfterparties) { _ in
