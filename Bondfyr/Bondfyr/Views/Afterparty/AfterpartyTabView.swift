@@ -79,9 +79,9 @@ struct CreateAfterpartyButton: View {
         Button(action: onCreateTap) {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                Text("Create Afterparty")
+                        Text("Create Afterparty")
             }
-            .frame(maxWidth: .infinity)
+                                            .frame(maxWidth: .infinity)
             .padding()
             .background(
                 Group {
@@ -165,7 +165,7 @@ struct AfterpartyTabView: View {
                                 .foregroundColor(.gray)
                                 .multilineTextAlignment(.center)
                         }
-                        .padding()
+                                .padding()
                         Spacer()
                     } else {
                         ScrollView {
@@ -174,7 +174,7 @@ struct AfterpartyTabView: View {
                                     AfterpartyCard(afterparty: afterparty)
                                 }
                             }
-                            .padding()
+                                .padding()
                         }
                     }
                 }
@@ -206,8 +206,8 @@ struct AfterpartyTabView: View {
             }
         }
         .alert("Active Afterparty Exists", isPresented: $showingActivePartyAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
+                Button("OK", role: .cancel) { }
+            } message: {
             Text("You already have an active afterparty. Please wait for it to end or stop it before creating a new one.")
         }
         .alert("Location Access Required", isPresented: $showLocationDeniedAlert) {
@@ -262,7 +262,7 @@ struct AfterpartyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header with location and vibe tag
-            HStack {
+                HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(afterparty.locationName)
                         .font(.headline)
@@ -283,19 +283,19 @@ struct AfterpartyCard: View {
                     .padding(.vertical, 6)
                     .background(Color.purple.opacity(0.3))
                     .foregroundColor(.purple)
-                    .cornerRadius(12)
+                .cornerRadius(12)
             }
             
             // Description if available
             if !afterparty.description.isEmpty {
                 Text(afterparty.description)
-                    .font(.subheadline)
+                        .font(.subheadline)
                     .foregroundColor(.gray)
                     .lineLimit(2)
             }
             
             // Time and host info
-            HStack {
+                    HStack {
                 Label(formatTime(afterparty.startTime), systemImage: "clock.fill")
                     .foregroundColor(.pink)
                 
@@ -316,10 +316,10 @@ struct AfterpartyCard: View {
             HStack {
                 Label("\(afterparty.activeUsers.count) accepted", systemImage: "person.2.fill")
                     .font(.caption)
-                    .foregroundColor(.gray)
+                                    .foregroundColor(.gray)
                 
                 Text("•")
-                    .foregroundColor(.gray)
+                                    .foregroundColor(.gray)
                 
                 Label("\(afterparty.pendingRequests.count) pending", systemImage: "person.2.badge.gearshape")
                     .font(.caption)
@@ -436,13 +436,13 @@ struct AcceptedGuestRow: View {
     let onRemove: () -> Void
     
     var body: some View {
-        HStack {
+            HStack {
             Image(systemName: "person.circle.fill")
                 .foregroundColor(.gray)
             Text(userId)
-                .foregroundColor(.white)
+                    .foregroundColor(.white)
             
-            Spacer()
+                Spacer()
             
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
@@ -458,9 +458,9 @@ struct PendingGuestRow: View {
     let onDeny: () -> Void
     
     var body: some View {
-        HStack {
+            HStack {
             Image(systemName: "person.circle.fill")
-                .foregroundColor(.gray)
+            .foregroundColor(.gray)
             Text(userId)
                 .foregroundColor(.white)
             
@@ -559,12 +559,12 @@ struct GuestListView: View {
                                 }
                             },
                             onDeny: {
-                                Task {
-                                    do {
+                    Task {
+                        do {
                                         try await afterpartyManager.denyRequest(afterpartyId: afterparty.id, userId: userId)
                                         alertMessage = "Request denied successfully!"
                                         showingAlert = true
-                                    } catch {
+                        } catch {
                                         alertMessage = "Failed to deny request: \(error.localizedDescription)"
                                         showingAlert = true
                                     }
@@ -625,8 +625,8 @@ struct EditAfterpartyView: View {
                     TextEditor(text: $description)
                         .frame(height: 100)
                 }
-            }
-            .onAppear {
+        }
+        .onAppear {
                 // Load existing values
                 description = afterparty.description
                 address = afterparty.address
@@ -665,6 +665,22 @@ struct CreateAfterpartyView: View {
     @State private var isCreating = false
     @State private var showingError = false
     @State private var errorMessage = ""
+    @State private var selectedDay: String
+    
+    init(currentLocation: CLLocationCoordinate2D?, currentCity: String) {
+        self.currentLocation = currentLocation
+        self.currentCity = currentCity
+        
+        // Initialize selectedDay based on available slots
+        let calendar = Calendar.current
+        let now = Date()
+        var nextHour = calendar.date(bySetting: .minute, value: 0, of: now) ?? now
+        nextHour = calendar.date(byAdding: .hour, value: 1, to: nextHour) ?? now
+        
+        // Check if next hour is still today
+        let isNextHourToday = calendar.isDate(nextHour, inSameDayAs: now)
+        _selectedDay = State(initialValue: isNextHourToday ? "today" : "tomorrow")
+    }
     
     let vibeOptions = [
         "Chill",
@@ -684,13 +700,14 @@ struct CreateAfterpartyView: View {
         
         var slots: [(Date, Bool)] = []
         
-        // Generate slots for next 9 hours
-        for hourOffset in 1...9 {
-            var components = calendar.dateComponents([.year, .month, .day, .hour], from: now)
-            components.hour! += hourOffset
-            components.minute = 0
-            
-            if let slotTime = calendar.date(from: components) {
+        // Round up to the next hour
+        var nextHour = calendar.date(bySetting: .minute, value: 0, of: now) ?? now
+        nextHour = calendar.date(byAdding: .hour, value: 1, to: nextHour) ?? now
+        
+        // Generate slots for exactly 9 hours from the next hour
+        for hourOffset in 0...8 {
+            if let slotTime = calendar.date(byAdding: .hour, value: hourOffset, to: nextHour) {
+                // A time slot is considered "today" if it's on the same calendar day as now
                 let isToday = calendar.isDate(slotTime, inSameDayAs: now)
                 slots.append((slotTime, isToday))
             }
@@ -709,7 +726,7 @@ struct CreateAfterpartyView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
+                ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     // Vibe Tags
                     VStack(alignment: .leading, spacing: 12) {
@@ -748,6 +765,7 @@ struct CreateAfterpartyView: View {
                         
                         HStack(spacing: 12) {
                             Button(action: {
+                                selectedDay = "today"
                                 if let firstTodaySlot = todaySlots.first {
                                     startTime = firstTodaySlot
                                 }
@@ -755,13 +773,14 @@ struct CreateAfterpartyView: View {
                                 Text("Today")
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
-                                    .background(!todaySlots.isEmpty ? Color.pink : Color(.systemGray6))
+                                    .background(!todaySlots.isEmpty && selectedDay == "today" ? Color.pink : Color(.systemGray6))
                                 .foregroundColor(.white)
                                     .cornerRadius(12)
                             }
                             .disabled(todaySlots.isEmpty)
                             
                             Button(action: {
+                                selectedDay = "tomorrow"
                                 if let firstTomorrowSlot = tomorrowSlots.first {
                                     startTime = firstTomorrowSlot
                                 }
@@ -769,7 +788,7 @@ struct CreateAfterpartyView: View {
                                 Text("Tomorrow")
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
-                                    .background(!tomorrowSlots.isEmpty ? Color.pink : Color(.systemGray6))
+                                    .background(!tomorrowSlots.isEmpty && selectedDay == "tomorrow" ? Color.pink : Color(.systemGray6))
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                             }
@@ -778,8 +797,8 @@ struct CreateAfterpartyView: View {
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
-                                ForEach(timeSlots, id: \.0) { slot in
-                                    let time = slot.0
+                                let availableSlots = selectedDay == "today" ? todaySlots : tomorrowSlots
+                                ForEach(availableSlots, id: \.self) { time in
                                     Button(action: { startTime = time }) {
                                         Text(formatHourOnly(time))
                                             .padding(.horizontal, 24)
@@ -862,8 +881,8 @@ struct CreateAfterpartyView: View {
             .navigationBarItems(
                 trailing: Button("Cancel") { 
                     presentationMode.wrappedValue.dismiss() 
-                }
-                .foregroundColor(.white)
+                    }
+                    .foregroundColor(.white)
             )
             .alert("Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) { }
@@ -899,15 +918,15 @@ struct CreateAfterpartyView: View {
                     endTime: endTime,
                     city: currentCity,
                     locationName: address,
-                    description: description,
-                    address: address,
-                    googleMapsLink: googleMapsLink,
+                description: description,
+                address: address,
+                googleMapsLink: googleMapsLink,
                     vibeTag: Array(selectedVibes).joined(separator: ", ")
-                )
-                await MainActor.run {
+            )
+            await MainActor.run {
                     presentationMode.wrappedValue.dismiss()
-                }
-            } catch {
+            }
+        } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true
