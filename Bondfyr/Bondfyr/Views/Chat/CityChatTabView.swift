@@ -3,76 +3,82 @@ import FirebaseFirestore
 
 struct CityChatTabView: View {
     @StateObject private var chatManager = ChatManager.shared
-    @State private var searchText = ""
     @State private var message = ""
     @State private var selectedCity = "Pune"
     
     var body: some View {
-        VStack(spacing: 0) {
-            // City Header
-            HStack {
-                Image(systemName: "mappin.circle.fill")
-                    .foregroundColor(.pink)
-                Text(selectedCity)
-                    .font(.headline)
-                    .foregroundColor(.white)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(Color.black)
+        ZStack {
+            // Solid black background like other screens
+            Color.black.ignoresSafeArea()
             
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Search messages...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .foregroundColor(.white)
-            }
-            .padding(10)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
-            .padding()
-            
-            if chatManager.messages.isEmpty {
-                Spacer()
-                VStack {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 50))
-                        .foregroundColor(.gray)
-                    Text("No messages yet")
-                        .foregroundColor(.gray)
+            VStack(spacing: 0) {
+                // City Header - Styled like other screens
+                HStack {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundColor(.pink)
+                        .font(.system(size: 18))
+                    Text(selectedCity)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
                 }
-                Spacer()
-            } else {
-                // Messages List
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        ForEach(chatManager.messages) { message in
-                            MessageBubble(message: message)
+                .padding()
+                .background(
+                    Color.white.opacity(0.05)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.pink.opacity(0.5), lineWidth: 1.5)
+                        .shadow(color: .pink.opacity(0.3), radius: 8, x: 0, y: 0)
+                )
+                .cornerRadius(12)
+                .padding()
+                
+                // Messages or Empty State
+                ZStack {
+                    if chatManager.messages.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray)
+                            Text("No messages yet")
+                                .foregroundColor(.gray)
+                                .font(.subheadline)
+                        }
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(chatManager.messages) { message in
+                                    MessageBubble(message: message)
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
                         }
                     }
-                    .padding()
                 }
-            }
-            
-            // Message Input
-            HStack {
-                TextField("Type a message...", text: $message)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .padding(10)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundColor(.pink)
+                // Message Input
+                HStack(spacing: 12) {
+                    TextField("Type a message...", text: $message)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(16)
+                    
+                    Button(action: sendMessage) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.pink)
+                    }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.8))
             }
-            .padding()
         }
-        .background(Color.black.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
     }
     
@@ -92,13 +98,14 @@ struct MessageBubble: View {
         HStack {
             if message.isCurrentUser { Spacer() }
             
-            VStack(alignment: message.isCurrentUser ? .trailing : .leading) {
+            VStack(alignment: message.isCurrentUser ? .trailing : .leading, spacing: 2) {
                 Text("@\(message.userHandle)")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.gray)
                 
                 Text(message.text)
-                    .padding(12)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(message.isCurrentUser ? Color.pink : Color(.systemGray6))
                     .foregroundColor(.white)
                     .cornerRadius(16)
