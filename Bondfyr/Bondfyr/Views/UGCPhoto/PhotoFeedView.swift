@@ -9,18 +9,12 @@ struct PhotoFeedView: View {
     @StateObject private var photoManager = PhotoManager.shared
     @State private var selectedScope: PhotoScope = .city
     @State private var showCamera = false
-    @State private var searchText = ""
     @State private var selectedCity = "Pune"
     @State private var showingPhotoDetail = false
     @State private var selectedPhoto: CityPhoto?
     
     var filteredPhotos: [CityPhoto] {
-        if searchText.isEmpty {
-            return photoManager.cityPhotos
-        }
-        return photoManager.cityPhotos.filter { photo in
-            photo.city.localizedCaseInsensitiveContains(searchText)
-        }
+        photoManager.cityPhotos
     }
     
     var body: some View {
@@ -51,19 +45,6 @@ struct PhotoFeedView: View {
                     }
                 }
                 .padding(.vertical, 4)
-                
-                // Search Bar
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    TextField("Search photos...", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .foregroundColor(.white)
-                }
-                .padding(8)
-                .background(Color(.systemGray6).opacity(0.3))
-                .cornerRadius(8)
-                .padding(.horizontal)
                 
                 // Content
                 if photoManager.isLoading {
