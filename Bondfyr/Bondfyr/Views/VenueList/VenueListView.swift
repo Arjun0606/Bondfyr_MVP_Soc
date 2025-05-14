@@ -30,106 +30,63 @@ struct VenueListView: View {
     }
     
     var body: some View {
-        print("📱 VenueListView.body evaluation started")
-        debugState(from: "body evaluation")
-        
-        return NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    Group {
-                        cityHeader
-                            .padding(.horizontal)
-                            .padding(.top)
-                            .onAppear { print("📱 City header appeared") }
-                        
-                        if locationDenied {
-                            Text("Location access is required for distance-based sorting. Please enable location in Settings.")
-                                .foregroundColor(.red)
-                                .font(.caption)
-                                .padding(.horizontal)
-                                .padding(.top, 4)
-                        }
-                        
-                        sortFilterBar
-                            .onAppear { print("📱 Sort filter bar appeared") }
-                        searchBar
-                            .onAppear { print("📱 Search bar appeared") }
-                    }
-                    
-                    // Content Section with improved state tracking
-                    Group {
-                        if isFetchingGoogleVenues {
-                            loadingView
-                                .onAppear { 
-                                    print("📱 Loading view appeared")
-                                    debugState(from: "loadingView appear")
-                                }
-                        } else if let error = errorMessage {
-                            errorView(message: error)
-                                .onAppear { 
-                                    print("📱 Error view appeared: \(error)")
-                                    debugState(from: "errorView appear")
-                                }
-                        } else if googleVenues.isEmpty {
-                            emptyStateView
-                                .onAppear { 
-                                    print("📱 Empty state view appeared")
-                                    debugState(from: "emptyStateView appear")
-                                }
-                        } else {
-                            venueListView
-                                .onAppear { 
-                                    print("📱 Venue list view appeared with \(googleVenues.count) venues")
-                                    debugState(from: "venueListView appear")
-                                }
-                        }
-                    }
-                    .onChange(of: isFetchingGoogleVenues) { newValue in
-                        print("🔄 isFetchingGoogleVenues changed to: \(newValue)")
-                        debugState(from: "isFetchingGoogleVenues change")
+        ZStack {
+            Color.black.edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 0) {
+                // City Header
+                cityHeader
+                    .padding(.horizontal)
+                
+                if locationDenied {
+                    Text("Location access is required for distance-based sorting. Please enable location in Settings.")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .padding(.horizontal)
+                        .padding(.top, 4)
+                }
+                
+                sortFilterBar
+                searchBar
+                
+                // Content Section with improved state tracking
+                Group {
+                    if isFetchingGoogleVenues {
+                        loadingView
+                    } else if let error = errorMessage {
+                        errorView(message: error)
+                    } else if googleVenues.isEmpty {
+                        emptyStateView
+                    } else {
+                        venueListView
                     }
                 }
             }
-            .navigationBarHidden(true)
-            .task {
-                print("📱 VenueListView task started")
-                debugState(from: "view task")
-                if cityManager.selectedCity == nil {
-                    print("⚠️ No city selected, detecting user's city")
-                    cityManager.detectUserCity { city in
-                        if let city = city {
-                            print("📱 Detected user's city: \(city)")
-                            DispatchQueue.main.async {
-                                cityManager.selectedCity = city
-                            }
+            .background(Color.black)
+        }
+        .navigationBarHidden(true)
+        .task {
+            if cityManager.selectedCity == nil {
+                cityManager.detectUserCity { city in
+                    if let city = city {
+                        DispatchQueue.main.async {
+                            cityManager.selectedCity = city
                         }
                     }
-                } else {
-                    print("📱 City already selected: \(cityManager.selectedCity ?? "nil")")
                 }
+            }
+            await fetchGoogleVenuesForSelectedCity()
+        }
+        .onChange(of: cityManager.selectedCity) { newCity in
+            googleVenues = []
+            nextPageToken = nil
+            totalFetched = 0
+            Task {
                 await fetchGoogleVenuesForSelectedCity()
-            }
-            .onChange(of: cityManager.selectedCity) { newCity in
-                print("📱 Selected city changed to: \(newCity ?? "nil")")
-                debugState(from: "city change")
-                // Reset state immediately
-                googleVenues = []
-                nextPageToken = nil
-                totalFetched = 0
-                // Then fetch new venues
-                Task {
-                    await fetchGoogleVenuesForSelectedCity()
-                }
-            }
-            .onAppear {
-                print("📱 VenueListView root appeared")
-                debugState(from: "root onAppear")
             }
         }
         .sheet(isPresented: $showCityPicker) {
             CitySelectionView { selectedCity in
-                print("📱 City selected from picker: \(selectedCity)")
                 cityManager.selectedCity = selectedCity
                 showCityPicker = false
             }

@@ -1,5 +1,6 @@
 import SwiftUI
 import Kingfisher
+import BondfyrPhotos
 
 struct EventPhotoDetailView: View {
     let photo: EventPhoto
@@ -10,7 +11,7 @@ struct EventPhotoDetailView: View {
             Color.black.ignoresSafeArea()
             
             VStack {
-                KFImage(URL(string: photo.imageUrl))
+                KFImage(URL(string: photo.photoURL))
                     .placeholder {
                         Rectangle()
                             .fill(Color.gray.opacity(0.2))

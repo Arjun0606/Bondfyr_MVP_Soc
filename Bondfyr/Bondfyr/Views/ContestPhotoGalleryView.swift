@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseFirestore
 import Kingfisher
+import BondfyrPhotos
 
 struct ContestPhotoGalleryView: View {
     let eventId: String
@@ -53,16 +54,16 @@ struct ContestPhotoGalleryView: View {
                 contestStatusView
                 
                 // Photo Grid
-                        ScrollView {
+                ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(photoManager.contestPhotos) { photo in
-                            PhotoGridItem(photo: photo)
-                                        .onTapGesture {
-                                            selectedPhoto = photo
-                                        }
+                            ContestPhotoGridItem(photo: photo)
+                                .onTapGesture {
+                                    selectedPhoto = photo
                                 }
-                            }
-                            .padding()
+                        }
+                    }
+                    .padding()
                 }
             }
         }
@@ -75,19 +76,19 @@ struct ContestPhotoGalleryView: View {
         .onAppear {
             checkContestStatus()
             Task {
-                await photoManager.fetchContestPhotos(for: eventId)
+                await photoManager.checkContestEligibility()
             }
         }
     }
     
     private var contestStatusView: some View {
-            switch contestStatus {
-            case .checking:
+        switch contestStatus {
+        case .checking:
             return AnyView(
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .pink))
             )
-            case .active(let timeRemaining):
+        case .active(let timeRemaining):
             return AnyView(
                 HStack {
                     Image(systemName: "timer")
@@ -131,18 +132,18 @@ struct ContestPhotoGalleryView: View {
     }
 }
 
-struct PhotoGridItem: View {
+struct ContestPhotoGridItem: View {
     let photo: EventPhoto
     
     var body: some View {
-        KFImage(URL(string: photo.imageUrl))
+        KFImage(URL(string: photo.photoURL))
             .placeholder {
                 Rectangle()
                     .fill(Color.gray.opacity(0.2))
-                    }
-                            .resizable()
+            }
+            .resizable()
             .aspectRatio(1, contentMode: .fill)
-                            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity)
             .cornerRadius(12)
             .overlay(
                 VStack {
@@ -156,8 +157,8 @@ struct PhotoGridItem: View {
                             .background(Color.black.opacity(0.6))
                             .cornerRadius(8)
                             .padding(8)
-            }
-        }
+                    }
+                }
             )
     }
 }

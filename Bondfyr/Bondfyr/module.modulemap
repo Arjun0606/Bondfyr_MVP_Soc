@@ -1,0 +1,6 @@
+framework module BondfyrPhotos {
+    umbrella header "BondfyrPhotos.h"
+    
+    export *
+    module * { export * }
+} 

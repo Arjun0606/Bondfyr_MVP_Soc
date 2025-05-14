@@ -1,6 +1,7 @@
 import UIKit
 import FirebaseStorage
 import FirebaseFirestore
+import BondfyrPhotos
 
 struct UGCPhotoUploader: PhotoUploader {
     let eventId: String?

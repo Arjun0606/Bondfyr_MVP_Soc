@@ -159,76 +159,76 @@ struct AfterpartyTabView: View {
     }
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.edgesIgnoringSafeArea(.all)
+        ZStack {
+            Color.black.edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 16) {
+                // City Header
+                CityPickerView(
+                    currentCity: locationManager.currentCity,
+                    authorizationStatus: locationManager.authorizationStatus,
+                    onLocationDenied: { showLocationDeniedAlert = true }
+                )
+                .padding(.horizontal)
                 
-                VStack(spacing: 16) {
-                    CityPickerView(
-                        currentCity: locationManager.currentCity,
-                        authorizationStatus: locationManager.authorizationStatus,
-                        onLocationDenied: { showLocationDeniedAlert = true }
-                    )
-                    
-                    SearchBarView(searchText: $searchText)
-                    
-                    DistanceSliderView(
-                        selectedRadius: $selectedRadius,
-                        onRadiusChange: { radius in
-                            // Only fetch new data if we need to expand our search radius
-                            if radius > lastFetchRadius {
-                                if let location = locationManager.location?.coordinate {
-                                    Task {
-                                        await afterpartyManager.updateLocation(location)
-                                        lastFetchRadius = radius
-                                    }
+                SearchBarView(searchText: $searchText)
+                    .padding(.horizontal)
+                
+                DistanceSliderView(
+                    selectedRadius: $selectedRadius,
+                    onRadiusChange: { radius in
+                        if radius > lastFetchRadius {
+                            if let location = locationManager.location?.coordinate {
+                                Task {
+                                    await afterpartyManager.updateLocation(location)
+                                    lastFetchRadius = radius
                                 }
                             }
                         }
-                    )
-                    
-                    CreateAfterpartyButton(
-                        hasActiveParty: hasActiveParty,
-                        onCreateTap: {
-                            if hasActiveParty {
-                                showingActivePartyAlert = true
-                            } else if locationManager.authorizationStatus == .denied {
-                                showLocationDeniedAlert = true
-                            } else {
-                                showingCreateSheet = true
-                            }
+                    }
+                )
+                
+                CreateAfterpartyButton(
+                    hasActiveParty: hasActiveParty,
+                    onCreateTap: {
+                        if hasActiveParty {
+                            showingActivePartyAlert = true
+                        } else if locationManager.authorizationStatus == .denied {
+                            showLocationDeniedAlert = true
+                        } else {
+                            showingCreateSheet = true
                         }
-                    )
-                    
-                    if afterpartyManager.isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                    } else if filteredAfterparties.isEmpty {
-                        VStack {
-                            Image(systemName: "party.popper.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.gray)
-                            Text("No afterparties yet in \(locationManager.currentCity ?? "your area").")
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
+                    }
+                )
+                
+                if afterpartyManager.isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                } else if filteredAfterparties.isEmpty {
+                    VStack {
+                        Image(systemName: "party.popper.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray)
+                        Text("No afterparties yet in \(locationManager.currentCity ?? "your area").")
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding()
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(filteredAfterparties) { afterparty in
+                                AfterpartyCard(afterparty: afterparty)
+                            }
                         }
                         .padding()
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(filteredAfterparties) { afterparty in
-                                    AfterpartyCard(afterparty: afterparty)
-                                }
-                            }
-                            .padding()
-                        }
                     }
                 }
             }
-            .navigationBarHidden(true)
+            .background(Color.black)
         }
-        .preferredColorScheme(.dark)
+        .navigationBarHidden(true)
         .sheet(isPresented: $showingCreateSheet) {
             CreateAfterpartyView(
                 currentLocation: locationManager.location?.coordinate,
@@ -256,8 +256,8 @@ struct AfterpartyTabView: View {
             }
         }
         .alert("Active Afterparty Exists", isPresented: $showingActivePartyAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
+            Button("OK", role: .cancel) { }
+        } message: {
             Text("You already have an active afterparty. Please wait for it to end or stop it before creating a new one.")
         }
         .alert("Location Access Required", isPresented: $showLocationDeniedAlert) {

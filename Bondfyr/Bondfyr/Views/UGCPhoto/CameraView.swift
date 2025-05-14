@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import BondfyrPhotos
 
 struct CameraView: View {
     @Environment(\.presentationMode) var presentationMode
@@ -7,6 +8,8 @@ struct CameraView: View {
     @State private var showingImagePicker = false
     @State private var capturedImage: UIImage?
     @State private var isUploading = false
+    @State private var showError = false
+    @State private var errorMessage = ""
     
     var body: some View {
         NavigationView {
@@ -76,6 +79,11 @@ struct CameraView: View {
                 }
                 .foregroundColor(.white)
             )
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
         }
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(image: $capturedImage, sourceType: .camera)
@@ -86,14 +94,33 @@ struct CameraView: View {
         guard let image = capturedImage else { return }
         isUploading = true
         
+        // Create a new DailyPhoto
+        let photo = DailyPhoto(
+            id: UUID().uuidString,
+            photoURL: "", // Will be set after upload
+            userID: "", // Set this from your auth system
+            userHandle: "", // Set this from your auth system
+            city: "", // Set this from location
+            country: "", // Set this from location
+            timestamp: Date(),
+            likes: 0,
+            likedBy: []
+        )
+        
         Task {
             do {
-                try await photoManager.uploadDailyPhoto(photo: image)
-                presentationMode.wrappedValue.dismiss()
+                try await photoManager.uploadDailyPhoto(image: image, photo: photo)
+                await MainActor.run {
+                    isUploading = false
+                    presentationMode.wrappedValue.dismiss()
+                }
             } catch {
-                print("Error uploading photo: \(error)")
+                await MainActor.run {
+                    isUploading = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
             }
-            isUploading = false
         }
     }
 } 

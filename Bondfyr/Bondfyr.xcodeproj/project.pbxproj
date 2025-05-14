@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DC1AAA622DCEC4FE000B9918 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = DC1AAA612DCEC4FE000B9918 /* Kingfisher */; };
+		DC1AAC6C2DD4A153000B9918 /* BondfyrPhotos in Frameworks */ = {isa = PBXBuildFile; productRef = DC1AAC6B2DD4A153000B9918 /* BondfyrPhotos */; };
 		DC40AA722D9185E000D78A39 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AA712D9185E000D78A39 /* FirebaseAnalytics */; };
 		DC40AA742D9185E000D78A39 /* FirebaseAnalyticsOnDeviceConversion in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AA732D9185E000D78A39 /* FirebaseAnalyticsOnDeviceConversion */; };
 		DC40AA762D9185E000D78A39 /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AA752D9185E000D78A39 /* FirebaseAnalyticsWithoutAdIdSupport */; };
@@ -104,6 +105,7 @@
 				DC9A4B752DB927C300A44426 /* SDWebImage in Frameworks */,
 				DC40AA742D9185E000D78A39 /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 				DC9A4B772DB927C300A44426 /* SDWebImageMapKit in Frameworks */,
+				DC1AAC6C2DD4A153000B9918 /* BondfyrPhotos in Frameworks */,
 				DC40AA932D91934800D78A39 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -203,6 +205,7 @@
 				DC9A4B742DB927C300A44426 /* SDWebImage */,
 				DC9A4B762DB927C300A44426 /* SDWebImageMapKit */,
 				DC1AAA612DCEC4FE000B9918 /* Kingfisher */,
+				DC1AAC6B2DD4A153000B9918 /* BondfyrPhotos */,
 			);
 			productName = Bondfyr;
 			productReference = DCBA6B5C2D90FA0E00214DC5 /* Bondfyr.app */;
@@ -287,6 +290,7 @@
 				DC40AA912D91933800D78A39 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				DC9A4B732DB927C300A44426 /* XCRemoteSwiftPackageReference "SDWebImage" */,
 				DC1AAA602DCEC4FE000B9918 /* XCRemoteSwiftPackageReference "Kingfisher" */,
+				DC1AAC6A2DD4A152000B9918 /* XCLocalSwiftPackageReference "../BondfyrPhotos" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DCBA6B5D2D90FA0E00214DC5 /* Products */;
@@ -656,6 +660,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		DC1AAC6A2DD4A152000B9918 /* XCLocalSwiftPackageReference "../BondfyrPhotos" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../BondfyrPhotos;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		DC1AAA602DCEC4FE000B9918 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -696,6 +707,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DC1AAA602DCEC4FE000B9918 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
+		};
+		DC1AAC6B2DD4A153000B9918 /* BondfyrPhotos */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BondfyrPhotos;
 		};
 		DC40AA712D9185E000D78A39 /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;

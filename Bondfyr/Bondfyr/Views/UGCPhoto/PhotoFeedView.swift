@@ -1,13 +1,9 @@
 import SwiftUI
 import FirebaseStorage
 import FirebaseFirestore
+import BondfyrPhotos
 
-// Remove the local PhotoScope enum and use the one from DailyPhotoModels
-enum PhotoScope: String, CaseIterable {
-    case city = "City"
-    case country = "Country"
-    case world = "World"
-}
+// Remove the local PhotoScope enum since we're using the one from PhotoModels.swift
 
 struct PhotoFeedView: View {
     @StateObject private var photoManager = PhotoManager.shared
@@ -15,99 +11,83 @@ struct PhotoFeedView: View {
     @State private var showCamera = false
     @State private var searchText = ""
     @State private var selectedCity = "Pune"
+    @State private var showingPhotoDetail = false
+    @State private var selectedPhoto: CityPhoto?
     
-    private var photos: [DailyPhoto] {
-        switch selectedScope {
-        case .city:
+    var filteredPhotos: [CityPhoto] {
+        if searchText.isEmpty {
             return photoManager.cityPhotos
-        case .country:
-            return photoManager.countryPhotos
-        case .world:
-            return photoManager.worldPhotos
+        }
+        return photoManager.cityPhotos.filter { photo in
+            photo.city.localizedCaseInsensitiveContains(searchText)
         }
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // City Header
-            cityHeader
+        ZStack {
+            Color.black.edgesIgnoringSafeArea(.all)
             
-            // Scope Selector
-            scopeSelector
-            
-            // Search Bar
-            searchBar
-            
-            // Content
-            if photoManager.isLoading {
-                loadingView
-            } else {
-                photoList
+            VStack(spacing: 8) {
+                // City Header
+                HStack {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundColor(.pink)
+                    Text(selectedCity)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                // Scope Selector
+                HStack(spacing: 24) {
+                    ForEach(PhotoScope.allCases, id: \.self) { scope in
+                        Button(action: { selectedScope = scope }) {
+                            Text(scope.rawValue)
+                                .font(.system(size: 16, weight: selectedScope == scope ? .semibold : .regular))
+                                .foregroundColor(selectedScope == scope ? .pink : .gray)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+                
+                // Search Bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search photos...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .foregroundColor(.white)
+                }
+                .padding(8)
+                .background(Color(.systemGray6).opacity(0.3))
+                .cornerRadius(8)
+                .padding(.horizontal)
+                
+                // Content
+                if photoManager.isLoading {
+                    loadingView
+                } else if filteredPhotos.isEmpty {
+                    emptyStateView
+                } else {
+                    photoGrid
+                }
             }
         }
-        .background(Color.black.edgesIgnoringSafeArea(.all))
         .navigationBarHidden(true)
         .sheet(isPresented: $showCamera) {
-            CameraView()
+            CityPhotoCamera(currentCity: selectedCity)
         }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { showCamera = true }) {
-                    Image(systemName: "camera.fill")
-                        .foregroundColor(.pink)
-                }
-            }
+        .sheet(item: $selectedPhoto) { photo in
+            PhotoDetailView(photo: photo)
         }
-        .task {
-            await photoManager.fetchPhotos(scope: DailyPhotoScope(rawValue: selectedScope.rawValue)!)
+        .onAppear {
+            photoManager.startListeningToCityPhotos(city: selectedCity)
         }
-    }
-    
-    private var cityHeader: some View {
-        HStack {
-            Image(systemName: "mappin.circle.fill")
-                .foregroundColor(.pink)
-            Text(selectedCity)
-                .font(.headline)
-                .foregroundColor(.white)
+        .onDisappear {
+            photoManager.stopListeningToCityPhotos()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color.black)
-    }
-    
-    private var scopeSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(PhotoScope.allCases, id: \.self) { scope in
-                Button(action: { 
-                    selectedScope = scope
-                    Task {
-                        await photoManager.fetchPhotos(scope: DailyPhotoScope(rawValue: scope.rawValue)!)
-                    }
-                }) {
-                    Text(scope.rawValue)
-                        .foregroundColor(selectedScope == scope ? .pink : .purple)
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-    
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.gray)
-            TextField("Search photos...", text: $searchText)
-                .textFieldStyle(PlainTextFieldStyle())
-                .foregroundColor(.white)
-        }
-        .padding(10)
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
     }
     
     private var loadingView: some View {
@@ -119,78 +99,186 @@ struct PhotoFeedView: View {
         }
     }
     
-    private var photoList: some View {
-        ScrollView {
-            if photos.isEmpty {
-                VStack {
-                    Image(systemName: "photo.stack")
-                        .font(.system(size: 50))
-                        .foregroundColor(.gray)
-                    Text("No photos yet")
-                        .foregroundColor(.gray)
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            
+            Image(systemName: "photo.stack")
+                .font(.system(size: 40))
+                .foregroundColor(.gray)
+            
+            Text("No photos yet")
+                .font(.title3)
+                .foregroundColor(.white)
+            
+            Text("Be the first to share a photo in \(selectedCity)!")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            Button(action: { showCamera = true }) {
+                Text("Take Photo")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(width: 160)
+                    .padding(.vertical, 12)
+                    .background(Color.pink)
+                    .cornerRadius(25)
+            }
+            .padding(.top, 8)
+            
+            Spacer()
+        }
+        .padding()
+    }
+    
+    private var photoGrid: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1),
+                GridItem(.flexible(), spacing: 1)
+            ], spacing: 1) {
+                ForEach(filteredPhotos) { photo in
+                    PhotoGridItemView(photo: photo)
+                        .onTapGesture {
+                            selectedPhoto = photo
+                        }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 100)
-            } else {
-                LazyVStack(spacing: 16) {
-                    ForEach(photos) { photo in
-                        PhotoCard(photo: photo)
-                    }
-                }
-                .padding()
             }
         }
     }
 }
 
-struct PhotoCard: View {
-    let photo: DailyPhoto
-    @State private var isLiked = false
+struct PhotoGridItemView: View {
+    let photo: CityPhoto
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Photo
-            if let url = URL(string: photo.photoURL) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-                .clipped()
-                .cornerRadius(12)
+        AsyncImage(url: URL(string: photo.imageUrl)) { phase in
+            switch phase {
+            case .empty:
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(1, contentMode: .fill)
+                    .background(Color.gray.opacity(0.2))
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(1, contentMode: .fill)
+                    .clipped()
+            case .failure:
+                Image(systemName: "photo")
+                    .font(.largeTitle)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(1, contentMode: .fill)
+                    .background(Color.gray.opacity(0.2))
+            @unknown default:
+                EmptyView()
             }
+        }
+    }
+}
+
+struct PhotoDetailView: View {
+    let photo: CityPhoto
+    @StateObject private var photoManager = PhotoManager.shared
+    @Environment(\.presentationMode) var presentationMode
+    @State private var isLiking = false
+    
+    var body: some View {
+        ZStack {
+            Color.black.edgesIgnoringSafeArea(.all)
             
-            // User info and likes
-            HStack {
-                Text("@\(photo.userHandle)")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                
-                Spacer()
-                
-                Button(action: { isLiked.toggle() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .foregroundColor(isLiked ? .pink : .white)
-                        Text("\(photo.likes)")
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Image(systemName: "xmark")
                             .foregroundColor(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing) {
+                        Text(photo.city)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text(timeRemaining)
+                            .font(.caption)
+                            .foregroundColor(.gray)
                     }
                 }
+                .padding()
+                
+                // Photo
+                GeometryReader { geometry in
+                    AsyncImage(url: URL(string: photo.imageUrl)) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: geometry.size.width)
+                        case .failure:
+                            Image(systemName: "photo")
+                                .font(.largeTitle)
+                                .foregroundColor(.gray)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+                
+                // Like button and count
+                HStack {
+                    Button(action: likePhoto) {
+                        Image(systemName: "heart.fill")
+                            .foregroundColor(isLiking ? .gray : .pink)
+                            .font(.title2)
+                    }
+                    .disabled(isLiking)
+                    
+                    Text("\(photo.likes) likes")
+                        .foregroundColor(.white)
+                        .font(.subheadline)
+                    
+                    Spacer()
+                }
+                .padding()
             }
-            
-            // Location and time
-            Text("\(photo.city), \(photo.country)")
-                .font(.caption)
-                .foregroundColor(.gray)
         }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(16)
+    }
+    
+    private var timeRemaining: String {
+        let remaining = photo.expiresAt.timeIntervalSince(Date())
+        let hours = Int(remaining) / 3600
+        let minutes = Int(remaining) / 60 % 60
+        return "\(hours)h \(minutes)m remaining"
+    }
+    
+    private func likePhoto() {
+        guard !isLiking else { return }
+        isLiking = true
+        
+        Task {
+            do {
+                try await photoManager.likePhoto(photo)
+                isLiking = false
+            } catch {
+                isLiking = false
+                print("Error liking photo: \(error)")
+            }
+        }
     }
 }
 
