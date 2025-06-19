@@ -139,6 +139,12 @@ struct AfterpartyTabView: View {
     @State private var isUpdatingRadius = false
     @State private var lastFetchRadius: Double = 15.0 // Track the radius used for last fetch
     
+    // MARK: - New Marketplace Features
+    @State private var showingFilters = false
+    @State private var marketplaceAfterparties: [Afterparty] = []
+    @State private var currentFilters: MarketplaceFilters?
+    @State private var isLoadingMarketplace = false
+    
     private var filteredAfterparties: [Afterparty] {
         guard let userLocation = locationManager.location?.coordinate else {
             return afterpartyManager.nearbyAfterparties
@@ -163,16 +169,70 @@ struct AfterpartyTabView: View {
             Color.black.edgesIgnoringSafeArea(.all)
             
             VStack(spacing: 16) {
-                // City Header
-                CityPickerView(
-                    currentCity: locationManager.currentCity,
-                    authorizationStatus: locationManager.authorizationStatus,
-                    onLocationDenied: { showLocationDeniedAlert = true }
-                )
+                // MARK: - Marketplace Header
+                VStack(spacing: 12) {
+                    // City and Filter Button
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Party Discovery")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            
+                            HStack {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundColor(.pink)
+                                if locationManager.authorizationStatus == .denied {
+                                    Text("Location Access Required")
+                                        .foregroundColor(.red)
+                                } else {
+                                    Text(locationManager.currentCity ?? "Loading...")
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Filter button
+                        Button(action: { showingFilters = true }) {
+                            HStack {
+                                Image(systemName: "slider.horizontal.3")
+                                Text("Filter")
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.purple)
+                            .foregroundColor(.white)
+                            .cornerRadius(20)
+                        }
+                    }
+                    
+                    // Search and stats
+                    HStack {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.gray)
+                            TextField("Search parties...", text: $searchText)
+                        }
+                        .padding(10)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                        
+                        // Active parties count
+                        VStack {
+                            Text("\(marketplaceAfterparties.count)")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                            Text("live")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                }
                 .padding(.horizontal)
-                
-                SearchBarView(searchText: $searchText)
-                    .padding(.horizontal)
                 
                 DistanceSliderView(
                     selectedRadius: $selectedRadius,
@@ -201,24 +261,49 @@ struct AfterpartyTabView: View {
                     }
                 )
                 
-                if afterpartyManager.isLoading {
+                if isLoadingMarketplace {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
-                } else if filteredAfterparties.isEmpty {
-                    VStack {
-                        Image(systemName: "party.popper.fill")
-                            .font(.system(size: 50))
+                        .padding()
+                } else if marketplaceAfterparties.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "dollarsign.circle")
+                            .font(.system(size: 60))
                             .foregroundColor(.gray)
-                        Text("No afterparties yet in \(locationManager.currentCity ?? "your area").")
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
+                        
+                        VStack(spacing: 8) {
+                            Text("No paid parties yet")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                            
+                            Text("Be the first to host a party in \(locationManager.currentCity ?? "your area") and start earning!")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                        }
+                        
+                        Button("Host a Paid Party") {
+                            if hasActiveParty {
+                                showingActivePartyAlert = true
+                            } else if locationManager.authorizationStatus == .denied {
+                                showLocationDeniedAlert = true
+                            } else {
+                                showingCreateSheet = true
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                        .foregroundColor(.white)
+                        .cornerRadius(25)
                     }
                     .padding()
                     Spacer()
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {
-                            ForEach(filteredAfterparties) { afterparty in
+                            ForEach(marketplaceAfterparties) { afterparty in
                                 AfterpartyCard(afterparty: afterparty)
                             }
                         }
@@ -256,8 +341,8 @@ struct AfterpartyTabView: View {
             }
         }
         .alert("Active Afterparty Exists", isPresented: $showingActivePartyAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
+                Button("OK", role: .cancel) { }
+            } message: {
             Text("You already have an active afterparty. Please wait for it to end or stop it before creating a new one.")
         }
         .alert("Location Access Required", isPresented: $showLocationDeniedAlert) {
@@ -269,6 +354,189 @@ struct AfterpartyTabView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Please enable location services in Settings to use this feature.")
+        }
+        .sheet(isPresented: $showingFilters) {
+            MarketplaceFiltersView(isPresented: $showingFilters) { filters in
+                currentFilters = filters
+                Task {
+                    await loadMarketplaceAfterparties(with: filters)
+                }
+            }
+        }
+        .task {
+            await loadMarketplaceAfterparties()
+        }
+    }
+    
+    // MARK: - Marketplace Data Loading
+    private func loadMarketplaceAfterparties(with filters: MarketplaceFilters? = nil) async {
+        isLoadingMarketplace = true
+        defer { isLoadingMarketplace = false }
+        
+        do {
+            let afterparties = try await afterpartyManager.getMarketplaceAfterparties(
+                priceRange: filters?.priceRange,
+                vibes: filters?.vibes,
+                timeFilter: filters?.timeFilter ?? .all
+            )
+            
+            // Apply additional client-side filters
+            var filteredResults = afterparties
+            
+            if let filters = filters {
+                if filters.showOnlyAvailable {
+                    filteredResults = filteredResults.filter { !$0.isSoldOut }
+                }
+                
+                filteredResults = filteredResults.filter { $0.maxGuestCount <= filters.maxGuestCount }
+            }
+            
+            // Apply search filter
+            if !searchText.isEmpty {
+                filteredResults = filteredResults.filter { afterparty in
+                    afterparty.title.localizedCaseInsensitiveContains(searchText) ||
+                    afterparty.locationName.localizedCaseInsensitiveContains(searchText) ||
+                    afterparty.vibeTag.localizedCaseInsensitiveContains(searchText) ||
+                    afterparty.hostHandle.localizedCaseInsensitiveContains(searchText)
+                }
+            }
+            
+            await MainActor.run {
+                marketplaceAfterparties = filteredResults
+            }
+        } catch {
+            print("Error loading marketplace afterparties: \(error)")
+        }
+    }
+}
+
+// MARK: - Action Buttons View (Extracted to fix type-checking)
+struct ActionButtonsView: View {
+    let afterparty: Afterparty
+    let isHost: Bool
+    @Binding var isJoining: Bool
+    @Binding var showingGuestList: Bool
+    @Binding var showingEditSheet: Bool
+    @Binding var showingDeleteConfirmation: Bool
+    @Binding var showingShareSheet: Bool
+    let afterpartyManager: AfterpartyManager
+    let authViewModel: AuthViewModel
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            if isHost {
+                hostControlsMenu
+            } else {
+                guestActionButton
+            }
+            
+            shareButton
+        }
+    }
+    
+    private var hostControlsMenu: some View {
+        Menu {
+            Button(action: { showingGuestList = true }) {
+                Label("Manage Guests (\(afterparty.guestRequests.count))", systemImage: "person.2.fill")
+            }
+            
+            Button(action: { showingEditSheet = true }) {
+                Label("Edit Party", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive, action: { showingDeleteConfirmation = true }) {
+                Label("Cancel Party", systemImage: "xmark.circle")
+                    .foregroundColor(.red)
+            }
+        } label: {
+            HStack {
+                Text("Manage")
+                Image(systemName: "chevron.down")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.purple)
+            .foregroundColor(.white)
+            .cornerRadius(20)
+        }
+    }
+    
+    private var guestActionButton: some View {
+        let userId = authViewModel.currentUser?.uid ?? ""
+        let hasRequested = afterparty.guestRequests.contains { $0.userId == userId }
+        let isConfirmed = afterparty.activeUsers.contains(userId)
+        
+        return Button(action: {
+            if !hasRequested && !isConfirmed {
+                Task {
+                    isJoining = true
+                    do {
+                        try await afterpartyManager.requestPaidAccess(
+                            to: afterparty,
+                            userHandle: authViewModel.currentUser?.instagramHandle ?? authViewModel.currentUser?.snapchatHandle ?? authViewModel.currentUser?.name ?? "",
+                            userName: authViewModel.currentUser?.name ?? ""
+                        )
+                    } catch {
+                        print("Error requesting access: \(error)")
+                    }
+                    isJoining = false
+                }
+            }
+        }) {
+            HStack {
+                if isJoining {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    guestButtonContent(hasRequested: hasRequested, isConfirmed: isConfirmed)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(guestButtonBackground(hasRequested: hasRequested, isConfirmed: isConfirmed))
+            .foregroundColor(.white)
+            .cornerRadius(20)
+        }
+        .disabled(isJoining || hasRequested || isConfirmed || afterparty.isSoldOut)
+    }
+    
+    @ViewBuilder
+    private func guestButtonContent(hasRequested: Bool, isConfirmed: Bool) -> some View {
+        if isConfirmed {
+            Image(systemName: "checkmark.circle.fill")
+            Text("Going")
+        } else if hasRequested {
+            Image(systemName: "clock.fill")
+            Text("Pending")
+        } else if afterparty.isSoldOut {
+            Image(systemName: "xmark.circle.fill")
+            Text("Sold Out")
+        } else {
+            Image(systemName: "dollarsign.circle.fill")
+            Text("Request $\(Int(afterparty.ticketPrice))")
+        }
+    }
+    
+    private func guestButtonBackground(hasRequested: Bool, isConfirmed: Bool) -> AnyView {
+        if isConfirmed {
+            return AnyView(Color.green)
+        } else if hasRequested {
+            return AnyView(Color.orange)
+        } else if afterparty.isSoldOut {
+            return AnyView(Color.gray)
+        } else {
+            return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+        }
+    }
+    
+    private var shareButton: some View {
+        Button(action: { showingShareSheet = true }) {
+            Image(systemName: "square.and.arrow.up")
+                .padding(8)
+                .background(Color(.systemGray6))
+                .foregroundColor(.white)
+                .cornerRadius(20)
         }
     }
 }
@@ -311,69 +579,166 @@ struct AfterpartyCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header with location and vibe tag
-                HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(afterparty.locationName)
-                        .font(.headline)
+            // MARK: - Cover Photo & Price Header
+            ZStack(alignment: .topTrailing) {
+                // Cover photo or placeholder
+                if let coverURL = afterparty.coverPhotoURL {
+                    AsyncImage(url: URL(string: coverURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color(.systemGray4)
+                    }
+                    .frame(height: 120)
+                    .clipped()
+                    .cornerRadius(12)
+                } else {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(LinearGradient(gradient: Gradient(colors: [.purple.opacity(0.6), .pink.opacity(0.4)]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(height: 120)
+                        .overlay(
+                            VStack {
+                                Image(systemName: "party.popper.fill")
+                                    .font(.title)
+                                    .foregroundColor(.white)
+                                Text(afterparty.title)
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                            }
+                        )
+                }
+                
+                // Price tag
+                VStack(spacing: 4) {
+                    Text("$\(Int(afterparty.ticketPrice))")
+                        .font(.title2)
+                        .fontWeight(.bold)
                         .foregroundColor(.white)
                     
-                    Text(afterparty.address)
+                    if isHost {
+                        Text("$\(Int(afterparty.ticketPrice * 0.88))")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                            .overlay(
+                                Text("your cut")
+                                    .font(.caption2)
+                                    .foregroundColor(.green.opacity(0.8))
+                                    .offset(y: 12)
+                            )
+                    }
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(8)
+                .padding(.trailing, 8)
+                .padding(.top, 8)
+            }
+            
+            // Party title and host
+            VStack(alignment: .leading, spacing: 4) {
+                Text(afterparty.title)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text("at \(afterparty.locationName)")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
+            
+            // Vibe tags
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
+                        Text(vibe)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.purple.opacity(0.3))
+                            .foregroundColor(.purple)
+                            .cornerRadius(8)
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+            
+            // Party stats and info
+            HStack {
+                // Guest capacity
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount)")
                         .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    Text("confirmed")
+                        .font(.caption)
                         .foregroundColor(.gray)
-                        .lineLimit(2)
                 }
                 
                 Spacer()
                 
-                // Vibe tags
-                Text(afterparty.vibeTag)
-                    .font(.caption)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.purple.opacity(0.3))
-                    .foregroundColor(.purple)
-                .cornerRadius(12)
-            }
-            
-            // Description if available
-            if !afterparty.description.isEmpty {
-                Text(afterparty.description)
+                // Time until start
+                VStack(alignment: .center, spacing: 2) {
+                    Text(afterparty.timeUntilStart)
                         .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
-            }
-            
-            // Time and host info
-                    HStack {
-                Label(formatTime(afterparty.startTime), systemImage: "clock.fill")
-                    .foregroundColor(.pink)
-                
-                Text("•")
-                    .foregroundColor(.gray)
-                
-                Text(timeRemaining)
-                    .foregroundColor(.orange)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.orange)
+                    Text("starts")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
                 
                 Spacer()
                 
-                Label(afterparty.hostHandle, systemImage: "person.fill")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                // Host earnings (if host)
+                if isHost {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("$\(Int(afterparty.hostEarnings))")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.green)
+                        Text("earned")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                } else {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("@\(afterparty.hostHandle)")
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                        Text("host")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
             }
             
-            // Guest count and Google Maps
+            // Sold out / age restriction indicators
             HStack {
-                Label("\(afterparty.activeUsers.count) accepted", systemImage: "person.2.fill")
-                    .font(.caption)
-                                    .foregroundColor(.gray)
+                if afterparty.isSoldOut {
+                    Text("SOLD OUT")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.2))
+                        .cornerRadius(8)
+                }
                 
-                Text("•")
-                                    .foregroundColor(.gray)
-                
-                Label("\(afterparty.pendingRequests.count) pending", systemImage: "person.2.badge.gearshape")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                if let ageRestriction = afterparty.ageRestriction {
+                    Text("\(ageRestriction)+")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.2))
+                        .cornerRadius(8)
+                }
                 
                 Spacer()
                 
@@ -386,56 +751,17 @@ struct AfterpartyCard: View {
             }
             
             // Action buttons
-            HStack(spacing: 12) {
-                if isHost {
-                    // Host controls
-                    Menu {
-                        Button(action: { showingGuestList = true }) {
-                            Label("Manage Guest List", systemImage: "person.2.fill")
-                        }
-                        
-                        Button(action: { showingEditSheet = true }) {
-                            Label("Edit Afterparty", systemImage: "pencil")
-                        }
-                        
-                        Button(role: .destructive, action: { showingDeleteConfirmation = true }) {
-                            Label("Stop Invitation", systemImage: "xmark.circle")
-                                .foregroundColor(.red)
-                        }
-                    } label: {
-                        Label("Manage", systemImage: "ellipsis.circle.fill")
-                            .foregroundColor(.white)
-                    }
-                } else {
-                    // Guest actions
-                    Button(action: {
-                        Task {
-                            isJoining = true
-                            if afterparty.activeUsers.contains(authViewModel.currentUser?.uid ?? "") {
-                                try? await afterpartyManager.leaveAfterparty(afterparty)
-                            } else {
-                                try? await afterpartyManager.joinAfterparty(afterparty)
-                            }
-                            isJoining = false
-                        }
-                    }) {
-                        if isJoining {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Text(afterparty.activeUsers.contains(authViewModel.currentUser?.uid ?? "") ? "Leave" : "Join")
-                        }
-                    }
-                    .disabled(isJoining)
-                    .buttonStyle(.borderedProminent)
-                }
-                
-                // Share button
-                Button(action: { showingShareSheet = true }) {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(.white)
-                }
-            }
+            ActionButtonsView(
+                afterparty: afterparty,
+                isHost: isHost,
+                isJoining: $isJoining,
+                showingGuestList: $showingGuestList,
+                showingEditSheet: $showingEditSheet,
+                showingDeleteConfirmation: $showingDeleteConfirmation,
+                showingShareSheet: $showingShareSheet,
+                afterpartyManager: afterpartyManager,
+                authViewModel: authViewModel
+            )
         }
         .padding(16)
         .background(Color(.systemGray6).opacity(0.1))
@@ -717,6 +1043,24 @@ struct CreateAfterpartyView: View {
     @State private var errorMessage = ""
     @State private var selectedDay: String
     
+    // MARK: - New Marketplace Fields
+    @State private var title = ""
+    @State private var ticketPrice: Double = 10.0
+    @State private var coverPhotoURL: String = ""
+    @State private var coverPhotoImage: UIImage? = nil
+    @State private var maxGuestCount: Int = 25
+    @State private var visibility: PartyVisibility = .publicFeed
+    @State private var approvalType: ApprovalType = .manual
+    @State private var ageRestriction: Int? = nil
+    @State private var maxMaleRatio: Double = 1.0
+    @State private var legalDisclaimerAccepted = false
+    @State private var showImagePicker = false
+    
+    // MARK: - Enhanced Date/Time Selection
+    @State private var selectedDate = Date()
+    @State private var customStartTime = Date().addingTimeInterval(3600)
+    @State private var customEndTime = Date().addingTimeInterval(3600 * 5)
+    
     init(currentLocation: CLLocationCoordinate2D?, currentCity: String) {
         self.currentLocation = currentLocation
         self.currentCity = currentCity
@@ -733,14 +1077,22 @@ struct CreateAfterpartyView: View {
     }
     
     let vibeOptions = [
-        "Chill",
-        "Sesh 🍃",
         "BYOB",
-        "House",
+        "Frat", 
+        "420",
+        "Pool",
         "Rooftop",
-        "Pool Party",
+        "All-Girls",
+        "Dress Code",
         "💊",
-        "Video Games"
+        "Lounge",
+        "House Party",
+        "Dorm Party",
+        "Backyard",
+        "Exclusive",
+        "Games",
+        "Dancing",
+        "Chill"
     ]
     
     // Calculate available time slots based on current time
@@ -774,153 +1126,87 @@ struct CreateAfterpartyView: View {
         timeSlots.filter { !$0.1 }.map { $0.0 }
     }
     
+    // MARK: - Form Validation
+    private var isFormValid: Bool {
+        return !title.isEmpty &&
+               !selectedVibes.isEmpty &&
+               !address.isEmpty &&
+               ticketPrice >= 5.0 && // Minimum $5
+               maxGuestCount >= 5 && // Minimum 5 guests
+               legalDisclaimerAccepted // Must accept legal responsibility
+    }
+    
+    // MARK: - Computed Properties
+    private var createButtonBackground: AnyView {
+        if isFormValid {
+            return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+        } else {
+            return AnyView(LinearGradient(gradient: Gradient(colors: [.gray, .gray]), startPoint: .leading, endPoint: .trailing))
+        }
+    }
+    
     var body: some View {
         NavigationView {
                 ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // MARK: - Party Title & Price (Required)
+                    PartyDetailsSection(
+                        title: $title,
+                        ticketPrice: $ticketPrice,
+                        maxGuestCount: $maxGuestCount
+                    )
+                    
+                    // MARK: - Cover Photo
+                    CoverPhotoSection(
+                        coverPhotoURL: $coverPhotoURL,
+                        showImagePicker: $showImagePicker
+                    )
+                    
                     // Vibe Tags
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Select Vibes (Choose Multiple)")
-                            .font(.title2)
-                                .foregroundColor(.white)
-                        
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 12) {
-                            ForEach(vibeOptions, id: \.self) { vibe in
-                                    Button(action: {
-                                    if selectedVibes.contains(vibe) {
-                                        selectedVibes.remove(vibe)
-                                        } else {
-                                        selectedVibes.insert(vibe)
-                                        }
-                                    }) {
-                                        Text(vibe)
-                                            .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .background(selectedVibes.contains(vibe) ? Color.pink : Color(.systemGray6))
-                                        .foregroundColor(selectedVibes.contains(vibe) ? .white : .primary)
-                                        .cornerRadius(12)
-                                }
-                            }
-                        }
-                    }
+                    VibeTagsSection(
+                        selectedVibes: $selectedVibes,
+                        vibeOptions: vibeOptions
+                    )
                     
-                    // Time Selection
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Start Time")
-                            .font(.title2)
-                                .foregroundColor(.white)
-                        
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                selectedDay = "today"
-                                if let firstTodaySlot = todaySlots.first {
-                                    startTime = firstTodaySlot
-                                }
-                            }) {
-                                Text("Today")
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(!todaySlots.isEmpty && selectedDay == "today" ? Color.pink : Color(.systemGray6))
-                                .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                            .disabled(todaySlots.isEmpty)
-                            
-                            Button(action: {
-                                selectedDay = "tomorrow"
-                                if let firstTomorrowSlot = tomorrowSlots.first {
-                                    startTime = firstTomorrowSlot
-                                }
-                            }) {
-                                Text("Tomorrow")
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(!tomorrowSlots.isEmpty && selectedDay == "tomorrow" ? Color.pink : Color(.systemGray6))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                            .disabled(tomorrowSlots.isEmpty)
-                        }
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                let availableSlots = selectedDay == "today" ? todaySlots : tomorrowSlots
-                                ForEach(availableSlots, id: \.self) { time in
-                                    Button(action: { startTime = time }) {
-                                        Text(formatHourOnly(time))
-                                            .padding(.horizontal, 24)
-                                            .padding(.vertical, 12)
-                                            .background(Calendar.current.isDate(time, equalTo: startTime, toGranularity: .hour) ? Color.pink : Color(.systemGray6))
-                                            .foregroundColor(.white)
-                                            .cornerRadius(12)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Text("Ends at \(formatTime(endTime))")
-                            .foregroundColor(.gray)
-                    }
+                    // Enhanced Date & Time Selection
+                    EnhancedDateTimeSection(
+                        selectedDate: $selectedDate,
+                        customStartTime: $customStartTime,
+                        customEndTime: $customEndTime,
+                        formatTime: formatTime
+                    )
                     
-                    // Location
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Address (flat/house number, street, etc.)")
-                            .font(.body)
-                            .foregroundColor(.white)
+                    // Location & Description
+                    LocationDescriptionSection(
+                        address: $address,
+                        googleMapsLink: $googleMapsLink,
+                        description: $description
+                    )
                         
-                        TextField("Enter address", text: $address)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .foregroundColor(.white)
+                        // MARK: - Party Settings
+                        PartySettingsSection(
+                            visibility: $visibility,
+                            approvalType: $approvalType,
+                            ageRestriction: $ageRestriction,
+                            maxMaleRatio: $maxMaleRatio
+                        )
                         
-                            Text("Google Maps Link")
-                            .font(.body)
-                                .foregroundColor(.white)
-                        
-                        TextField("Paste Google Maps link", text: $googleMapsLink)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                                .foregroundColor(.white)
-                        }
-                        
-                        // Description
-                    VStack(alignment: .leading, spacing: 12) {
-                            Text("Description")
-                            .font(.body)
-                                .foregroundColor(.white)
-                        
-                            TextEditor(text: $description)
-                                .frame(height: 100)
-                            .padding(4)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                                .foregroundColor(.white)
-                        }
+                        // MARK: - Legal Disclaimer
+                        LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
                         
                     // Create Button
                     Button(action: createAfterparty) {
-                        HStack {
-                            Text("Create Afterparty")
-                                .fontWeight(.semibold)
-                            if isCreating {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            }
-                        }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        .background(
-                            selectedVibes.isEmpty || address.isEmpty ? Color.gray : Color.pink
+                        CreateButtonContent(
+                            ticketPrice: ticketPrice,
+                            isCreating: isCreating
                         )
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
-                    .disabled(isCreating || selectedVibes.isEmpty || address.isEmpty)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(createButtonBackground)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                    .disabled(isCreating || !isFormValid)
                     .padding(.top, 24)
                     }
                     .padding()
@@ -938,6 +1224,17 @@ struct CreateAfterpartyView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(errorMessage)
+            }
+            .sheet(isPresented: $showImagePicker) {
+                ImagePicker(image: $coverPhotoImage, sourceType: .photoLibrary)
+                    .onDisappear {
+                        if let image = coverPhotoImage {
+                            // Convert UIImage to URL string for cover photo
+                            // In a real app, you'd upload this to Firebase Storage
+                            // For now, we'll just use a placeholder
+                            coverPhotoURL = "placeholder_image_url"
+                        }
+                    }
             }
         }
     }
@@ -960,23 +1257,49 @@ struct CreateAfterpartyView: View {
         isCreating = true
         Task {
             do {
+                // Combine selected date with custom times
+                let finalStartTime = Calendar.current.date(
+                    bySettingHour: Calendar.current.component(.hour, from: customStartTime),
+                    minute: Calendar.current.component(.minute, from: customStartTime),
+                    second: 0,
+                    of: selectedDate
+                ) ?? customStartTime
+                
+                let finalEndTime = Calendar.current.date(
+                    bySettingHour: Calendar.current.component(.hour, from: customEndTime),
+                    minute: Calendar.current.component(.minute, from: customEndTime),
+                    second: 0,
+                    of: selectedDate
+                ) ?? customEndTime
+                
                 try await afterpartyManager.createAfterparty(
                     hostHandle: authViewModel.currentUser?.name ?? "",
                     coordinate: location,
                     radius: 5000, // 5km radius
-                    startTime: startTime,
-                    endTime: endTime,
+                    startTime: finalStartTime,
+                    endTime: finalEndTime,
                     city: currentCity,
                     locationName: address,
-                description: description,
-                address: address,
-                googleMapsLink: googleMapsLink,
-                    vibeTag: Array(selectedVibes).joined(separator: ", ")
-            )
-            await MainActor.run {
+                    description: description,
+                    address: address,
+                    googleMapsLink: googleMapsLink,
+                    vibeTag: Array(selectedVibes).joined(separator: ", "),
+                    
+                    // New marketplace parameters
+                    title: title,
+                    ticketPrice: ticketPrice,
+                    coverPhotoURL: coverPhotoURL.isEmpty ? nil : coverPhotoURL,
+                    maxGuestCount: maxGuestCount,
+                    visibility: visibility,
+                    approvalType: approvalType,
+                    ageRestriction: ageRestriction,
+                    maxMaleRatio: maxMaleRatio,
+                    legalDisclaimerAccepted: legalDisclaimerAccepted
+                )
+                await MainActor.run {
                     presentationMode.wrappedValue.dismiss()
-            }
-        } catch {
+                }
+            } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true
@@ -1266,4 +1589,642 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-} 
+}
+
+// MARK: - Extracted Form Sections to Fix Type-Checking
+
+struct PartyDetailsSection: View {
+    @Binding var title: String
+    @Binding var ticketPrice: Double
+    @Binding var maxGuestCount: Int
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Party Details")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            // Title
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Party Title *")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                TextField("Epic Rooftop Rager", text: $title)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
+            }
+            
+            // Ticket Price
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Ticket Price * 💰")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                HStack {
+                    Text("$")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                    
+                    TextField("10", text: Binding(
+                        get: { ticketPrice == 0 ? "" : String(format: "%.0f", ticketPrice) },
+                        set: { newValue in
+                            if let value = Double(newValue), value >= 0 {
+                                ticketPrice = value
+                            } else if newValue.isEmpty {
+                                ticketPrice = 0
+                            }
+                        }
+                    ))
+                        .keyboardType(.numberPad)
+                        .padding()
+                        .background(ticketPrice < 5.0 ? Color(.systemGray4) : Color(.systemGray6))
+                        .cornerRadius(12)
+                        .foregroundColor(ticketPrice < 5.0 ? .gray : .white)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(ticketPrice < 5.0 ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+                        )
+                    
+                    Text("per person")
+                        .foregroundColor(.gray)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    if ticketPrice >= 5.0 {
+                        Text("You'll earn $\(String(format: "%.2f", ticketPrice * 0.88)) per ticket (12% Bondfyr fee)")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    } else {
+                        Text("⚠️ Minimum $5 required to create party")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    
+                    Text("No maximum price limit - charge what your party is worth!")
+                        .font(.caption)
+                        .foregroundColor(ticketPrice >= 5.0 ? .green : .gray)
+                }
+            }
+            
+            // Guest Limit
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Max Guests")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                HStack {
+                    Button("-") {
+                        if maxGuestCount > 5 {
+                            maxGuestCount -= 5
+                        }
+                    }
+                    .padding()
+                    .background(maxGuestCount <= 5 ? Color(.systemGray4) : Color(.systemGray6))
+                    .cornerRadius(8)
+                    .foregroundColor(maxGuestCount <= 5 ? .gray : .white)
+                    .disabled(maxGuestCount <= 5)
+                    
+                    Text("\(maxGuestCount) people")
+                        .frame(minWidth: 100)
+                        .foregroundColor(.white)
+                    
+                    Button("+") {
+                        if maxGuestCount < 200 {
+                            maxGuestCount += 5
+                        }
+                    }
+                    .padding()
+                    .background(maxGuestCount >= 200 ? Color(.systemGray4) : Color(.systemGray6))
+                    .cornerRadius(8)
+                    .foregroundColor(maxGuestCount >= 200 ? .gray : .white)
+                    .disabled(maxGuestCount >= 200)
+                }
+            }
+        }
+    }
+}
+
+struct CoverPhotoSection: View {
+    @Binding var coverPhotoURL: String
+    @Binding var showImagePicker: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Cover Photo")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Button(action: { showImagePicker = true }) {
+                if coverPhotoURL.isEmpty {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                        .frame(height: 120)
+                        .overlay(
+                            VStack {
+                                Image(systemName: "camera.fill")
+                                    .font(.title)
+                                    .foregroundColor(.gray)
+                                Text("Add Cover Photo")
+                                    .foregroundColor(.gray)
+                            }
+                        )
+                } else {
+                    AsyncImage(url: URL(string: coverPhotoURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color(.systemGray6)
+                    }
+                    .frame(height: 120)
+                    .clipped()
+                    .cornerRadius(12)
+                }
+            }
+        }
+    }
+}
+
+struct VibeTagsSection: View {
+    @Binding var selectedVibes: Set<String>
+    let vibeOptions: [String]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Select Vibes (Choose Multiple)")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                ForEach(vibeOptions, id: \.self) { vibe in
+                    Button(action: {
+                        if selectedVibes.contains(vibe) {
+                            selectedVibes.remove(vibe)
+                        } else {
+                            selectedVibes.insert(vibe)
+                        }
+                    }) {
+                        Text(vibe)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(selectedVibes.contains(vibe) ? Color.pink : Color(.systemGray6))
+                            .foregroundColor(selectedVibes.contains(vibe) ? .white : .primary)
+                            .cornerRadius(12)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct CreateButtonContent: View {
+    let ticketPrice: Double
+    let isCreating: Bool
+    
+    var body: some View {
+        HStack {
+            Text("Create Paid Party • $\(Int(ticketPrice))")
+                .fontWeight(.semibold)
+            if isCreating {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            }
+        }
+    }
+}
+
+struct TimeSelectionSection: View {
+    @Binding var selectedDay: String
+    @Binding var startTime: Date
+    let endTime: Date
+    let todaySlots: [Date]
+    let tomorrowSlots: [Date]
+    let formatHourOnly: (Date) -> String
+    let formatTime: (Date) -> String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Start Time")
+                .font(.title2)
+                .foregroundColor(.white)
+            
+            // Day selection buttons
+            DaySelectionButtons(
+                selectedDay: $selectedDay,
+                startTime: $startTime,
+                todaySlots: todaySlots,
+                tomorrowSlots: tomorrowSlots
+            )
+            
+            // Time slot picker
+            TimeSlotPicker(
+                selectedDay: selectedDay,
+                startTime: $startTime,
+                todaySlots: todaySlots,
+                tomorrowSlots: tomorrowSlots,
+                formatHourOnly: formatHourOnly
+            )
+            
+            Text("Ends at \(formatTime(endTime))")
+                .foregroundColor(.gray)
+        }
+    }
+}
+
+struct DaySelectionButtons: View {
+    @Binding var selectedDay: String
+    @Binding var startTime: Date
+    let todaySlots: [Date]
+    let tomorrowSlots: [Date]
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: {
+                selectedDay = "today"
+                if let firstTodaySlot = todaySlots.first {
+                    startTime = firstTodaySlot
+                }
+            }) {
+                Text("Today")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(todayButtonBackground)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .disabled(todaySlots.isEmpty)
+            
+            Button(action: {
+                selectedDay = "tomorrow"
+                if let firstTomorrowSlot = tomorrowSlots.first {
+                    startTime = firstTomorrowSlot
+                }
+            }) {
+                Text("Tomorrow")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(tomorrowButtonBackground)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .disabled(tomorrowSlots.isEmpty)
+        }
+    }
+    
+    private var todayButtonBackground: Color {
+        (!todaySlots.isEmpty && selectedDay == "today") ? Color.pink : Color(.systemGray6)
+    }
+    
+    private var tomorrowButtonBackground: Color {
+        (!tomorrowSlots.isEmpty && selectedDay == "tomorrow") ? Color.pink : Color(.systemGray6)
+    }
+}
+
+struct TimeSlotPicker: View {
+    let selectedDay: String
+    @Binding var startTime: Date
+    let todaySlots: [Date]
+    let tomorrowSlots: [Date]
+    let formatHourOnly: (Date) -> String
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                let availableSlots = selectedDay == "today" ? todaySlots : tomorrowSlots
+                ForEach(availableSlots, id: \.self) { time in
+                    Button(action: { startTime = time }) {
+                        Text(formatHourOnly(time))
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(timeSlotBackground(for: time))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func timeSlotBackground(for time: Date) -> Color {
+        Calendar.current.isDate(time, equalTo: startTime, toGranularity: .hour) ? Color.pink : Color(.systemGray6)
+    }
+}
+
+struct PartySettingsSection: View {
+    @Binding var visibility: PartyVisibility
+    @Binding var approvalType: ApprovalType
+    @Binding var ageRestriction: Int?
+    @Binding var maxMaleRatio: Double
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Party Settings")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            // Visibility
+            VisibilitySection(visibility: $visibility)
+            
+            // Approval Type
+            ApprovalSection(approvalType: $approvalType)
+            
+            // Age Restriction
+            AgeRestrictionSection(ageRestriction: $ageRestriction)
+            
+            // Gender Ratio Control
+            GenderRatioSection(maxMaleRatio: $maxMaleRatio)
+        }
+    }
+}
+
+struct VisibilitySection: View {
+    @Binding var visibility: PartyVisibility
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Visibility")
+                .font(.body)
+                .foregroundColor(.white)
+            
+            HStack(spacing: 12) {
+                ForEach(PartyVisibility.allCases, id: \.self) { option in
+                    Button(action: { visibility = option }) {
+                        Text(option.displayName)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(visibility == option ? Color.pink : Color(.systemGray6))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ApprovalSection: View {
+    @Binding var approvalType: ApprovalType
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Guest Approval")
+                .font(.body)
+                .foregroundColor(.white)
+            
+            HStack(spacing: 12) {
+                ForEach(ApprovalType.allCases, id: \.self) { option in
+                    Button(action: { approvalType = option }) {
+                        Text(option.displayName)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(approvalType == option ? Color.pink : Color(.systemGray6))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct AgeRestrictionSection: View {
+    @Binding var ageRestriction: Int?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Age Restriction (Optional)")
+                .font(.body)
+                .foregroundColor(.white)
+            
+            HStack {
+                AgeRestrictionButton(title: "None", value: nil, current: ageRestriction) {
+                    ageRestriction = nil
+                }
+                
+                AgeRestrictionButton(title: "18+", value: 18, current: ageRestriction) {
+                    ageRestriction = 18
+                }
+                
+                AgeRestrictionButton(title: "21+", value: 21, current: ageRestriction) {
+                    ageRestriction = 21
+                }
+                
+                Spacer()
+            }
+        }
+    }
+}
+
+struct AgeRestrictionButton: View {
+    let title: String
+    let value: Int?
+    let current: Int?
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+        }
+        .padding()
+        .background(current == value ? Color.pink : Color(.systemGray6))
+        .foregroundColor(.white)
+        .cornerRadius(8)
+    }
+}
+
+struct GenderRatioSection: View {
+    @Binding var maxMaleRatio: Double
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Max Male Ratio: \(Int(maxMaleRatio * 100))%")
+                .font(.body)
+                .foregroundColor(.white)
+            
+            Slider(value: $maxMaleRatio, in: 0.3...1.0, step: 0.1)
+                .accentColor(.pink)
+            
+            Text("Controls gender balance at your party")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+    }
+}
+
+struct LocationDescriptionSection: View {
+    @Binding var address: String
+    @Binding var googleMapsLink: String
+    @Binding var description: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Location
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Address (flat/house number, street, etc.)")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                TextField("Enter address", text: $address)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
+                
+                Text("Google Maps Link")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                TextField("Paste Google Maps link", text: $googleMapsLink)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
+            }
+            
+            // Description
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Description")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                TextEditor(text: $description)
+                    .frame(height: 100)
+                    .padding(4)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
+            }
+        }
+    }
+}
+
+struct EnhancedDateTimeSection: View {
+    @Binding var selectedDate: Date
+    @Binding var customStartTime: Date
+    @Binding var customEndTime: Date
+    let formatTime: (Date) -> String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Date & Time")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            // Date Selection
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Party Date")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
+                    .datePickerStyle(CompactDatePickerStyle())
+                    .accentColor(.pink)
+                    .colorScheme(.dark)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+            }
+            
+            // Start Time
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Start Time")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                DatePicker("Start Time", selection: $customStartTime, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(WheelDatePickerStyle())
+                    .accentColor(.pink)
+                    .colorScheme(.dark)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+            }
+            
+            // End Time
+            VStack(alignment: .leading, spacing: 8) {
+                Text("End Time")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                DatePicker("End Time", selection: $customEndTime, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(WheelDatePickerStyle())
+                    .accentColor(.pink)
+                    .colorScheme(.dark)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .onChange(of: customEndTime) { newEndTime in
+                        // Ensure end time is after start time
+                        if newEndTime <= customStartTime {
+                            customEndTime = Calendar.current.date(byAdding: .hour, value: 1, to: customStartTime) ?? customStartTime
+                        }
+                    }
+            }
+            
+            // Duration Display
+            HStack {
+                Text("Duration: \(formatDuration())")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                Spacer()
+            }
+        }
+    }
+    
+    private func formatDuration() -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: customStartTime, to: customEndTime)
+        let hours = components.hour ?? 0
+        let minutes = components.minute ?? 0
+        
+        if hours > 0 && minutes > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if hours > 0 {
+            return "\(hours)h"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+}
+
+struct LegalDisclaimerSection: View {
+    @Binding var legalDisclaimerAccepted: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Legal Responsibility")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            HStack(alignment: .top, spacing: 12) {
+                Button(action: { legalDisclaimerAccepted.toggle() }) {
+                    Image(systemName: legalDisclaimerAccepted ? "checkmark.square.fill" : "square")
+                        .foregroundColor(legalDisclaimerAccepted ? .pink : .gray)
+                        .font(.title2)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("I agree to take full responsibility for this event *")
+                        .font(.body)
+                        .foregroundColor(.white)
+                    
+                    Text("You are legally responsible for your party, including guest safety, property damage, noise complaints, and local law compliance.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+    }
+}
+ 

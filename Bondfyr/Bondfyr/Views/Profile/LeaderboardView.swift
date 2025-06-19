@@ -1,4 +1,5 @@
 import SwiftUI
+import BondfyrPhotos
 
 struct LeaderboardEntry: Identifiable {
     let id: String
@@ -7,29 +8,38 @@ struct LeaderboardEntry: Identifiable {
     let likeCount: Int
 }
 
-enum LeaderboardScope: String, CaseIterable {
-    case city = "City"
-    case country = "Country"
-    case continent = "Continent"
-    case world = "World"
+enum LeaderboardType {
+    case today
+    case cumulative
 }
 
 struct LeaderboardView: View {
     @State private var entries: [LeaderboardEntry] = []
-    @State private var selectedScope: LeaderboardScope = .city
+    @State private var selectedType: LeaderboardType = .today
     @State private var isLoading = false
     @State private var error: String? = nil
     @ObservedObject var cityManager = CityManager.shared
 
     var body: some View {
-        VStack {
-            Picker("Scope", selection: $selectedScope) {
-                ForEach(LeaderboardScope.allCases, id: \ .self) { scope in
-                    Text(scope.rawValue).tag(scope)
+        VStack(alignment: .leading) {
+            // Tab text
+            Text("Leaderboard Today")
+                .font(.system(size: 24))
+                .foregroundColor(selectedType == .today ? .pink : Color.gray)
+                .onTapGesture {
+                    withAnimation {
+                        selectedType = .today
+                    }
                 }
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding()
+            
+            Text("Leaderboard Cumulative")
+                .font(.system(size: 24))
+                .foregroundColor(selectedType == .cumulative ? .pink : Color.gray)
+                .onTapGesture {
+                    withAnimation {
+                        selectedType = .cumulative
+                    }
+                }
 
             if isLoading {
                 ProgressView()
@@ -56,10 +66,10 @@ struct LeaderboardView: View {
                 }
             }
         }
-        .background(BackgroundGradientView())
-        .navigationTitle("Leaderboard")
+        .padding(.horizontal)
+        .background(Color.black.edgesIgnoringSafeArea(.all))
         .onAppear { fetchLeaderboard() }
-        .onChange(of: selectedScope) { _ in fetchLeaderboard() }
+        .onChange(of: selectedType) { _ in fetchLeaderboard() }
     }
 
     func fetchLeaderboard() {

@@ -18,6 +18,7 @@ struct BondfyrApp: App {
     @StateObject var authViewModel = AuthViewModel()
     @StateObject var tabSelection = TabSelection()
     @StateObject var eventViewModel = EventViewModel()
+    @StateObject var cityManager = CityManager.shared
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     
     // Add state variables to manage navigation
@@ -105,9 +106,9 @@ struct BondfyrApp: App {
                 self.pendingNavigationEventId = eventId
                 self.pendingNavigationAction = userInfo["action"] as? String
                 
-                // Switch to the discover tab which contains events
+                // Switch to the party feed tab which contains events
                 DispatchQueue.main.async {
-                    self.tabSelection.selectedTab = .discover
+                    self.tabSelection.selectedTab = .partyFeed
                 }
             }
         }
@@ -120,6 +121,7 @@ struct BondfyrApp: App {
                     .environmentObject(authViewModel)
                     .environmentObject(tabSelection)
                     .environmentObject(eventViewModel)
+                    .environmentObject(cityManager)
                     .environment(\.pendingEventNavigation, pendingNavigationEventId)
                     .environment(\.pendingEventAction, pendingNavigationAction)
                     .onChange(of: pendingNavigationEventId) { newValue in
@@ -129,6 +131,10 @@ struct BondfyrApp: App {
                                 self.pendingNavigationAction = nil
                             }
                         }
+                    }
+                    .onAppear {
+                        // Start location monitoring when app launches
+                        cityManager.startMonitoringLocation()
                     }
                 
                 // Contest photo capture overlay
@@ -182,9 +188,9 @@ struct BondfyrApp: App {
                         self.showContestPhotoCapture = false
                     }
                     
-                    // Navigate to discover tab which shows events
+                    // Navigate to party feed tab which shows events
                     DispatchQueue.main.async {
-                        self.tabSelection.selectedTab = .discover
+                        self.tabSelection.selectedTab = .partyFeed
                     }
                 }
             }

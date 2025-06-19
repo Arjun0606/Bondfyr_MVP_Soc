@@ -65,7 +65,18 @@ class AfterpartyManager: NSObject, ObservableObject {
         description: String,
         address: String,
         googleMapsLink: String,
-        vibeTag: String
+        vibeTag: String,
+        
+        // New marketplace parameters
+        title: String,
+        ticketPrice: Double,
+        coverPhotoURL: String? = nil,
+        maxGuestCount: Int,
+        visibility: PartyVisibility = .publicFeed,
+        approvalType: ApprovalType = .manual,
+        ageRestriction: Int? = nil,
+        maxMaleRatio: Double = 1.0,
+        legalDisclaimerAccepted: Bool = false
     ) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
@@ -97,7 +108,18 @@ class AfterpartyManager: NSObject, ObservableObject {
             address: address,
             googleMapsLink: googleMapsLink,
             vibeTag: vibeTag,
-            createdAt: creationTime
+            createdAt: creationTime,
+            
+            // New marketplace fields
+            title: title,
+            ticketPrice: ticketPrice,
+            coverPhotoURL: coverPhotoURL,
+            maxGuestCount: maxGuestCount,
+            visibility: visibility,
+            approvalType: approvalType,
+            ageRestriction: ageRestriction,
+            maxMaleRatio: maxMaleRatio,
+            legalDisclaimerAccepted: legalDisclaimerAccepted
         )
         
         let data = try Firestore.Encoder().encode(afterparty)
@@ -184,6 +206,163 @@ class AfterpartyManager: NSObject, ObservableObject {
         try await db.collection("afterparties").document(afterparty.id).updateData([
             "pendingRequests": FieldValue.arrayUnion([userId])
         ])
+    }
+    
+    // MARK: - New Paid Marketplace Methods
+    
+    /// Request paid access to an afterparty
+    func requestPaidAccess(
+        to afterparty: Afterparty,
+        userHandle: String,
+        userName: String
+    ) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        // Check if party is sold out
+        if afterparty.isSoldOut {
+            throw NSError(domain: "AfterpartyError", code: 403, userInfo: [NSLocalizedDescriptionKey: "This party is sold out!"])
+        }
+        
+        // Check if user already requested access
+        if afterparty.guestRequests.contains(where: { $0.userId == userId }) {
+            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You already requested access to this party"])
+        }
+        
+        // Create guest request with payment processing
+        let success = try await PaymentService.shared.requestAfterpartyAccess(
+            afterparty: afterparty,
+            userId: userId,
+            userName: userName,
+            userHandle: userHandle
+        )
+        
+        if success {
+            // Add to Firebase with pending payment status
+            let guestRequest = GuestRequest(
+                userId: userId,
+                userName: userName,
+                userHandle: userHandle,
+                paymentStatus: .pending,
+                stripePaymentIntentId: "pi_placeholder_\(UUID().uuidString)"
+            )
+            
+            // Update Firestore
+            var updatedRequests = afterparty.guestRequests
+            updatedRequests.append(guestRequest)
+            
+            try await db.collection("afterparties").document(afterparty.id).updateData([
+                "guestRequests": updatedRequests.map { try Firestore.Encoder().encode($0) }
+            ])
+        }
+    }
+    
+    /// Approve a paid guest request (host action)
+    func approvePaidGuest(afterpartyId: String, guestRequestId: String) async throws {
+        // In real implementation, this would:
+        // 1. Verify payment was successful
+        // 2. Move guest from pending to confirmed
+        // 3. Update host earnings
+        // 4. Send confirmation notification
+        
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "pendingRequests": FieldValue.arrayRemove([guestRequestId]),
+            "activeUsers": FieldValue.arrayUnion([guestRequestId])
+        ])
+    }
+    
+    /// Get host earnings dashboard
+    func getHostEarnings(for hostId: String) async throws -> HostEarnings {
+        let snapshot = try await db.collection("afterparties")
+            .whereField("userId", isEqualTo: hostId)
+            .getDocuments()
+        
+        let afterparties = try snapshot.documents.compactMap { doc -> Afterparty? in
+            var docData = doc.data()
+            docData["id"] = doc.documentID
+            return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
+        }
+        
+        // Calculate earnings
+        let totalEarnings = afterparties.reduce(0) { $0 + $1.hostEarnings }
+        let totalGuests = afterparties.reduce(0) { $0 + $1.confirmedGuestsCount }
+        let averagePartySize = afterparties.isEmpty ? 0 : Double(totalGuests) / Double(afterparties.count)
+        
+        // Create transactions (placeholder)
+        let transactions: [Transaction] = []
+        
+        return HostEarnings(
+            totalEarnings: totalEarnings,
+            totalAfterparties: afterparties.count,
+            totalGuests: totalGuests,
+            averagePartySize: averagePartySize,
+            thisMonth: totalEarnings * 0.3, // Placeholder
+            lastMonth: totalEarnings * 0.2, // Placeholder
+            pendingPayouts: totalEarnings * 0.1, // Placeholder
+            transactions: transactions
+        )
+    }
+    
+    /// Filter afterparties for marketplace discovery
+    func getMarketplaceAfterparties(
+        priceRange: ClosedRange<Double>? = nil,
+        vibes: [String]? = nil,
+        timeFilter: TimeFilter = .all
+    ) async throws -> [Afterparty] {
+        // Base query for public afterparties only
+        var query = db.collection("afterparties")
+            .whereField("visibility", isEqualTo: PartyVisibility.publicFeed.rawValue)
+        
+        // Add price filter if specified
+        if let priceRange = priceRange {
+            query = query
+                .whereField("ticketPrice", isGreaterThanOrEqualTo: priceRange.lowerBound)
+                .whereField("ticketPrice", isLessThanOrEqualTo: priceRange.upperBound)
+        }
+        
+        let snapshot = try await query.getDocuments()
+        
+        var afterparties = try snapshot.documents.compactMap { doc -> Afterparty? in
+            var docData = doc.data()
+            docData["id"] = doc.documentID
+            
+            // Skip expired afterparties
+            if let endTime = (docData["endTime"] as? Timestamp)?.dateValue(),
+               endTime < Date() {
+                return nil
+            }
+            
+            return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
+        }
+        
+        // Apply client-side filters
+        if let vibes = vibes, !vibes.isEmpty {
+            afterparties = afterparties.filter { afterparty in
+                vibes.allSatisfy { afterparty.vibeTag.contains($0) }
+            }
+        }
+        
+        // Apply time filter
+        switch timeFilter {
+        case .tonight:
+            afterparties = afterparties.filter { Calendar.current.isDateInToday($0.startTime) }
+        case .upcoming:
+            afterparties = afterparties.filter { $0.startTime > Date() }
+        case .ongoing:
+            afterparties = afterparties.filter { 
+                $0.startTime <= Date() && $0.endTime > Date()
+            }
+        case .all:
+            break
+        }
+        
+        // Sort by start time
+        return afterparties.sorted { $0.startTime < $1.startTime }
+    }
+    
+    enum TimeFilter {
+        case all, tonight, upcoming, ongoing
     }
     
     func approveRequest(afterpartyId: String, userId: String) async throws {

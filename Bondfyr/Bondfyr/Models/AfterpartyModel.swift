@@ -2,6 +2,65 @@ import Foundation
 import FirebaseFirestore
 import CoreLocation
 
+// MARK: - Enums for the new marketplace features
+enum PartyVisibility: String, CaseIterable, Codable {
+    case publicFeed = "public"
+    case privateInvite = "private"
+    
+    var displayName: String {
+        switch self {
+        case .publicFeed: return "Public (on feed)"
+        case .privateInvite: return "Private (invite-only)"
+        }
+    }
+}
+
+enum ApprovalType: String, CaseIterable, Codable {
+    case manual = "manual"
+    case automatic = "automatic"
+    
+    var displayName: String {
+        switch self {
+        case .manual: return "Manual approval"
+        case .automatic: return "Auto-approve"
+        }
+    }
+}
+
+enum PaymentStatus: String, Codable {
+    case pending = "pending"
+    case paid = "paid"
+    case refunded = "refunded"
+}
+
+// MARK: - Guest request with payment info
+struct GuestRequest: Identifiable, Codable {
+    let id: String
+    let userId: String
+    let userName: String
+    let userHandle: String
+    let requestedAt: Date
+    let paymentStatus: PaymentStatus
+    let stripePaymentIntentId: String?
+    
+    init(id: String = UUID().uuidString,
+         userId: String,
+         userName: String,
+         userHandle: String,
+         requestedAt: Date = Date(),
+         paymentStatus: PaymentStatus = .pending,
+         stripePaymentIntentId: String? = nil) {
+        self.id = id
+        self.userId = userId
+        self.userName = userName
+        self.userHandle = userHandle
+        self.requestedAt = requestedAt
+        self.paymentStatus = paymentStatus
+        self.stripePaymentIntentId = stripePaymentIntentId
+    }
+}
+
+// MARK: - Updated Afterparty model for marketplace
 struct Afterparty: Identifiable, Codable {
     let id: String
     let userId: String
@@ -20,12 +79,74 @@ struct Afterparty: Identifiable, Codable {
     let pendingRequests: [String]
     let createdAt: Date
     
+    // MARK: - New marketplace features
+    let title: String
+    let ticketPrice: Double // Required - no free parties
+    let coverPhotoURL: String?
+    let maxGuestCount: Int
+    let visibility: PartyVisibility
+    let approvalType: ApprovalType
+    let ageRestriction: Int? // e.g. 21+ 
+    let maxMaleRatio: Double // 0.0 to 1.0, e.g. 0.7 = max 70% male
+    let legalDisclaimerAccepted: Bool
+    let guestRequests: [GuestRequest] // New detailed guest request system
+    let earnings: Double // Host earnings (price * confirmed guests * 0.88)
+    let bondfyrFee: Double // 12% fee
+    
+    // MARK: - Computed properties
     var isExpired: Bool {
         return Date() > endTime
     }
     
+    var confirmedGuestsCount: Int {
+        return activeUsers.count
+    }
+    
+    var pendingGuestsCount: Int {
+        return guestRequests.filter { $0.paymentStatus == .pending }.count
+    }
+    
+    var isSoldOut: Bool {
+        return confirmedGuestsCount >= maxGuestCount
+    }
+    
+    var currentMaleRatio: Double {
+        // This would need actual user gender data - placeholder for now
+        return 0.5 // 50% male ratio placeholder
+    }
+    
+    var hostEarnings: Double {
+        let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
+        return Double(confirmedPaidGuests) * ticketPrice * 0.88 // 88% to host, 12% to Bondfyr
+    }
+    
+    var bondfyrRevenue: Double {
+        let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
+        return Double(confirmedPaidGuests) * ticketPrice * 0.12
+    }
+    
+    var spotsRemaining: Int {
+        return max(0, maxGuestCount - confirmedGuestsCount)
+    }
+    
+    var timeUntilStart: String {
+        let now = Date()
+        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: startTime)
+        
+        if startTime <= now {
+            return "Started"
+        } else if let hours = components.hour, let minutes = components.minute {
+            if hours > 0 {
+                return "Starts in \(hours)h \(minutes)m"
+            } else {
+                return "Starts in \(minutes)m"
+            }
+        }
+        return ""
+    }
+    
     var shareText: String {
-        return "Join my afterparty at \(locationName)! Starting at \(formatTime(startTime))"
+        return "🎉 Join my party '\(title)' at \(locationName)! $\(Int(ticketPrice)) • Starting at \(formatTime(startTime))"
     }
     
     var deepLinkURL: URL {
@@ -38,25 +159,40 @@ struct Afterparty: Identifiable, Codable {
         return formatter.string(from: date)
     }
     
+    // MARK: - Updated vibe options for nightlife culture
     static let vibeOptions = [
-        "Chill",
-        "Lit",
+        "BYOB",
+        "Frat", 
+        "420",
+        "Pool",
+        "Rooftop",
+        "All-Girls",
+        "Dress Code",
+        "💊",
+        "Lounge",
+        "House Party",
+        "Dorm Party",
+        "Backyard",
         "Exclusive",
-        "Everyone Welcome",
         "Games",
         "Dancing",
-        "Drinks",
-        "Food"
+        "Chill"
     ]
     
-    // Update CodingKeys to include both possible location field names
+    // MARK: - CodingKeys
     private enum CodingKeys: String, CodingKey {
         case id, userId, hostHandle, radius, startTime, endTime
         case city, locationName, description, address, googleMapsLink
         case vibeTag, activeUsers, pendingRequests, createdAt
         case geoPoint, coordinate
+        
+        // New marketplace fields
+        case title, ticketPrice, coverPhotoURL, maxGuestCount
+        case visibility, approvalType, ageRestriction, maxMaleRatio
+        case legalDisclaimerAccepted, guestRequests, earnings, bondfyrFee
     }
     
+    // MARK: - Initializer
     init(id: String = UUID().uuidString,
          userId: String,
          hostHandle: String,
@@ -72,7 +208,21 @@ struct Afterparty: Identifiable, Codable {
          vibeTag: String,
          activeUsers: [String] = [],
          pendingRequests: [String] = [],
-         createdAt: Date = Date()) {
+         createdAt: Date = Date(),
+         
+         // New marketplace parameters
+         title: String,
+         ticketPrice: Double,
+         coverPhotoURL: String? = nil,
+         maxGuestCount: Int,
+         visibility: PartyVisibility = .publicFeed,
+         approvalType: ApprovalType = .manual,
+         ageRestriction: Int? = nil,
+         maxMaleRatio: Double = 1.0,
+         legalDisclaimerAccepted: Bool = false,
+         guestRequests: [GuestRequest] = [],
+         earnings: Double = 0.0,
+         bondfyrFee: Double = 0.12) {
         
         self.id = id
         self.userId = userId
@@ -90,6 +240,20 @@ struct Afterparty: Identifiable, Codable {
         self.activeUsers = activeUsers
         self.pendingRequests = pendingRequests
         self.createdAt = createdAt
+        
+        // New marketplace fields
+        self.title = title
+        self.ticketPrice = ticketPrice
+        self.coverPhotoURL = coverPhotoURL
+        self.maxGuestCount = maxGuestCount
+        self.visibility = visibility
+        self.approvalType = approvalType
+        self.ageRestriction = ageRestriction
+        self.maxMaleRatio = maxMaleRatio
+        self.legalDisclaimerAccepted = legalDisclaimerAccepted
+        self.guestRequests = guestRequests
+        self.earnings = earnings
+        self.bondfyrFee = bondfyrFee
     }
     
     // Helper to convert GeoPoint to CLLocationCoordinate2D
@@ -97,7 +261,7 @@ struct Afterparty: Identifiable, Codable {
         CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
     }
     
-    // Custom Decodable implementation to handle Firestore types
+    // MARK: - Custom Decodable implementation
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
@@ -117,13 +281,39 @@ struct Afterparty: Identifiable, Codable {
         activeUsers = (try? container.decode([String].self, forKey: .activeUsers)) ?? []
         pendingRequests = (try? container.decode([String].self, forKey: .pendingRequests)) ?? []
         
+        // New marketplace fields with defaults for backward compatibility
+        title = (try? container.decode(String.self, forKey: .title)) ?? locationName
+        ticketPrice = (try? container.decode(Double.self, forKey: .ticketPrice)) ?? 10.0
+        coverPhotoURL = try? container.decode(String.self, forKey: .coverPhotoURL)
+        maxGuestCount = (try? container.decode(Int.self, forKey: .maxGuestCount)) ?? 50
+        
+        // Enums with defaults
+        if let visibilityString = try? container.decode(String.self, forKey: .visibility) {
+            visibility = PartyVisibility(rawValue: visibilityString) ?? .publicFeed
+        } else {
+            visibility = .publicFeed
+        }
+        
+        if let approvalString = try? container.decode(String.self, forKey: .approvalType) {
+            approvalType = ApprovalType(rawValue: approvalString) ?? .manual
+        } else {
+            approvalType = .manual
+        }
+        
+        ageRestriction = try? container.decode(Int.self, forKey: .ageRestriction)
+        maxMaleRatio = (try? container.decode(Double.self, forKey: .maxMaleRatio)) ?? 1.0
+        legalDisclaimerAccepted = (try? container.decode(Bool.self, forKey: .legalDisclaimerAccepted)) ?? false
+        guestRequests = (try? container.decode([GuestRequest].self, forKey: .guestRequests)) ?? []
+        earnings = (try? container.decode(Double.self, forKey: .earnings)) ?? 0.0
+        bondfyrFee = (try? container.decode(Double.self, forKey: .bondfyrFee)) ?? 0.12
+        
         // Handle Timestamps
         if let startTimestamp = try? container.decode(Timestamp.self, forKey: .startTime) {
             startTime = startTimestamp.dateValue()
         } else {
             startTime = try container.decode(Date.self, forKey: .startTime)
-    }
-    
+        }
+        
         if let endTimestamp = try? container.decode(Timestamp.self, forKey: .endTime) {
             endTime = endTimestamp.dateValue()
         } else {
@@ -148,7 +338,7 @@ struct Afterparty: Identifiable, Codable {
         }
     }
     
-    // Add encode method for Encodable conformance
+    // MARK: - Encodable implementation
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         
@@ -168,5 +358,19 @@ struct Afterparty: Identifiable, Codable {
         try container.encode(activeUsers, forKey: .activeUsers)
         try container.encode(pendingRequests, forKey: .pendingRequests)
         try container.encode(Timestamp(date: createdAt), forKey: .createdAt)
+        
+        // New marketplace fields
+        try container.encode(title, forKey: .title)
+        try container.encode(ticketPrice, forKey: .ticketPrice)
+        try container.encode(coverPhotoURL, forKey: .coverPhotoURL)
+        try container.encode(maxGuestCount, forKey: .maxGuestCount)
+        try container.encode(visibility.rawValue, forKey: .visibility)
+        try container.encode(approvalType.rawValue, forKey: .approvalType)
+        try container.encode(ageRestriction, forKey: .ageRestriction)
+        try container.encode(maxMaleRatio, forKey: .maxMaleRatio)
+        try container.encode(legalDisclaimerAccepted, forKey: .legalDisclaimerAccepted)
+        try container.encode(guestRequests, forKey: .guestRequests)
+        try container.encode(earnings, forKey: .earnings)
+        try container.encode(bondfyrFee, forKey: .bondfyrFee)
     }
 } 

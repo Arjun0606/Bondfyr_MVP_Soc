@@ -7,7 +7,7 @@ import BondfyrPhotos
 
 struct PhotoFeedView: View {
     @StateObject private var photoManager = PhotoManager.shared
-    @State private var selectedScope: PhotoScope = .city
+    @State private var selectedScope: PhotoScope = .today
     @State private var showCamera = false
     @State private var selectedCity = "Pune"
     @State private var showingPhotoDetail = false
@@ -35,16 +35,17 @@ struct PhotoFeedView: View {
                 .padding(.top, 8)
                 
                 // Scope Selector
-                HStack(spacing: 24) {
+                HStack(spacing: 32) {
                     ForEach(PhotoScope.allCases, id: \.self) { scope in
                         Button(action: { selectedScope = scope }) {
                             Text(scope.rawValue)
-                                .font(.system(size: 16, weight: selectedScope == scope ? .semibold : .regular))
-                                .foregroundColor(selectedScope == scope ? .pink : .gray)
+                                .font(.system(size: 18))
+                                .foregroundColor(selectedScope == scope ? .pink : .gray.opacity(0.8))
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 12)
+                .padding(.horizontal)
                 
                 // Content
                 if photoManager.isLoading {

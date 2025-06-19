@@ -67,13 +67,8 @@ struct VenueListView: View {
         .navigationBarHidden(true)
         .task {
             if cityManager.selectedCity == nil {
-                cityManager.detectUserCity { city in
-                    if let city = city {
-                        DispatchQueue.main.async {
-                            cityManager.selectedCity = city
-                        }
-                    }
-                }
+                // Start location monitoring which will automatically detect and set the city
+                cityManager.startMonitoringLocation()
             }
             await fetchGoogleVenuesForSelectedCity()
         }

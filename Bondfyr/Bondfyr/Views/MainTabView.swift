@@ -21,13 +21,13 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $tabSelection.selectedTab) {
             NavigationView {
-                VenueListView()
+                AfterpartyTabView()  // Party discovery is now the main feed
             }
             .tabItem {
-                Image(systemName: "flame")
-                Text("Hot Venues")
+                Image(systemName: "dollarsign.circle.fill")
+                Text("Party Feed")
             }
-            .tag(Tab.discover)
+            .tag(Tab.partyFeed)
             
             NavigationView {
                 PhotoFeedView()
@@ -39,31 +39,31 @@ struct MainTabView: View {
             .tag(Tab.photos)
             
             NavigationView {
-                AfterpartyTabView()
+                CreateAfterpartyDirectView()  // Direct party creation view
             }
             .tabItem {
-                Image(systemName: "party.popper")
-                Text("Afterparty")
+                Image(systemName: "plus.circle.fill")
+                Text("Host Party")
             }
-            .tag(Tab.afterparty)
+            .tag(Tab.hostParty)
             
             NavigationView {
-                CityChatTabView()
+                PartyTalkChatView()  // Party-focused chat
             }
             .tabItem {
-                Image(systemName: "bubble.left.and.bubble.right")
-                Text("City Chat")
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                Text("Party Talk")
             }
-            .tag(Tab.citychat)
+            .tag(Tab.partyTalk)
 
             NavigationView {
-            ProfileView()
+                ProfileView()
             }
-                .tabItem {
-                    Image(systemName: "person.circle")
-                    Text("Profile")
-                }
-                .tag(Tab.profile)
+            .tabItem {
+                Image(systemName: "person.circle")
+                Text("Profile")
+            }
+            .tag(Tab.profile)
         }
         .accentColor(.pink)
     }

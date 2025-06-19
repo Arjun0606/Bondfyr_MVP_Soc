@@ -8,14 +8,14 @@
 import Foundation
 
 class TabSelection: ObservableObject {
-    @Published var selectedTab: Tab = .discover
+    @Published var selectedTab: Tab = .partyFeed
 }
 
 enum Tab: Int, Hashable {
-    case discover
-    case photos
-    case afterparty
-    case citychat
-    case profile
-    case tickets
+    case partyFeed      // was discover - now main party discovery
+    case photos         // unchanged - daily photos
+    case hostParty      // was afterparty - now party creation 
+    case partyTalk      // was citychat - now party discussion
+    case profile        // unchanged
+    case tickets        // unused
 }
