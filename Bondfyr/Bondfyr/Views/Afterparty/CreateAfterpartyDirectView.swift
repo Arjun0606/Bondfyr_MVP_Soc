@@ -8,6 +8,7 @@ struct CreateAfterpartyDirectView: View {
     @State private var showLocationDeniedAlert = false
     @State private var hasActiveParty = false
     @State private var showingActivePartyAlert = false
+    @State private var showingDashboard = false
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     
     var body: some View {
@@ -96,34 +97,57 @@ struct CreateAfterpartyDirectView: View {
                 
                 Spacer()
                 
-                // Create Party Button
-                Button(action: {
-                    if hasActiveParty {
-                        showingActivePartyAlert = true
-                    } else if locationManager.authorizationStatus == .denied {
-                        showLocationDeniedAlert = true
-                    } else {
-                        showingCreateSheet = true
+                // Action Buttons
+                VStack(spacing: 16) {
+                    // Create Party Button
+                    Button(action: {
+                        if hasActiveParty {
+                            showingActivePartyAlert = true
+                        } else if locationManager.authorizationStatus == .denied {
+                            showLocationDeniedAlert = true
+                        } else {
+                            showingCreateSheet = true
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Create New Party")
+                                .fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(
+                            hasActiveParty ? 
+                            AnyView(Color.gray) : 
+                            AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                        )
+                        .foregroundColor(.white)
+                        .cornerRadius(15)
+                        .opacity(hasActiveParty ? 0.7 : 1.0)
                     }
-                }) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Create Your Party")
-                            .fontWeight(.semibold)
+                    .disabled(hasActiveParty)
+                    
+                    // Host Dashboard Button
+                    Button(action: {
+                        showingDashboard = true
+                    }) {
+                        HStack {
+                            Image(systemName: "chart.bar.fill")
+                            Text("Host Dashboard")
+                                .fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemGray6).opacity(0.3))
+                        .foregroundColor(.white)
+                        .cornerRadius(15)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 15)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        )
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        hasActiveParty ? 
-                        AnyView(Color.gray) : 
-                        AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                    )
-                    .foregroundColor(.white)
-                    .cornerRadius(15)
-                    .opacity(hasActiveParty ? 0.7 : 1.0)
                 }
                 .padding(.horizontal)
-                .disabled(hasActiveParty)
                 
                 if hasActiveParty {
                     Text("You already have an active party")
@@ -141,6 +165,9 @@ struct CreateAfterpartyDirectView: View {
                 currentLocation: locationManager.location?.coordinate,
                 currentCity: locationManager.currentCity ?? ""
             )
+        }
+        .sheet(isPresented: $showingDashboard) {
+            HostDashboardView()
         }
         .alert("Active Afterparty Exists", isPresented: $showingActivePartyAlert) {
             Button("OK", role: .cancel) { }

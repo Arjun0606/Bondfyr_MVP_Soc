@@ -1387,9 +1387,10 @@ struct CreateAfterpartyView: View {
                     )
                     
                     // MARK: - Cover Photo
-                    CoverPhotoSection(
+                    CoverPhotoSectionWithBinding(
                         coverPhotoURL: $coverPhotoURL,
-                        showImagePicker: $showImagePicker
+                        showImagePicker: $showImagePicker,
+                        coverPhotoImage: $coverPhotoImage
                     )
                     
                     // Vibe Tags
@@ -1461,8 +1462,8 @@ struct CreateAfterpartyView: View {
                         if let image = coverPhotoImage {
                             // Convert UIImage to URL string for cover photo
                             // In a real app, you'd upload this to Firebase Storage
-                            // For now, we'll just use a placeholder
-                            coverPhotoURL = "placeholder_image_url"
+                            // For now, we'll just use a placeholder that indicates an image was selected
+                            coverPhotoURL = "local_image_selected"
                         }
                     }
             }
@@ -1938,19 +1939,51 @@ struct PartyDetailsSection: View {
     }
 }
 
-struct CoverPhotoSection: View {
+struct CoverPhotoSectionWithBinding: View {
     @Binding var coverPhotoURL: String
     @Binding var showImagePicker: Bool
+    @Binding var coverPhotoImage: UIImage?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Cover Photo")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
+            HStack {
+                Text("Cover Photo")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                if coverPhotoImage != nil || !coverPhotoURL.isEmpty {
+                    Button("Clear") {
+                        coverPhotoImage = nil
+                        coverPhotoURL = ""
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.pink)
+                }
+            }
             
             Button(action: { showImagePicker = true }) {
-                if coverPhotoURL.isEmpty {
+                if let image = coverPhotoImage {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 120)
+                        .clipped()
+                        .cornerRadius(12)
+                } else if !coverPhotoURL.isEmpty {
+                    AsyncImage(url: URL(string: coverPhotoURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color(.systemGray6)
+                    }
+                    .frame(height: 120)
+                    .clipped()
+                    .cornerRadius(12)
+                } else {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(.systemGray6))
                         .frame(height: 120)
@@ -1963,19 +1996,11 @@ struct CoverPhotoSection: View {
                                     .foregroundColor(.gray)
                             }
                         )
-                } else {
-                    AsyncImage(url: URL(string: coverPhotoURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color(.systemGray6)
-                    }
-                    .frame(height: 120)
-                    .clipped()
-                    .cornerRadius(12)
                 }
             }
+        }
+        .onChange(of: showImagePicker) { _ in
+            // This will be handled by the parent view's ImagePicker
         }
     }
 }
@@ -2319,6 +2344,9 @@ struct LocationDescriptionSection: View {
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
                     .foregroundColor(.white)
+                    .keyboardType(.URL)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
             }
             
             // Description
