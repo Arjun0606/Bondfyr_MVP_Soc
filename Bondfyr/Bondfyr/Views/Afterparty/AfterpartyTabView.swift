@@ -142,7 +142,13 @@ struct AfterpartyTabView: View {
     // MARK: - New Marketplace Features
     @State private var showingFilters = false
     @State private var marketplaceAfterparties: [Afterparty] = []
-    @State private var currentFilters: MarketplaceFilters?
+    @State private var currentFilters: MarketplaceFilters = MarketplaceFilters(
+        priceRange: 5...200,
+        vibes: [],
+        timeFilter: .all,
+        showOnlyAvailable: true,
+        maxGuestCount: 200
+    )
     @State private var isLoadingMarketplace = false
     
     private var filteredAfterparties: [Afterparty] {
@@ -162,6 +168,15 @@ struct AfterpartyTabView: View {
             let distance = afterpartyLocation.distance(from: userCLLocation) / 1609.34 // Convert meters to miles
             return distance <= selectedRadius
         }
+    }
+    
+    // Check if any filters are active (different from defaults)
+    private var hasActiveFilters: Bool {
+        return currentFilters.priceRange != 5...200 ||
+               !currentFilters.vibes.isEmpty ||
+               currentFilters.timeFilter != .all ||
+               currentFilters.showOnlyAvailable != true ||
+               currentFilters.maxGuestCount != 200
     }
     
     var body: some View {
@@ -194,15 +209,20 @@ struct AfterpartyTabView: View {
                         
                         Spacer()
                         
-                        // Filter button
+                        // Filter button with active indicator
                         Button(action: { showingFilters = true }) {
                             HStack {
                                 Image(systemName: "slider.horizontal.3")
                                 Text("Filter")
+                                if hasActiveFilters {
+                                    Circle()
+                                        .fill(Color.pink)
+                                        .frame(width: 8, height: 8)
+                                }
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color.purple)
+                            .background(hasActiveFilters ? Color.pink : Color.purple)
                             .foregroundColor(.white)
                             .cornerRadius(20)
                         }
@@ -356,7 +376,10 @@ struct AfterpartyTabView: View {
             Text("Please enable location services in Settings to use this feature.")
         }
         .sheet(isPresented: $showingFilters) {
-            MarketplaceFiltersView(isPresented: $showingFilters) { filters in
+            MarketplaceFiltersView(
+                isPresented: $showingFilters,
+                currentFilters: currentFilters
+            ) { filters in
                 currentFilters = filters
                 Task {
                     await loadMarketplaceAfterparties(with: filters)
@@ -373,23 +396,56 @@ struct AfterpartyTabView: View {
         isLoadingMarketplace = true
         defer { isLoadingMarketplace = false }
         
+        // Use provided filters or current filters
+        let activeFilters = filters ?? currentFilters
+        
+        // Always show sample parties for demo, regardless of Firebase errors
+        let sampleParties = createSampleParties()
+        
+        var afterparties: [Afterparty] = []
+        
+        // Try to get real parties, but don't fail if Firebase has issues
         do {
-            let afterparties = try await afterpartyManager.getMarketplaceAfterparties(
-                priceRange: filters?.priceRange,
-                vibes: filters?.vibes,
-                timeFilter: filters?.timeFilter ?? .all
+            afterparties = try await afterpartyManager.getMarketplaceAfterparties(
+                priceRange: activeFilters.priceRange,
+                vibes: activeFilters.vibes,
+                timeFilter: activeFilters.timeFilter
             )
+        } catch {
+            print("Firebase error (showing sample data anyway): \(error)")
+            // Continue with just sample parties
+        }
+        
+        // Combine real parties with sample data for demo
+        let allParties = afterparties + sampleParties
             
             // Apply additional client-side filters
-            var filteredResults = afterparties
+            var filteredResults = allParties
             
-            if let filters = filters {
-                if filters.showOnlyAvailable {
-                    filteredResults = filteredResults.filter { !$0.isSoldOut }
-                }
-                
-                filteredResults = filteredResults.filter { $0.maxGuestCount <= filters.maxGuestCount }
+            // Apply price range filter
+            filteredResults = filteredResults.filter { afterparty in
+                afterparty.ticketPrice >= activeFilters.priceRange.lowerBound &&
+                afterparty.ticketPrice <= activeFilters.priceRange.upperBound
             }
+            
+            // Apply vibe filters
+            if !activeFilters.vibes.isEmpty {
+                filteredResults = filteredResults.filter { afterparty in
+                    let partyVibes = afterparty.vibeTag.components(separatedBy: ", ")
+                    return activeFilters.vibes.contains { selectedVibe in
+                        partyVibes.contains { partyVibe in
+                            partyVibe.localizedCaseInsensitiveContains(selectedVibe) ||
+                            selectedVibe.localizedCaseInsensitiveContains(partyVibe)
+                        }
+                    }
+                }
+            }
+            
+            if activeFilters.showOnlyAvailable {
+                filteredResults = filteredResults.filter { !$0.isSoldOut }
+            }
+            
+            filteredResults = filteredResults.filter { $0.maxGuestCount <= activeFilters.maxGuestCount }
             
             // Apply search filter
             if !searchText.isEmpty {
@@ -404,9 +460,183 @@ struct AfterpartyTabView: View {
             await MainActor.run {
                 marketplaceAfterparties = filteredResults
             }
-        } catch {
-            print("Error loading marketplace afterparties: \(error)")
+        
+        await MainActor.run {
+            marketplaceAfterparties = filteredResults
+            print("🎉 Loaded \(filteredResults.count) parties (including \(sampleParties.count) sample parties)")
         }
+    }
+    
+    // MARK: - Sample Data for Testing
+    private func createSampleParties() -> [Afterparty] {
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // Use current city and nearby coordinates
+        let currentCity = locationManager.currentCity ?? "Pune"
+        let baseCoordinate = locationManager.location?.coordinate ?? CLLocationCoordinate2D(latitude: 18.4955, longitude: 73.9040)
+        
+        return [
+            // 1. Rooftop Party - Premium pricing
+            Afterparty(
+                id: "sample-1",
+                userId: "host-1",
+                hostHandle: "mike_parties",
+                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude + 0.001, longitude: baseCoordinate.longitude + 0.001),
+                radius: 1000,
+                startTime: calendar.date(byAdding: .hour, value: 2, to: now) ?? now,
+                endTime: calendar.date(byAdding: .hour, value: 6, to: now) ?? now,
+                city: currentCity,
+                locationName: "Luxury Rooftop Loft",
+                description: "Epic rooftop party with DJ, open bar, and amazing city views! Dress code enforced.",
+                address: "123 MG Road, \(currentCity)",
+                googleMapsLink: "https://maps.google.com/?q=123+MG+Road+\(currentCity)",
+                vibeTag: "Rooftop, Dress Code, Dancing",
+                activeUsers: ["user-1", "user-2", "user-3", "user-4", "user-5", "user-6", "user-7", "user-8", "user-9", "user-10", "user-11", "user-12", "user-13", "user-14", "user-15"],
+                pendingRequests: ["guest-1"],
+                createdAt: calendar.date(byAdding: .hour, value: -1, to: now) ?? now,
+                title: "🌆 Skyline Rooftop Bash",
+                ticketPrice: 45.0,
+                coverPhotoURL: nil,
+                maxGuestCount: 80,
+                visibility: .publicFeed,
+                approvalType: .manual,
+                ageRestriction: 21,
+                maxMaleRatio: 0.6,
+                legalDisclaimerAccepted: true,
+                guestRequests: [
+                    GuestRequest(userId: "guest-1", userName: "Sarah K", userHandle: "sarah_k", requestedAt: now, paymentStatus: .pending),
+                    GuestRequest(userId: "guest-2", userName: "Alex M", userHandle: "alex_m", requestedAt: calendar.date(byAdding: .minute, value: -15, to: now) ?? now, paymentStatus: .paid)
+                ]
+            ),
+            
+            // 2. House Party - Mid-range pricing
+            Afterparty(
+                id: "sample-2", 
+                userId: "host-2",
+                hostHandle: "party_queen",
+                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude + 0.002, longitude: baseCoordinate.longitude - 0.001),
+                radius: 1000,
+                startTime: calendar.date(byAdding: .hour, value: 4, to: now) ?? now,
+                endTime: calendar.date(byAdding: .hour, value: 8, to: now) ?? now,
+                city: currentCity,
+                locationName: "Cozy Mission House",
+                description: "Chill house party with beer pong, good vibes, and friendly crowd. BYOB welcome!",
+                address: "456 FC Road, \(currentCity)",
+                googleMapsLink: "https://maps.google.com/?q=456+FC+Road+\(currentCity)",
+                vibeTag: "House Party, BYOB, Games",
+                activeUsers: ["user-a", "user-b", "user-c", "user-d", "user-e", "user-f", "user-g", "user-h"],
+                pendingRequests: [],
+                createdAt: calendar.date(byAdding: .minute, value: -30, to: now) ?? now,
+                title: "🏠 Mission House Vibes",
+                ticketPrice: 15.0,
+                coverPhotoURL: nil,
+                maxGuestCount: 35,
+                visibility: .publicFeed,
+                approvalType: .automatic,
+                ageRestriction: 18,
+                maxMaleRatio: 0.7,
+                legalDisclaimerAccepted: true,
+                guestRequests: [
+                    GuestRequest(userId: "guest-3", userName: "Jordan P", userHandle: "jordan_p", requestedAt: calendar.date(byAdding: .minute, value: -10, to: now) ?? now, paymentStatus: .paid)
+                ]
+            ),
+            
+            // 3. Pool Party - Higher capacity
+            Afterparty(
+                id: "sample-3",
+                userId: "host-3", 
+                hostHandle: "poolside_steve",
+                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude - 0.001, longitude: baseCoordinate.longitude + 0.002),
+                radius: 1000,
+                startTime: calendar.date(byAdding: .day, value: 1, to: now) ?? now,
+                endTime: calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .hour, value: 6, to: now) ?? now) ?? now,
+                city: currentCity,
+                locationName: "Private Pool Villa",
+                description: "Day party by the pool! Bring swimwear, sunscreen, and good energy. Pool floaties provided!",
+                address: "789 Koregaon Park, \(currentCity)", 
+                googleMapsLink: "https://maps.google.com/?q=789+Koregaon+Park+\(currentCity)",
+                vibeTag: "Pool, Backyard, Chill",
+                activeUsers: ["user-x", "user-y", "user-z", "user-1a", "user-2a", "user-3a"],
+                pendingRequests: ["guest-5"],
+                createdAt: calendar.date(byAdding: .minute, value: -45, to: now) ?? now,
+                title: "🏊‍♀️ Poolside Paradise",
+                ticketPrice: 25.0,
+                coverPhotoURL: nil,
+                maxGuestCount: 60,
+                visibility: .publicFeed,
+                approvalType: .manual,
+                ageRestriction: nil,
+                maxMaleRatio: 0.5,
+                legalDisclaimerAccepted: true,
+                guestRequests: [
+                    GuestRequest(userId: "guest-4", userName: "Emma R", userHandle: "emma_r", requestedAt: calendar.date(byAdding: .minute, value: -20, to: now) ?? now, paymentStatus: .paid),
+                    GuestRequest(userId: "guest-5", userName: "Tyler B", userHandle: "tyler_b", requestedAt: calendar.date(byAdding: .minute, value: -5, to: now) ?? now, paymentStatus: .pending)
+                ]
+            ),
+            
+            // 4. Exclusive Party - Premium pricing
+            Afterparty(
+                id: "sample-4",
+                userId: "host-4",
+                hostHandle: "vip_nights", 
+                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude + 0.003, longitude: baseCoordinate.longitude + 0.003),
+                radius: 1000,
+                startTime: calendar.date(byAdding: .hour, value: 8, to: now) ?? now,
+                endTime: calendar.date(byAdding: .hour, value: 12, to: now) ?? now,
+                city: currentCity,
+                locationName: "Penthouse Suite",
+                description: "Ultra-exclusive penthouse party. Bottle service, professional DJ, strict guest list. Limited spots!",
+                address: "101 Bund Garden, \(currentCity)",
+                googleMapsLink: "https://maps.google.com/?q=101+Bund+Garden+\(currentCity)",
+                vibeTag: "Exclusive, Lounge, Dress Code",
+                activeUsers: ["vip-1", "vip-2", "vip-3", "vip-4", "vip-5", "vip-6", "vip-7", "vip-8", "vip-9", "vip-10"],
+                pendingRequests: [],
+                createdAt: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
+                title: "💎 VIP Penthouse Experience",
+                ticketPrice: 85.0,
+                coverPhotoURL: nil,
+                maxGuestCount: 25,
+                visibility: .publicFeed,
+                approvalType: .manual,
+                ageRestriction: 21,
+                maxMaleRatio: 0.4,
+                legalDisclaimerAccepted: true,
+                guestRequests: [
+                    GuestRequest(userId: "guest-6", userName: "Sophia L", userHandle: "sophia_l", requestedAt: calendar.date(byAdding: .minute, value: -25, to: now) ?? now, paymentStatus: .paid)
+                ]
+            ),
+            
+            // 5. Frat Party - Budget-friendly
+            Afterparty(
+                id: "sample-5",
+                userId: "host-5",
+                hostHandle: "kappa_kyle",
+                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude - 0.002, longitude: baseCoordinate.longitude - 0.002),
+                radius: 1000,
+                startTime: calendar.date(byAdding: .hour, value: 6, to: now) ?? now,
+                endTime: calendar.date(byAdding: .hour, value: 10, to: now) ?? now,
+                city: currentCity, 
+                locationName: "College Hostel",
+                description: "Classic college party! Beer pong tournaments, loud music, and good times. Come ready to party!",
+                address: "202 University Road, \(currentCity)",
+                googleMapsLink: "https://maps.google.com/?q=202+University+Road+\(currentCity)",
+                vibeTag: "Frat, Games, Dancing",
+                activeUsers: Array(1...25).map { "frat-\($0)" },
+                pendingRequests: [],
+                createdAt: calendar.date(byAdding: .minute, value: -60, to: now) ?? now,
+                title: "🍺 Sigma Chi Bash",
+                ticketPrice: 8.0,
+                coverPhotoURL: nil,
+                maxGuestCount: 120,
+                visibility: .publicFeed,
+                approvalType: .automatic,
+                ageRestriction: 18,
+                maxMaleRatio: 0.8,
+                legalDisclaimerAccepted: true,
+                guestRequests: []
+            )
+        ]
     }
 }
 

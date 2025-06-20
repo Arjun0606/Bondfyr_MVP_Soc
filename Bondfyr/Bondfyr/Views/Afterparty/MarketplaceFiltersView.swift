@@ -3,13 +3,27 @@ import SwiftUI
 // MARK: - Marketplace Filters View
 struct MarketplaceFiltersView: View {
     @Binding var isPresented: Bool
+    let currentFilters: MarketplaceFilters
     
-    // Filter state
-    @State private var selectedPriceRange: ClosedRange<Double> = 5...100
-    @State private var selectedVibes: Set<String> = []
-    @State private var selectedTimeFilter: AfterpartyManager.TimeFilter = .all
-    @State private var showOnlyAvailable = true
-    @State private var maxGuestCount: Int = 200
+    // Filter state - Initialize with current filters
+    @State private var selectedPriceRange: ClosedRange<Double>
+    @State private var selectedVibes: Set<String>
+    @State private var selectedTimeFilter: AfterpartyManager.TimeFilter
+    @State private var showOnlyAvailable: Bool
+    @State private var maxGuestCount: Int
+    
+    init(isPresented: Binding<Bool>, currentFilters: MarketplaceFilters, onApplyFilters: @escaping (MarketplaceFilters) -> Void) {
+        self._isPresented = isPresented
+        self.currentFilters = currentFilters
+        self.onApplyFilters = onApplyFilters
+        
+        // Initialize state with current filter values
+        self._selectedPriceRange = State(initialValue: currentFilters.priceRange)
+        self._selectedVibes = State(initialValue: Set(currentFilters.vibes))
+        self._selectedTimeFilter = State(initialValue: currentFilters.timeFilter)
+        self._showOnlyAvailable = State(initialValue: currentFilters.showOnlyAvailable)
+        self._maxGuestCount = State(initialValue: currentFilters.maxGuestCount)
+    }
     
     let vibeOptions = Afterparty.vibeOptions
     
@@ -167,11 +181,22 @@ struct MarketplaceFiltersView: View {
                     // MARK: - Clear & Apply Buttons
                     VStack(spacing: 12) {
                         Button("Clear All Filters") {
-                            selectedPriceRange = 5...100
+                            selectedPriceRange = 5...200
                             selectedVibes.removeAll()
                             selectedTimeFilter = .all
                             showOnlyAvailable = true
                             maxGuestCount = 200
+                            
+                            // Immediately apply cleared filters
+                            let clearedFilters = MarketplaceFilters(
+                                priceRange: 5...200,
+                                vibes: [],
+                                timeFilter: .all,
+                                showOnlyAvailable: true,
+                                maxGuestCount: 200
+                            )
+                            onApplyFilters(clearedFilters)
+                            isPresented = false
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
