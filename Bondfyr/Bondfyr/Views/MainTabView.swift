@@ -29,15 +29,7 @@ struct MainTabView: View {
             }
             .tag(Tab.partyFeed)
             
-            NavigationView {
-                PhotoFeedView()
-            }
-            .tabItem {
-                Image(systemName: "camera")
-                Text("Daily Photos")
-            }
-            .tag(Tab.photos)
-            
+
             NavigationView {
                 CreateAfterpartyDirectView()  // Direct party creation view
             }
@@ -48,13 +40,13 @@ struct MainTabView: View {
             .tag(Tab.hostParty)
             
             NavigationView {
-                PartyTalkChatView()  // Party-focused chat
+                MyTicketsView()  // User's purchased tickets
             }
             .tabItem {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                Text("Party Talk")
+                Image(systemName: "ticket.fill")
+                Text("My Tickets")
             }
-            .tag(Tab.partyTalk)
+            .tag(Tab.tickets)
 
             NavigationView {
                 ProfileView()
