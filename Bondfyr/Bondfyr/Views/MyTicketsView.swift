@@ -16,7 +16,7 @@ struct MyTicketsView: View {
     @State private var isLoading = false
     @State private var selectedParty: Afterparty? = nil
     @State private var showingTicketDetail = false
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
