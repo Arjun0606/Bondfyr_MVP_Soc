@@ -132,15 +132,37 @@ struct ProfileView: View {
     private var profileHeader: some View {
         VStack(spacing: 16) {
             // Profile Picture
-            Circle()
-                .fill(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing))
+            if let avatarURL = authViewModel.currentUser?.avatarURL,
+               let url = URL(string: avatarURL) {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Circle()
+                        .fill(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .overlay(
+                            Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        )
+                }
                 .frame(width: 100, height: 100)
-                .overlay(
-                    Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "U")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+            } else {
+                Circle()
+                    .fill(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 100, height: 100)
+                    .overlay(
+                        Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "U")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    )
+                    .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+            }
             
             VStack(spacing: 4) {
                                     Text(authViewModel.currentUser?.name ?? "User")
