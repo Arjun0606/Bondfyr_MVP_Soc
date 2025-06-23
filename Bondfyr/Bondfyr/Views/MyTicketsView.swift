@@ -259,120 +259,123 @@ struct UpcomingPartyCard: View {
     let party: Afterparty
     let onTap: () -> Void
     
-    private var timeUntilParty: String {
-        let now = Date()
-        let components = Calendar.current.dateComponents([.day, .hour, .minute], from: now, to: party.startTime)
-        
-        if let days = components.day, days > 0 {
-            return "in \(days) day\(days == 1 ? "" : "s")"
-        } else if let hours = components.hour, hours > 0 {
-            return "in \(hours) hour\(hours == 1 ? "" : "s")"
-        } else if let minutes = components.minute, minutes > 0 {
-            return "in \(minutes) min"
-        } else {
-            return "starting now!"
-        }
-    }
-    
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Header with time and price
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(party.title)
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text("at \(party.locationName)")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("$\(Int(party.ticketPrice))")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.green)
-                        
-                        Text("PAID")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.green)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Color.green.opacity(0.2))
-                            .cornerRadius(8)
-                    }
-                }
-                
-                // Time info
-                HStack {
-                    Image(systemName: "clock.fill")
-                        .foregroundColor(.pink)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(formatDate(party.startTime))
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                        
-                        Text("Starts \(timeUntilParty)")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                    
-                    Spacer()
-                    
-                    // Paid status indicator
-                    VStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.green)
-                        Text("Confirmed")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                    }
-                }
-                
-                // Location and host
-                HStack {
-                    Image(systemName: "location.fill")
-                        .foregroundColor(.blue)
-                    
-                    Text(party.address)
-                        .font(.caption)
-                        .foregroundColor(.gray)
+            VStack(alignment: .leading, spacing: 0) {
+                // Ticket Header
+                VStack {
+                    Text(party.title)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
                         .lineLimit(1)
                     
+                    Text("Tap to View Details")
+                        .font(.caption)
+                        .foregroundColor(.pink)
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.white.opacity(0.1))
+                
+                // Ticket Body
+                HStack {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TicketInfoRow(icon: "calendar", text: formatDate(party.startTime))
+                        TicketInfoRow(icon: "mappin.circle.fill", text: party.locationName)
+                    }
+                    
                     Spacer()
                     
-                    Text("@\(party.hostHandle)")
-                        .font(.caption)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(.systemGray6).opacity(0.3))
-                        .cornerRadius(8)
+                    CountdownView(startTime: party.startTime)
                 }
+                .padding()
             }
-            .padding()
-            .background(Color(.systemGray6).opacity(0.1))
+            .background(Color(.systemGray6).opacity(0.2))
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.pink.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(
+                        LinearGradient(
+                            gradient: Gradient(colors: [.pink, .purple]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
             )
         }
     }
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM d • h:mm a"
+        formatter.dateFormat = "EEE, MMM d 'at' h:mm a"
         return formatter.string(from: date)
+    }
+}
+
+struct TicketInfoRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.gray)
+                .font(.subheadline)
+            Text(text)
+                .foregroundColor(.white)
+                .font(.subheadline)
+        }
+    }
+}
+
+struct CountdownView: View {
+    let startTime: Date
+    @State private var timeRemaining: String = ""
+    
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        VStack {
+            Text(timeRemaining)
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            Text("Starts In")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .onReceive(timer) { _ in
+            updateTimeRemaining()
+        }
+        .onAppear {
+            updateTimeRemaining()
+        }
+    }
+    
+    private func updateTimeRemaining() {
+        let now = Date()
+        let calendar = Calendar.current
+        
+        if startTime < now {
+            timeRemaining = "Now"
+            return
+        }
+        
+        let components = calendar.dateComponents([.day, .hour, .minute, .second], from: now, to: startTime)
+        
+        if let days = components.day, days > 0 {
+            timeRemaining = "\(days)d"
+        } else if let hours = components.hour, hours > 0 {
+            timeRemaining = "\(hours)h"
+        } else if let minutes = components.minute, minutes > 0 {
+            timeRemaining = "\(minutes)m"
+        } else if let seconds = components.second, seconds > 0 {
+            timeRemaining = "\(seconds)s"
+        } else {
+            timeRemaining = "Now"
+        }
     }
 }
 

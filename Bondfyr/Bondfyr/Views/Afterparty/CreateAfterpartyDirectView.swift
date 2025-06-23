@@ -18,82 +18,33 @@ struct CreateAfterpartyDirectView: View {
             VStack(spacing: 32) {
                 // Header
                 VStack(spacing: 16) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 80))
-                        .foregroundColor(.pink)
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.yellow)
                     
-                    Text("Host a Paid Party")
-                        .font(.title)
+                    Text("Become a Top Host")
+                        .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                     
-                    Text("Turn your place into a money-making party spot")
-                        .font(.subheadline)
+                    Text("Host exclusive parties. We handle the payments, guests, and ticketing.")
+                        .font(.headline)
+                        .fontWeight(.regular)
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.top, 60)
+                .padding(.top, 40)
                 
-                // Revenue Highlight
+                // Host Benefits Section
                 VStack(spacing: 12) {
-                    HStack(spacing: 20) {
-                        VStack {
-                            Text("88%")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                            Text("You keep")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        VStack {
-                            Text("12%")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.pink)
-                            Text("Bondfyr fee")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                        
-                        VStack {
-                            Text("$25")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            Text("Avg ticket")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .padding()
-                    .background(Color(.systemGray6).opacity(0.1))
-                    .cornerRadius(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-                }
-                
-                // Example earnings
-                VStack(spacing: 8) {
-                    Text("💰 Potential Earnings")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    VStack(spacing: 4) {
-                        Text("20 guests × $25 = $500 gross")
-                            .foregroundColor(.gray)
-                        Text("Your cut: $440")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.green)
-                    }
+                    BenefitRow(icon: "checkmark.shield.fill", text: "Secure Payments Handled")
+                    BenefitRow(icon: "person.2.fill", text: "Automated Guest List")
+                    BenefitRow(icon: "ticket.fill", text: "Hassle-Free Ticketing")
+                    BenefitRow(icon: "chart.pie.fill", text: "You Keep 88% of Earnings", isPrimary: true)
                 }
                 .padding()
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
+                .background(Color(.systemGray6).opacity(0.1))
+                .cornerRadius(16)
                 
                 Spacer()
                 
@@ -188,6 +139,24 @@ struct CreateAfterpartyDirectView: View {
             if let isActive = try? await afterpartyManager.hasActiveAfterparty() {
                 hasActiveParty = isActive
             }
+        }
+    }
+}
+
+struct BenefitRow: View {
+    let icon: String
+    let text: String
+    var isPrimary: Bool = false
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(isPrimary ? .green : .pink)
+                .font(.headline)
+            Text(text)
+                .foregroundColor(isPrimary ? .green : .white)
+                .fontWeight(isPrimary ? .bold : .regular)
+            Spacer()
         }
     }
 } 

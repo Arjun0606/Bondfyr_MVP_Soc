@@ -644,13 +644,13 @@ struct AfterpartyTabView: View {
 struct ActionButtonsView: View {
     let afterparty: Afterparty
     let isHost: Bool
-    @Binding var isJoining: Bool
+    @State private var isJoining = false
     @Binding var showingGuestList: Bool
     @Binding var showingEditSheet: Bool
     @Binding var showingDeleteConfirmation: Bool
     @Binding var showingShareSheet: Bool
-    let afterpartyManager: AfterpartyManager
-    let authViewModel: AuthViewModel
+    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @EnvironmentObject private var authViewModel: AuthViewModel
     
     var body: some View {
         HStack(spacing: 12) {
@@ -779,7 +779,6 @@ struct AfterpartyCard: View {
     @State private var showingEditSheet = false
     @State private var showingShareSheet = false
     @State private var showingDeleteConfirmation = false
-    @State private var isJoining = false
     
     private var isHost: Bool {
         afterparty.userId == authViewModel.currentUser?.uid
@@ -825,8 +824,18 @@ struct AfterpartyCard: View {
                     .cornerRadius(12)
                 } else {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(LinearGradient(gradient: Gradient(colors: [.purple.opacity(0.6), .pink.opacity(0.4)]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(height: 120)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.purple.opacity(0.8),
+                                    Color.pink.opacity(0.6),
+                                    Color.orange.opacity(0.5)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(height: 150) // Increased height for more impact
                         .overlay(
                             VStack {
                                 Image(systemName: "party.popper.fill")
@@ -866,17 +875,22 @@ struct AfterpartyCard: View {
                 .padding(.top, 8)
             }
             
-            // Party title and host
+            // Party title and location
             VStack(alignment: .leading, spacing: 4) {
                 Text(afterparty.title)
-                    .font(.headline)
+                    .font(.title3) // Larger font for more emphasis
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
-                Text("at \(afterparty.locationName)")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(1)
+                HStack {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text(afterparty.locationName)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                }
             }
             
             // Vibe tags
@@ -895,88 +909,36 @@ struct AfterpartyCard: View {
                 .padding(.horizontal, 1)
             }
             
+            Divider().background(Color.white.opacity(0.2))
+            
             // Party stats and info
             HStack {
                 // Guest capacity
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount)")
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount) Guests", systemImage: "person.2.fill")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
-                    Text("confirmed")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    
+                    if afterparty.isSoldOut {
+                        Text("SOLD OUT")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                    }
                 }
                 
                 Spacer()
                 
-                // Time until start
-                VStack(alignment: .center, spacing: 2) {
-                    Text(afterparty.timeUntilStart)
+                // Host info
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("@\(afterparty.hostHandle)")
                         .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.orange)
-                    Text("starts")
+                        .fontWeight(.bold)
+                        .foregroundColor(.pink)
+                    Text("Host")
                         .font(.caption)
                         .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                // Host earnings (if host)
-                if isHost {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("$\(Int(afterparty.hostEarnings))")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.green)
-                        Text("earned")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                } else {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("@\(afterparty.hostHandle)")
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                        Text("host")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            
-            // Sold out / age restriction indicators
-            HStack {
-                if afterparty.isSoldOut {
-                    Text("SOLD OUT")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.red.opacity(0.2))
-                        .cornerRadius(8)
-                }
-                
-                if let ageRestriction = afterparty.ageRestriction {
-                    Text("\(ageRestriction)+")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.orange.opacity(0.2))
-                        .cornerRadius(8)
-                }
-                
-                Spacer()
-                
-                if !afterparty.googleMapsLink.isEmpty {
-                    Link(destination: URL(string: afterparty.googleMapsLink)!) {
-                        Image(systemName: "map.fill")
-                            .foregroundColor(.blue)
-                    }
                 }
             }
             
@@ -984,13 +946,10 @@ struct AfterpartyCard: View {
             ActionButtonsView(
                 afterparty: afterparty,
                 isHost: isHost,
-                isJoining: $isJoining,
                 showingGuestList: $showingGuestList,
                 showingEditSheet: $showingEditSheet,
                 showingDeleteConfirmation: $showingDeleteConfirmation,
-                showingShareSheet: $showingShareSheet,
-                afterpartyManager: afterpartyManager,
-                authViewModel: authViewModel
+                showingShareSheet: $showingShareSheet
             )
         }
         .padding(16)
