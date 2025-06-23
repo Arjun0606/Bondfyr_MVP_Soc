@@ -536,11 +536,7 @@ struct TicketPartyDetailsSection: View {
                     value: "\(party.locationName)\n\(party.address)"
                 )
                 
-                TicketDetailRow(
-                    icon: "person.fill",
-                    title: "Host",
-                    value: "@\(party.hostHandle)"
-                )
+                TicketHostRow(party: party)
                 
                 TicketDetailRow(
                     icon: "dollarsign.circle.fill",
@@ -635,6 +631,59 @@ struct ActionButtonsSection: View {
             .background(Color.pink)
             .foregroundColor(.white)
             .cornerRadius(12)
+        }
+    }
+}
+
+// MARK: - Ticket Host Row (with verification)
+struct TicketHostRow: View {
+    let party: Afterparty
+    @State private var verificationStatus: UserVerificationStatus?
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "person.fill")
+                .font(.title3)
+                .foregroundColor(.pink)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Host")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.gray)
+                
+                HStack {
+                    Text("@\(party.hostHandle)")
+                        .font(.body)
+                        .foregroundColor(.white)
+                    
+                    if let status = verificationStatus, status.isVerifiedHost {
+                        HStack(spacing: 2) {
+                            Text("👑")
+                                .font(.caption)
+                            Text("Verified Host")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.yellow)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.yellow.opacity(0.2))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .background(Color(.systemGray6).opacity(0.05))
+        .cornerRadius(12)
+        .onAppear {
+            BadgeService.shared.getBadgeForUser(userId: party.userId) { status in
+                self.verificationStatus = status
+            }
         }
     }
 }

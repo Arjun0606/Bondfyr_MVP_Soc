@@ -145,7 +145,7 @@ struct AfterpartyTabView: View {
     @State private var currentFilters: MarketplaceFilters = MarketplaceFilters(
         priceRange: 5...200,
         vibes: [],
-        timeFilter: .all,
+        timeFilter: AfterpartyManager.TimeFilter.all,
         showOnlyAvailable: true,
         maxGuestCount: 200
     )
@@ -174,7 +174,7 @@ struct AfterpartyTabView: View {
     private var hasActiveFilters: Bool {
         return currentFilters.priceRange != 5...200 ||
                !currentFilters.vibes.isEmpty ||
-               currentFilters.timeFilter != .all ||
+               currentFilters.timeFilter != AfterpartyManager.TimeFilter.all ||
                currentFilters.showOnlyAvailable != true ||
                currentFilters.maxGuestCount != 200
     }
@@ -930,12 +930,15 @@ struct AfterpartyCard: View {
                 
                 Spacer()
                 
-                // Host info
+                // Host info with verification
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("@\(afterparty.hostHandle)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.pink)
+                    HStack {
+                        Text("@\(afterparty.hostHandle)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.pink)
+                        HostVerificationBadge(hostUserId: afterparty.userId)
+                    }
                     Text("Host")
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -991,6 +994,50 @@ struct AfterpartyCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Host Verification Badge
+struct HostVerificationBadge: View {
+    let hostUserId: String
+    @State private var verificationStatus: UserVerificationStatus?
+    
+    var body: some View {
+        Group {
+            if let status = verificationStatus {
+                if status.isVerifiedHost {
+                    HStack(spacing: 2) {
+                        Text("👑")
+                            .font(.caption)
+                        Text("Verified")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.yellow)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.yellow.opacity(0.2))
+                    .cornerRadius(8)
+                } else if status.hostBadgeProgress > 0 {
+                    Text("\(status.hostBadgeProgress)/4")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(6)
+                }
+            }
+        }
+        .onAppear {
+            loadVerificationStatus()
+        }
+    }
+    
+    private func loadVerificationStatus() {
+        BadgeService.shared.getBadgeForUser(userId: hostUserId) { status in
+            self.verificationStatus = status
+        }
     }
 }
 
