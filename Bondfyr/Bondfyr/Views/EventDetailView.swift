@@ -67,7 +67,7 @@ struct EventDetailView: View {
     }
 
     private var isSaved: Bool {
-        savedEventsManager.savedEvents.contains(where: { ($0.firestoreId ?? $0.id.uuidString) == (event.firestoreId ?? event.id.uuidString) })
+        savedEventsManager.savedEvents.contains(where: { $0.id.uuidString == event.id.uuidString })
     }
 
     var body: some View {
@@ -425,10 +425,9 @@ struct EventDetailView: View {
     
     // Check if event chat is available based on check-in status
     private var isEventChatAvailable: Bool {
-        if let firestoreId = event.firestoreId {
-            return CheckInManager.shared.hasCheckedInToEvent(eventId: firestoreId)
-        }
-        return CheckInManager.shared.hasCheckedInToEvent(eventId: event.id.uuidString)
+        let eventId = event.id.uuidString
+        return CheckInManager.shared.hasCheckedInToEvent(eventId: eventId)
+
     }
 
     // MARK: - Calendar Integration
@@ -525,56 +524,28 @@ struct EventDetailView: View {
 
     // Add this method to trigger photo contest events with Firestore IDs
     private func startPhotoContest() {
-        guard let firestoreId = event.firestoreId else {
-            print("Cannot start contest: No Firestore ID")
-            return
-        }
-        
-        NotificationManager.shared.triggerPhotoContestForEvent(eventId: firestoreId)
+        let eventId = event.id.uuidString
+        NotificationManager.shared.triggerPhotoContestForEvent(eventId: eventId)
     }
 
     // MARK: - Subviews
     private var eventImageSection: some View {
         VStack {
-            Image(event.eventPosterImage)
+            Image(event.coverPhoto)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .cornerRadius(10)
                 .onTapGesture {
-                    zoomedImage = event.eventPosterImage
+                    zoomedImage = event.coverPhoto
                     zoomScale = 1.0
                 }
             
-            if let gallery = event.galleryImages, !gallery.isEmpty {
-                gallerySection(gallery: gallery)
-            }
+            // Gallery section removed as Event model doesn't have galleryImages property
         }
     }
     
-    func gallerySection(gallery: [String]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(gallery, id: \.self) { imageName in
-                    galleryImage(imageName: imageName)
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-    
-    func galleryImage(imageName: String) -> some View {
-        Image(imageName)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: 120, height: 120)
-            .clipped()
-            .cornerRadius(8)
-            .onTapGesture {
-                zoomedImage = imageName
-                zoomScale = 1.0
-            }
-    }
+    // Gallery functions removed as Event model doesn't have galleryImages property
     
     var eventInfoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -583,7 +554,7 @@ struct EventDetailView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
-            Text("\(event.location) • \(event.date)")
+            Text("\(event.venue) • \(event.date)")
                 .foregroundColor(.gray)
             
             mapButton
@@ -596,7 +567,9 @@ struct EventDetailView: View {
     
     var mapButton: some View {
         Button(action: {
-            if let url = URL(string: event.mapsURL) {
+            // For now, create a basic Google Maps search URL using the venue name
+            let searchQuery = event.venue.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let url = URL(string: "https://www.google.com/maps/search/\(searchQuery)") {
                 UIApplication.shared.open(url)
             }
         }) {

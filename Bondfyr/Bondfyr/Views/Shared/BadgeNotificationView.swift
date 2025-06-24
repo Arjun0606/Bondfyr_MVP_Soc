@@ -1,23 +1,41 @@
 import SwiftUI
+import BondfyrPhotos
 
-struct LegacyBadgeNotificationView: View {
-    let badge: UserBadge
+struct BadgeNotificationView: View {
+    let badge: PhotoBadge
     @Binding var isPresented: Bool
     
     var body: some View {
         VStack(spacing: 20) {
             // Badge Icon
-            Text(badge.type.emoji)
-                .font(.system(size: 80))
-                .frame(width: 100, height: 100)
-                .background(
-                    Circle()
-                        .fill(Color(hex: badge.level.color).opacity(0.2))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color(hex: badge.level.color), lineWidth: 3)
-                )
+            AsyncImage(url: URL(string: badge.imageURL)) { phase in
+                switch phase {
+                case .empty:
+                    Image(systemName: "star.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(Color(hex: badge.level.color))
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 100, height: 100)
+                case .failure:
+                    Image(systemName: "star.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(Color(hex: badge.level.color))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(width: 100, height: 100)
+            .background(
+                Circle()
+                    .fill(Color(hex: badge.level.color).opacity(0.2))
+            )
+            .overlay(
+                Circle()
+                    .stroke(Color(hex: badge.level.color), lineWidth: 3)
+            )
             
             // Badge Info
             Text("New Badge Earned!")
@@ -66,19 +84,36 @@ struct LegacyBadgeNotificationView: View {
 }
 
 struct BadgeToastView: View {
-    let badge: UserBadge
+    let badge: PhotoBadge
     @Binding var isPresented: Bool
     
     var body: some View {
         HStack(spacing: 12) {
             // Badge Icon
-            Text(badge.type.emoji)
-                .font(.system(size: 30))
-                .frame(width: 40, height: 40)
-                .background(
-                    Circle()
-                        .fill(Color(hex: badge.level.color).opacity(0.2))
-                )
+            AsyncImage(url: URL(string: badge.imageURL)) { phase in
+                switch phase {
+                case .empty:
+                    Image(systemName: "star.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(Color(hex: badge.level.color))
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 40, height: 40)
+                case .failure:
+                    Image(systemName: "star.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(Color(hex: badge.level.color))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(width: 40, height: 40)
+            .background(
+                Circle()
+                    .fill(Color(hex: badge.level.color).opacity(0.2))
+            )
             
             VStack(alignment: .leading, spacing: 2) {
                 Text("New Badge!")
@@ -111,6 +146,4 @@ struct BadgeToastView: View {
         )
         .transition(.move(edge: .top).combined(with: .opacity))
     }
-}
-
- 
+} 

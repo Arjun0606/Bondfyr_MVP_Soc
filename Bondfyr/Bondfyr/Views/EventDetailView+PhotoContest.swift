@@ -209,19 +209,17 @@ struct PhotoContestButton_Previews: PreviewProvider {
         VStack(spacing: 20) {
             PhotoContestButton(
                 event: Event(
-                    firestoreId: nil,
-                    eventName: "Summer Party",
+                    id: UUID(),
                     name: "Summer Party",
-                    location: "Beach Club",
-                    description: "A fun summer party",
                     date: "2023-08-15",
                     time: "8:00 PM",
-                    venueLogoImage: "",
-                    eventPosterImage: "",
-                    city: "Miami",
-                    mapsURL: "",
-                    galleryImages: [],
-                    instagramHandle: ""
+                    venue: "Beach Club",
+                    description: "A fun summer party",
+                    hostId: "host1",
+                    host: "Beach Club",
+                    coverPhoto: "",
+                    ticketTiers: [],
+                    venueLogoImage: ""
                 ),
                 style: .default
             ) {
@@ -230,19 +228,17 @@ struct PhotoContestButton_Previews: PreviewProvider {
             
             PhotoContestButton(
                 event: Event(
-                    firestoreId: nil,
-                    eventName: "Summer Party",
+                    id: UUID(),
                     name: "Summer Party",
-                    location: "Beach Club",
-                    description: "A fun summer party",
                     date: "2023-08-15",
                     time: "8:00 PM",
-                    venueLogoImage: "",
-                    eventPosterImage: "",
-                    city: "Miami",
-                    mapsURL: "",
-                    galleryImages: [],
-                    instagramHandle: ""
+                    venue: "Beach Club",
+                    description: "A fun summer party",
+                    hostId: "host1",
+                    host: "Beach Club",
+                    coverPhoto: "",
+                    ticketTiers: [],
+                    venueLogoImage: ""
                 ),
                 style: .compact
             ) {
@@ -251,19 +247,17 @@ struct PhotoContestButton_Previews: PreviewProvider {
             
             PhotoContestButton(
                 event: Event(
-                    firestoreId: nil,
-                    eventName: "Summer Party",
+                    id: UUID(),
                     name: "Summer Party",
-                    location: "Beach Club",
-                    description: "A fun summer party",
                     date: "2023-08-15",
                     time: "8:00 PM",
-                    venueLogoImage: "",
-                    eventPosterImage: "",
-                    city: "Miami",
-                    mapsURL: "",
-                    galleryImages: [],
-                    instagramHandle: ""
+                    venue: "Beach Club",
+                    description: "A fun summer party",
+                    hostId: "host1",
+                    host: "Beach Club",
+                    coverPhoto: "",
+                    ticketTiers: [],
+                    venueLogoImage: ""
                 ),
                 style: .featured
             ) {

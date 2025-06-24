@@ -183,7 +183,7 @@ struct MarketplaceFiltersView: View {
                         Button("Clear All Filters") {
                             selectedPriceRange = 5...200
                             selectedVibes.removeAll()
-                            selectedTimeFilter = AfterpartyManager.TimeFilter.all
+                            selectedTimeFilter = .all
                             showOnlyAvailable = true
                             maxGuestCount = 200
                             
@@ -191,7 +191,7 @@ struct MarketplaceFiltersView: View {
                             let clearedFilters = MarketplaceFilters(
                                 priceRange: 5...200,
                                 vibes: [],
-                                timeFilter: AfterpartyManager.TimeFilter.all,
+                                timeFilter: .all,
                                 showOnlyAvailable: true,
                                 maxGuestCount: 200
                             )

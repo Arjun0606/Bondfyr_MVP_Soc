@@ -20,13 +20,34 @@ struct AppUser: Codable {
     let googleID: String?
     let city: String?
     
+    // --- Verification & Reputation System ---
+    
+    // Verification Status
+    let isHostVerified: Bool?
+    let isGuestVerified: Bool?
+    
+    // Progress Tracking
+    let hostedPartiesCount: Int?
+    let attendedPartiesCount: Int?
+    
+    // User Ratings (average)
+    let hostRating: Double?
+    let guestRating: Double?
+    
+    // Rating Counts
+    let hostRatingsCount: Int?
+    let guestRatingsCount: Int?
+    
+    // Social Connections
+    let totalLikesReceived: Int?
+    
     enum UserRole: String, Codable {
         case user
         case vendor
         case admin
     }
     
-    init(uid: String, name: String, email: String, dob: Date, phoneNumber: String, role: UserRole = .user, instagramHandle: String? = nil, snapchatHandle: String? = nil, avatarURL: String? = nil, googleID: String? = nil, city: String? = nil) {
+    init(uid: String, name: String, email: String, dob: Date, phoneNumber: String, role: UserRole = .user, instagramHandle: String? = nil, snapchatHandle: String? = nil, avatarURL: String? = nil, googleID: String? = nil, city: String? = nil, isHostVerified: Bool? = false, isGuestVerified: Bool? = false, hostedPartiesCount: Int? = 0, attendedPartiesCount: Int? = 0, hostRating: Double? = 0.0, guestRating: Double? = 0.0, hostRatingsCount: Int? = 0, guestRatingsCount: Int? = 0, totalLikesReceived: Int? = 0) {
         self.uid = uid
         self.name = name
         self.email = email
@@ -38,5 +59,16 @@ struct AppUser: Codable {
         self.avatarURL = avatarURL
         self.googleID = googleID
         self.city = city
+        
+        // --- Verification & Reputation ---
+        self.isHostVerified = isHostVerified
+        self.isGuestVerified = isGuestVerified
+        self.hostedPartiesCount = hostedPartiesCount
+        self.attendedPartiesCount = attendedPartiesCount
+        self.hostRating = hostRating
+        self.guestRating = guestRating
+        self.hostRatingsCount = hostRatingsCount
+        self.guestRatingsCount = guestRatingsCount
+        self.totalLikesReceived = totalLikesReceived
     }
 }

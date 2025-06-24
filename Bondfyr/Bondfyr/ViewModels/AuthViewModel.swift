@@ -231,6 +231,17 @@ class AuthViewModel: ObservableObject {
                 let googleID = data["googleID"] as? String
                 let city = data["city"] as? String
                 
+                // --- Verification & Reputation ---
+                let isHostVerified = data["isHostVerified"] as? Bool ?? false
+                let isGuestVerified = data["isGuestVerified"] as? Bool ?? false
+                let hostedPartiesCount = data["hostedPartiesCount"] as? Int ?? 0
+                let attendedPartiesCount = data["attendedPartiesCount"] as? Int ?? 0
+                let hostRating = data["hostRating"] as? Double ?? 0.0
+                let guestRating = data["guestRating"] as? Double ?? 0.0
+                let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
+                let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
+                let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
+
                 let user = AppUser(
                     uid: uid,
                     name: name,
@@ -242,7 +253,16 @@ class AuthViewModel: ObservableObject {
                     snapchatHandle: snapchatHandle,
                     avatarURL: avatarURL,
                     googleID: googleID,
-                    city: city
+                    city: city,
+                    isHostVerified: isHostVerified,
+                    isGuestVerified: isGuestVerified,
+                    hostedPartiesCount: hostedPartiesCount,
+                    attendedPartiesCount: attendedPartiesCount,
+                    hostRating: hostRating,
+                    guestRating: guestRating,
+                    hostRatingsCount: hostRatingsCount,
+                    guestRatingsCount: guestRatingsCount,
+                    totalLikesReceived: totalLikesReceived
                 )
                 
                 DispatchQueue.main.async {
@@ -472,7 +492,16 @@ class AuthViewModel: ObservableObject {
                     email: user.email ?? "",
                     dob: dob,
                     phoneNumber: phoneNumber,
-                    role: .user // Explicitly set the role to match Firestore
+                    role: .user, // Explicitly set the role to match Firestore
+                    isHostVerified: false,
+                    isGuestVerified: false,
+                    hostedPartiesCount: 0,
+                    attendedPartiesCount: 0,
+                    hostRating: 0.0,
+                    guestRating: 0.0,
+                    hostRatingsCount: 0,
+                    guestRatingsCount: 0,
+                    totalLikesReceived: 0
                 )
                 
                 DispatchQueue.main.async {

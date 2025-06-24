@@ -145,7 +145,7 @@ struct AfterpartyTabView: View {
     @State private var currentFilters: MarketplaceFilters = MarketplaceFilters(
         priceRange: 5...200,
         vibes: [],
-        timeFilter: AfterpartyManager.TimeFilter.all,
+        timeFilter: .all,
         showOnlyAvailable: true,
         maxGuestCount: 200
     )
@@ -174,7 +174,7 @@ struct AfterpartyTabView: View {
     private var hasActiveFilters: Bool {
         return currentFilters.priceRange != 5...200 ||
                !currentFilters.vibes.isEmpty ||
-               currentFilters.timeFilter != AfterpartyManager.TimeFilter.all ||
+               currentFilters.timeFilter != .all ||
                currentFilters.showOnlyAvailable != true ||
                currentFilters.maxGuestCount != 200
     }
@@ -252,7 +252,7 @@ struct AfterpartyTabView: View {
                         .padding(.horizontal, 12)
                     }
                 }
-                .padding(.horizontal)
+                    .padding(.horizontal)
                 
                 DistanceSliderView(
                     selectedRadius: $selectedRadius,
@@ -289,7 +289,7 @@ struct AfterpartyTabView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "dollarsign.circle")
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                                .foregroundColor(.gray)
                         
                         VStack(spacing: 8) {
                             Text("No paid parties yet")
@@ -299,8 +299,8 @@ struct AfterpartyTabView: View {
                             
                             Text("Be the first to host a party in \(locationManager.currentCity ?? "your area") and start earning!")
                                 .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
                         }
                         
                         Button("Host a Paid Party") {
@@ -318,7 +318,7 @@ struct AfterpartyTabView: View {
                         .foregroundColor(.white)
                         .cornerRadius(25)
                     }
-                    .padding()
+                                .padding()
                     Spacer()
                 } else {
                     ScrollView {
@@ -327,7 +327,7 @@ struct AfterpartyTabView: View {
                                 AfterpartyCard(afterparty: afterparty)
                             }
                         }
-                        .padding()
+                                .padding()
                     }
                 }
             }
@@ -842,8 +842,8 @@ struct AfterpartyCard: View {
                                     .font(.title)
                                     .foregroundColor(.white)
                                 Text(afterparty.title)
-                                    .font(.headline)
-                                    .foregroundColor(.white)
+                        .font(.headline)
+                        .foregroundColor(.white)
                                     .multilineTextAlignment(.center)
                             }
                         )
@@ -855,10 +855,10 @@ struct AfterpartyCard: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                    
+                
                     if isHost {
                         Text("$\(Int(afterparty.ticketPrice * 0.88))")
-                            .font(.caption)
+                    .font(.caption)
                             .foregroundColor(.green)
                             .overlay(
                                 Text("your cut")
@@ -882,13 +882,13 @@ struct AfterpartyCard: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
-                HStack {
+            HStack {
                     Image(systemName: "mappin.and.ellipse")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    .font(.caption)
+                                    .foregroundColor(.gray)
                     Text(afterparty.locationName)
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                                    .foregroundColor(.gray)
                         .lineLimit(1)
                 }
             }
@@ -898,7 +898,7 @@ struct AfterpartyCard: View {
                 HStack(spacing: 8) {
                     ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
                         Text(vibe)
-                            .font(.caption)
+                    .font(.caption)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.purple.opacity(0.3))
@@ -924,21 +924,18 @@ struct AfterpartyCard: View {
                         Text("SOLD OUT")
                             .font(.caption)
                             .fontWeight(.bold)
-                            .foregroundColor(.red)
-                    }
+                                .foregroundColor(.red)
+                        }
                 }
                 
                 Spacer()
                 
-                // Host info with verification
+                // Host info
                 VStack(alignment: .trailing, spacing: 4) {
-                    HStack {
-                        Text("@\(afterparty.hostHandle)")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.pink)
-                        HostVerificationBadge(hostUserId: afterparty.userId)
-                    }
+                    Text("@\(afterparty.hostHandle)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.pink)
                     Text("Host")
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -994,50 +991,6 @@ struct AfterpartyCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
-    }
-}
-
-// MARK: - Host Verification Badge
-struct HostVerificationBadge: View {
-    let hostUserId: String
-    @State private var verificationStatus: UserVerificationStatus?
-    
-    var body: some View {
-        Group {
-            if let status = verificationStatus {
-                if status.isVerifiedHost {
-                    HStack(spacing: 2) {
-                        Text("👑")
-                            .font(.caption)
-                        Text("Verified")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.yellow)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.yellow.opacity(0.2))
-                    .cornerRadius(8)
-                } else if status.hostBadgeProgress > 0 {
-                    Text("\(status.hostBadgeProgress)/4")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(Color.gray.opacity(0.2))
-                        .cornerRadius(6)
-                }
-            }
-        }
-        .onAppear {
-            loadVerificationStatus()
-        }
-    }
-    
-    private func loadVerificationStatus() {
-        BadgeService.shared.getBadgeForUser(userId: hostUserId) { status in
-            self.verificationStatus = status
-        }
     }
 }
 
@@ -1376,10 +1329,10 @@ struct CreateAfterpartyView: View {
     private var createButtonBackground: AnyView {
         if isFormValid {
             return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-        } else {
+                                        } else {
             return AnyView(LinearGradient(gradient: Gradient(colors: [.gray, .gray]), startPoint: .leading, endPoint: .trailing))
-        }
-    }
+                                }
+                            }
     
     var body: some View {
         NavigationView {
@@ -1437,12 +1390,12 @@ struct CreateAfterpartyView: View {
                             ticketPrice: ticketPrice,
                             isCreating: isCreating
                         )
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                        }
+                                .frame(maxWidth: .infinity)
+                                .padding()
                     .background(createButtonBackground)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
                     .disabled(isCreating || !isFormValid)
                     .padding(.top, 24)
                     }
@@ -1517,9 +1470,9 @@ struct CreateAfterpartyView: View {
                     endTime: finalEndTime,
                     city: currentCity,
                     locationName: address,
-                    description: description,
-                    address: address,
-                    googleMapsLink: googleMapsLink,
+                description: description,
+                address: address,
+                googleMapsLink: googleMapsLink,
                     vibeTag: Array(selectedVibes).joined(separator: ", "),
                     
                     // New marketplace parameters
@@ -1532,11 +1485,11 @@ struct CreateAfterpartyView: View {
                     ageRestriction: ageRestriction,
                     maxMaleRatio: maxMaleRatio,
                     legalDisclaimerAccepted: legalDisclaimerAccepted
-                )
-                await MainActor.run {
+            )
+            await MainActor.run {
                     presentationMode.wrappedValue.dismiss()
-                }
-            } catch {
+            }
+        } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true
@@ -1826,7 +1779,7 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
+} 
 
 // MARK: - Extracted Form Sections to Fix Type-Checking
 

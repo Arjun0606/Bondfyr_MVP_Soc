@@ -7,86 +7,72 @@
 
 import Foundation
 
-struct Event: Identifiable {
-    let id = UUID()
-    let firestoreId: String? // Firestore document ID
-    let eventName: String      // Event name (e.g. "THE BIG FETE")
-    let name: String           // Venue/club name (e.g. "High Spirits")
-    let location: String       // Area (e.g. "Viman Nagar")
-    let description: String
-    let date: String
-    let time: String
-    let venueLogoImage: String // used in EventListView
-    let eventPosterImage: String // used in EventDetailView top
-    let city: String
-    let mapsURL: String
-    let galleryImages: [String]?
-    let instagramHandle: String
-    let photoContestActive: Bool
-    var isSaved: Bool = false // New property for saved events
-    
-    // Constructor with Firestore ID
-    init(firestoreId: String? = nil, eventName: String, name: String, location: String, description: String, date: String, time: String, venueLogoImage: String, eventPosterImage: String, city: String, mapsURL: String, galleryImages: [String]?, instagramHandle: String, photoContestActive: Bool = false, isSaved: Bool = false) {
-        self.firestoreId = firestoreId
-        self.eventName = eventName
-        self.name = name
-        self.location = location
-        self.description = description
-        self.date = date
-        self.time = time
-        self.venueLogoImage = venueLogoImage
-        self.eventPosterImage = eventPosterImage
-        self.city = city
-        self.mapsURL = mapsURL
-        self.galleryImages = galleryImages
-        self.instagramHandle = instagramHandle
-        self.photoContestActive = photoContestActive
-        self.isSaved = isSaved
+struct Event: Identifiable, Codable {
+    var id: UUID
+    var name: String
+    var date: String
+    var time: String
+    var venue: String
+    var description: String
+    var hostId: String // Added hostId
+    var host: String
+    var coverPhoto: String
+    var ticketTiers: [TicketTier]
+    var venueLogoImage: String
+
+    struct TicketTier: Identifiable, Codable {
+        var id: UUID
+        var name: String
+        var price: Double
+        var quantity: Int
     }
 }
 
 let sampleEvents: [Event] = [
     Event(
-        eventName: "The Big Fete",
-        name: "High Spirits",
-        location: "Koregaon Park",
-        description: "High Spirits Cafe in Pune, India, is a beloved nightlife hotspot that has been a fixture in Koregaon Park for over a decade. With its inviting open-air setting, adorned with fairy lights, it's a gathering place for both locals and visitors. The venue's eclectic music scene, ranging from live bands to DJ sets, ensures there's always something for every music lover.",
+        id: UUID(),
+        name: "The Big Fete",
         date: "March 30, 2025",
         time: "9:00 PM onwards",
-        venueLogoImage: "High_spirits",
-        eventPosterImage: "Hs_e",
-        city: "Pune",
-        mapsURL: "https://maps.app.goo.gl/92DFDF4oRGoVgFPs6?g_st=com.google.maps.preview.copy",
-        galleryImages: ["Hs1", "Hs2", "Hs3"],
-        instagramHandle: "thehighspirits"
+        venue: "High Spirits - Koregaon Park",
+        description: "High Spirits Cafe in Pune, India, is a beloved nightlife hotspot that has been a fixture in Koregaon Park for over a decade. With its inviting open-air setting, adorned with fairy lights, it's a gathering place for both locals and visitors. The venue's eclectic music scene, ranging from live bands to DJ sets, ensures there's always something for every music lover.",
+        hostId: "host1",
+        host: "High Spirits",
+        coverPhoto: "Hs_e",
+        ticketTiers: [
+            Event.TicketTier(id: UUID(), name: "General Entry", price: 500.0, quantity: 100)
+        ],
+        venueLogoImage: "High_spirits"
     ),
     Event(
-        eventName: "Mixology Night",
-        name: "Qora",
-        location: "Kalyani Nagar",
-        description: "An elevated cocktail experience accompanied by Contemporary fare! Serving responsibly to individuals aged 25 and above.",
+        id: UUID(),
+        name: "Mixology Night",
         date: "March 27, 2025",
         time: "8:00 PM onwards",
-        venueLogoImage: "Qora",
-        eventPosterImage: "Q_e",
-        city: "Pune",
-        mapsURL: "https://maps.app.goo.gl/PyuS1E19kp38bKwi9?g_st=com.google.maps.preview.copy",
-        galleryImages: ["Q1", "Q2", "Q3"],
-        instagramHandle: "qora_pune"
+        venue: "Qora - Kalyani Nagar",
+        description: "An elevated cocktail experience accompanied by Contemporary fare! Serving responsibly to individuals aged 25 and above.",
+        hostId: "host2",
+        host: "Qora",
+        coverPhoto: "Q_e",
+        ticketTiers: [
+            Event.TicketTier(id: UUID(), name: "VIP Access", price: 800.0, quantity: 50)
+        ],
+        venueLogoImage: "Qora"
     ),
     Event(
-        eventName: "Underground Beats",
-        name: "Vault",
-        location: "Baner",
-        description: "Dive into the underground, dive into VAULT!🪩 Experience the best night life!✨",
+        id: UUID(),
+        name: "Underground Beats",
         date: "March 28, 2025",
         time: "10:00 PM onwards",
-        venueLogoImage: "Vault",
-        eventPosterImage: "V_e",
-        city: "Pune",
-        mapsURL: "https://maps.app.goo.gl/B37Ry8uMQueSSAfp7?g_st=com.google.maps.preview.copy",
-        galleryImages: ["V1", "V2", "V3"],
-        instagramHandle: "vault.pune"
+        venue: "Vault - Baner",
+        description: "Dive into the underground, dive into VAULT!🪩 Experience the best night life!✨",
+        hostId: "host3",
+        host: "Vault",
+        coverPhoto: "V_e",
+        ticketTiers: [
+            Event.TicketTier(id: UUID(), name: "Dance Floor", price: 600.0, quantity: 75)
+        ],
+        venueLogoImage: "Vault"
     )
 ]
 

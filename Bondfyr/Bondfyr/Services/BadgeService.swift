@@ -1,399 +1,311 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import BondfyrPhotos
 
 @MainActor
 class BadgeService: ObservableObject {
     static let shared = BadgeService()
     private let db = Firestore.firestore()
     
-    @Published var userBadges: [UserBadge] = []
-    @Published var badgeProgress: BadgeProgress = BadgeProgress()
-    @Published var verificationStatus: UserVerificationStatus = UserVerificationStatus(
-        isVerifiedHost: false,
-        isVerifiedPartyGoer: false,
-        hostBadgeProgress: 0,
-        partyGoerBadgeProgress: 0
-    )
+    @Published var userBadges: [PhotoBadge] = []
     @Published var isLoading = false
     @Published var error: Error?
     
-    // Notification triggers
-    @Published var showingNewBadgeNotification = false
-    @Published var newlyEarnedBadge: UserBadge?
-    @Published var showingProgressNotification = false
-    @Published var progressNotificationText = ""
+    // Add actual count tracking
+    @Published var partyAttendanceCount: Int = 0
+    @Published var partyHostedCount: Int = 0
+    @Published var totalLikes: Int = 0
+    @Published var currentStreak: Int = 0
+    @Published var topThreeAppearances: Int = 0
     
     private init() {
         loadUserBadges()
-        loadBadgeProgress()
+        loadUserStats()
     }
     
-    // MARK: - Data Loading
-    
-    private func loadUserBadges() {
+    private func loadUserStats() {
         guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        // Load stats from Firestore
+        db.collection("users").document(userId).collection("stats")
+            .document("counts")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self,
+                      let data = snapshot?.data() else { return }
+                
+                self.partyAttendanceCount = data["attended"] as? Int ?? 0
+                self.partyHostedCount = data["hosted"] as? Int ?? 0
+                self.totalLikes = data["totalLikes"] as? Int ?? 0
+                self.currentStreak = data["currentStreak"] as? Int ?? 0
+                self.topThreeAppearances = data["topThree"] as? Int ?? 0
+            }
+    }
+    
+    // Update stats methods
+    func incrementPartyAttendance() async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        partyAttendanceCount += 1
+        
+        try? await db.collection("users").document(userId)
+            .collection("stats").document("counts")
+            .setData(["attended": partyAttendanceCount], merge: true)
+        
+        await checkAfterpartyGuestBadge(attendedCount: partyAttendanceCount)
+    }
+    
+    func incrementPartyHosted() async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        partyHostedCount += 1
+        
+        try? await db.collection("users").document(userId)
+            .collection("stats").document("counts")
+            .setData(["hosted": partyHostedCount], merge: true)
+        
+        await checkAfterpartyHostBadge(hostedCount: partyHostedCount)
+    }
+    
+    func updateTotalLikes(count: Int) async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        totalLikes = count
+        
+        try? await db.collection("users").document(userId)
+            .collection("stats").document("counts")
+            .setData(["totalLikes": totalLikes], merge: true)
+        
+        await checkPhotoLikesBadge(totalLikes: totalLikes)
+    }
+    
+    func updateTopThreeAppearances(count: Int) async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        topThreeAppearances = count
+        
+        try? await db.collection("users").document(userId)
+            .collection("stats").document("counts")
+            .setData(["topThree": topThreeAppearances], merge: true)
+        
+        await checkTopThreeBadge(appearances: topThreeAppearances)
+    }
+    
+    func updateCurrentStreak(days: Int) async {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        currentStreak = days
+        
+        try? await db.collection("users").document(userId)
+            .collection("stats").document("counts")
+            .setData(["currentStreak": currentStreak], merge: true)
+        
+        await checkDailyStreakBadge(streakDays: currentStreak)
+    }
+    
+    // MARK: - Badge Loading
+    func loadUserBadges() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        isLoading = true
         
         db.collection("users").document(userId).collection("badges")
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self,
-                      let documents = snapshot?.documents else { return }
+                guard let self = self else { return }
                 
-                self.userBadges = documents.compactMap { doc -> UserBadge? in
-                    try? doc.data(as: UserBadge.self)
-                }
-                
-                self.updateVerificationStatus()
-            }
-    }
-    
-    private func loadBadgeProgress() {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        db.collection("users").document(userId).collection("stats")
-            .document("progress")
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self,
-                      let data = snapshot?.data() else {
-                    // Initialize with default values if no data exists
-                    self?.createInitialBadgeProgress()
+                if let error = error {
+                    self.error = error
+                    self.isLoading = false
                     return
                 }
                 
-                self.badgeProgress = BadgeProgress(
-                    partiesHosted: data["partiesHosted"] as? Int ?? 0,
-                    partiesAttended: data["partiesAttended"] as? Int ?? 0,
-                    totalPhotoLikes: data["totalPhotoLikes"] as? Int ?? 0
-                )
+                self.userBadges = snapshot?.documents.compactMap { document in
+                    try? document.data(as: PhotoBadge.self)
+                } ?? []
                 
-                self.checkBadgeProgress()
+                self.isLoading = false
             }
     }
     
-    private func createInitialBadgeProgress() {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
+    // MARK: - Badge Progress Tracking
+    
+    func checkPhotoLikesBadge(totalLikes: Int) async {
+        let badgeType = BadgeType.mostLiked
+        let currentLevel = getCurrentBadgeLevel(for: badgeType)
         
-        let initialProgress = BadgeProgress()
+        let newLevel: BadgeLevel?
+        if totalLikes >= 1000 && currentLevel != .gold {
+            newLevel = .gold
+        } else if totalLikes >= 500 && currentLevel != .silver {
+            newLevel = .silver
+        } else if totalLikes >= 100 && currentLevel != .bronze {
+            newLevel = .bronze
+        } else {
+            newLevel = nil
+        }
         
-        do {
-            try db.collection("users").document(userId).collection("stats")
-                .document("progress")
-                .setData(from: initialProgress)
-            
-            // Create initial badge set
-            createInitialBadges()
-        } catch {
-            print("Error creating initial badge progress: \(error)")
+        if let level = newLevel {
+            await awardBadge(type: badgeType, level: level, progress: calculateProgress(totalLikes, for: badgeType))
         }
     }
     
-    private func createInitialBadges() {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
+    func checkTopThreeBadge(appearances: Int) async {
+        let badgeType = BadgeType.topThree
+        let currentLevel = getCurrentBadgeLevel(for: badgeType)
         
-        let allBadgeTypes = BadgeType.allCases
+        let newLevel: BadgeLevel?
+        if appearances >= 10 && currentLevel != .gold {
+            newLevel = .gold
+        } else if appearances >= 5 && currentLevel != .silver {
+            newLevel = .silver
+        } else if appearances >= 1 && currentLevel != .bronze {
+            newLevel = .bronze
+        } else {
+            newLevel = nil
+        }
         
-        for badgeType in allBadgeTypes {
-            let badge = UserBadge(
-                id: "\(userId)_\(badgeType.rawValue)",
-                type: badgeType,
-                name: badgeType.rawValue,
-                description: badgeType.description,
-                earnedDate: nil,
-                level: .locked,
-                progress: 0,
-                requirement: getRequirement(for: badgeType)
-            )
-            
-            do {
-                try db.collection("users").document(userId).collection("badges")
-                    .document(badge.id)
-                    .setData(from: badge)
-            } catch {
-                print("Error creating initial badge: \(error)")
-            }
+        if let level = newLevel {
+            await awardBadge(type: badgeType, level: level, progress: calculateProgress(appearances, for: badgeType))
         }
     }
     
-    private func getRequirement(for type: BadgeType) -> Int {
+    func checkAfterpartyHostBadge(hostedCount: Int) async {
+        let badgeType = BadgeType.afterpartyHost
+        let currentLevel = getCurrentBadgeLevel(for: badgeType)
+        
+        let newLevel: BadgeLevel?
+        if hostedCount >= 10 && currentLevel != .gold {
+            newLevel = .gold
+        } else if hostedCount >= 5 && currentLevel != .silver {
+            newLevel = .silver
+        } else if hostedCount >= 1 && currentLevel != .bronze {
+            newLevel = .bronze
+        } else {
+            newLevel = nil
+        }
+        
+        if let level = newLevel {
+            await awardBadge(type: badgeType, level: level, progress: calculateProgress(hostedCount, for: badgeType))
+        }
+    }
+    
+    func checkAfterpartyGuestBadge(attendedCount: Int) async {
+        let badgeType = BadgeType.afterpartyGuest
+        let currentLevel = getCurrentBadgeLevel(for: badgeType)
+        
+        let newLevel: BadgeLevel?
+        if attendedCount >= 20 && currentLevel != .gold {
+            newLevel = .gold
+        } else if attendedCount >= 10 && currentLevel != .silver {
+            newLevel = .silver
+        } else if attendedCount >= 3 && currentLevel != .bronze {
+            newLevel = .bronze
+        } else {
+            newLevel = nil
+        }
+        
+        if let level = newLevel {
+            await awardBadge(type: badgeType, level: level, progress: calculateProgress(attendedCount, for: badgeType))
+        }
+    }
+    
+    func checkDailyStreakBadge(streakDays: Int) async {
+        let badgeType = BadgeType.dailyStreak
+        let currentLevel = getCurrentBadgeLevel(for: badgeType)
+        
+        let newLevel: BadgeLevel?
+        if streakDays >= 14 && currentLevel != .gold {
+            newLevel = .gold
+        } else if streakDays >= 7 && currentLevel != .silver {
+            newLevel = .silver
+        } else if streakDays >= 3 && currentLevel != .bronze {
+            newLevel = .bronze
+        } else {
+            newLevel = nil
+        }
+        
+        if let level = newLevel {
+            await awardBadge(type: badgeType, level: level, progress: calculateProgress(streakDays, for: badgeType))
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func getCurrentBadgeLevel(for type: BadgeType) -> BadgeLevel? {
+        return userBadges.first { $0.type == type }?.level
+    }
+    
+    private func calculateProgress(_ value: Int, for type: BadgeType) -> Double {
         switch type {
-        case .verifiedHost:
-            return 4
-        case .verifiedPartyGoer:
-            return 4
-        case .socialStar:
-            return 100
-        case .partyLegend:
-            return 20
-        case .loyalGuest:
-            return 15
+        case .mostLiked:
+            if value >= 1000 { return 1.0 }
+            if value >= 500 { return Double(value - 500) / 500.0 }
+            if value >= 100 { return Double(value - 100) / 400.0 }
+            return Double(value) / 100.0
+            
+        case .topThree:
+            if value >= 10 { return 1.0 }
+            if value >= 5 { return Double(value - 5) / 5.0 }
+            if value >= 1 { return Double(value - 1) / 4.0 }
+            return Double(value)
+            
+        case .afterpartyHost:
+            if value >= 10 { return 1.0 }
+            if value >= 5 { return Double(value - 5) / 5.0 }
+            if value >= 1 { return Double(value - 1) / 4.0 }
+            return Double(value)
+            
+        case .afterpartyGuest:
+            if value >= 20 { return 1.0 }
+            if value >= 10 { return Double(value - 10) / 10.0 }
+            if value >= 3 { return Double(value - 3) / 7.0 }
+            return Double(value) / 3.0
+            
+        case .dailyStreak:
+            if value >= 14 { return 1.0 }
+            if value >= 7 { return Double(value - 7) / 7.0 }
+            if value >= 3 { return Double(value - 3) / 4.0 }
+            return Double(value) / 3.0
         }
     }
     
-    // MARK: - Progress Updates
-    
-    func incrementPartiesHosted() async {
-        let newCount = badgeProgress.partiesHosted + 1
-        await updateProgress(partiesHosted: newCount)
-        
-        // Check for verification milestone
-        if newCount == 4 {
-            await earnVerifiedHostBadge()
-        }
-        
-        // Check for legend milestone
-        if newCount == 20 {
-            await earnBadge(type: .partyLegend, newProgress: newCount)
-        }
-        
-        // Show progress notification for verification
-        if newCount < 4 {
-            showProgressNotification(text: "🎉 \(newCount)/4 parties hosted! \(4 - newCount) more to become a Verified Host!")
-        }
-    }
-    
-    func incrementPartiesAttended() async {
-        let newCount = badgeProgress.partiesAttended + 1
-        await updateProgress(partiesAttended: newCount)
-        
-        // Check for verification milestone
-        if newCount == 4 {
-            await earnVerifiedPartyGoerBadge()
-        }
-        
-        // Check for loyal guest milestone
-        if newCount == 15 {
-            await earnBadge(type: .loyalGuest, newProgress: newCount)
-        }
-        
-        // Show progress notification for verification
-        if newCount < 4 {
-            showProgressNotification(text: "🎊 \(newCount)/4 parties attended! \(4 - newCount) more to become a Verified Party Goer!")
-        }
-    }
-    
-    func incrementPhotoLikes() async {
-        let newCount = badgeProgress.totalPhotoLikes + 1
-        await updateProgress(totalPhotoLikes: newCount)
-        
-        // Check for social star milestone
-        if newCount == 100 {
-            await earnBadge(type: .socialStar, newProgress: newCount)
-        }
-        
-        // Show progress notification
-        if newCount < 100 && newCount % 10 == 0 {
-            showProgressNotification(text: "⭐ \(newCount)/100 photo likes! Getting closer to Social Star!")
-        }
-    }
-    
-    private func updateProgress(partiesHosted: Int? = nil, partiesAttended: Int? = nil, totalPhotoLikes: Int? = nil) async {
+    private func awardBadge(type: BadgeType, level: BadgeLevel, progress: Double) async {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
-        var updateData: [String: Any] = [:]
-        
-        if let hosted = partiesHosted {
-            updateData["partiesHosted"] = hosted
-            badgeProgress = BadgeProgress(
-                partiesHosted: hosted,
-                partiesAttended: badgeProgress.partiesAttended,
-                totalPhotoLikes: badgeProgress.totalPhotoLikes
-            )
-        }
-        
-        if let attended = partiesAttended {
-            updateData["partiesAttended"] = attended
-            badgeProgress = BadgeProgress(
-                partiesHosted: badgeProgress.partiesHosted,
-                partiesAttended: attended,
-                totalPhotoLikes: badgeProgress.totalPhotoLikes
-            )
-        }
-        
-        if let likes = totalPhotoLikes {
-            updateData["totalPhotoLikes"] = likes
-            badgeProgress = BadgeProgress(
-                partiesHosted: badgeProgress.partiesHosted,
-                partiesAttended: badgeProgress.partiesAttended,
-                totalPhotoLikes: likes
-            )
-        }
-        
-        do {
-            try await db.collection("users").document(userId).collection("stats")
-                .document("progress")
-                .setData(updateData, merge: true)
-        } catch {
-            print("Error updating progress: \(error)")
-        }
-    }
-    
-    // MARK: - Badge Earning
-    
-    private func earnVerifiedHostBadge() async {
-        await earnBadge(type: .verifiedHost, newProgress: badgeProgress.partiesHosted)
-        
-        // Update verification status immediately
-        verificationStatus = UserVerificationStatus(
-            isVerifiedHost: true,
-            isVerifiedPartyGoer: verificationStatus.isVerifiedPartyGoer,
-            hostBadgeProgress: badgeProgress.partiesHosted,
-            partyGoerBadgeProgress: verificationStatus.partyGoerBadgeProgress
-        )
-    }
-    
-    private func earnVerifiedPartyGoerBadge() async {
-        await earnBadge(type: .verifiedPartyGoer, newProgress: badgeProgress.partiesAttended)
-        
-        // Update verification status immediately
-        verificationStatus = UserVerificationStatus(
-            isVerifiedHost: verificationStatus.isVerifiedHost,
-            isVerifiedPartyGoer: true,
-            hostBadgeProgress: verificationStatus.hostBadgeProgress,
-            partyGoerBadgeProgress: badgeProgress.partiesAttended
-        )
-    }
-    
-    private func earnBadge(type: BadgeType, newProgress: Int) async {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        let badgeId = "\(userId)_\(type.rawValue)"
-        
-        let earnedBadge = UserBadge(
-            id: badgeId,
+        let badge = PhotoBadge(
+            id: "\(type.rawValue)_\(level.rawValue)".lowercased(),
             type: type,
             name: type.rawValue,
             description: type.description,
+            imageURL: getBadgeImageURL(for: type, level: level),
             earnedDate: Date(),
-            level: .earned,
-            progress: newProgress,
-            requirement: getRequirement(for: type)
+            level: level,
+            progress: progress
         )
         
         do {
             try await db.collection("users").document(userId).collection("badges")
-                .document(badgeId)
-                .setData(from: earnedBadge)
+                .document(badge.id)
+                .setData(from: badge)
             
-            // Show notification
-            showNewBadgeNotification(badge: earnedBadge)
-            
-        } catch {
-            print("Error earning badge: \(error)")
-        }
-    }
-    
-    private func checkBadgeProgress() {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        // Update all badges with current progress
-        for badgeType in BadgeType.allCases {
-            let currentProgress = getCurrentProgress(for: badgeType)
-            let requirement = getRequirement(for: badgeType)
-            
-            let isEarned = currentProgress >= requirement
-            let level: BadgeLevel = isEarned ? .earned : (currentProgress > 0 ? .inProgress : .locked)
-            
-            let badge = UserBadge(
-                id: "\(userId)_\(badgeType.rawValue)",
-                type: badgeType,
-                name: badgeType.rawValue,
-                description: badgeType.description,
-                earnedDate: isEarned ? Date() : nil,
-                level: level,
-                progress: currentProgress,
-                requirement: requirement
+            // Notify user about new badge
+            NotificationCenter.default.post(
+                name: Notification.Name("BadgeEarned"),
+                object: nil,
+                userInfo: ["badge": badge]
             )
-            
-            // Update in Firestore
-            Task {
-                do {
-                    try await db.collection("users").document(userId).collection("badges")
-                        .document(badge.id)
-                        .setData(from: badge)
-                } catch {
-                    print("Error updating badge progress: \(error)")
-                }
-            }
-        }
-        
-        updateVerificationStatus()
-    }
-    
-    private func getCurrentProgress(for type: BadgeType) -> Int {
-        switch type {
-        case .verifiedHost, .partyLegend:
-            return badgeProgress.partiesHosted
-        case .verifiedPartyGoer, .loyalGuest:
-            return badgeProgress.partiesAttended
-        case .socialStar:
-            return badgeProgress.totalPhotoLikes
+        } catch {
+            print("Error awarding badge: \(error)")
+            self.error = error
         }
     }
     
-    private func updateVerificationStatus() {
-        let hostBadge = userBadges.first { $0.type == .verifiedHost }
-        let partyGoerBadge = userBadges.first { $0.type == .verifiedPartyGoer }
+    private func getBadgeImageURL(for type: BadgeType, level: BadgeLevel) -> String {
+        // Generate the badge image
+        let image = BadgeEmoji.generateBadgeImage(type: type, level: level)
         
-        verificationStatus = UserVerificationStatus(
-            isVerifiedHost: hostBadge?.isEarned ?? false,
-            isVerifiedPartyGoer: partyGoerBadge?.isEarned ?? false,
-            hostBadgeProgress: hostBadge?.progress ?? 0,
-            partyGoerBadgeProgress: partyGoerBadge?.progress ?? 0
-        )
-    }
-    
-    // MARK: - Notifications
-    
-    private func showNewBadgeNotification(badge: UserBadge) {
-        newlyEarnedBadge = badge
-        showingNewBadgeNotification = true
-        
-        // Auto-hide after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            self.showingNewBadgeNotification = false
+        // Convert to base64 string
+        if let imageData = image.pngData() {
+            let base64String = imageData.base64EncodedString()
+            return "data:image/png;base64,\(base64String)"
         }
-    }
-    
-    private func showProgressNotification(text: String) {
-        progressNotificationText = text
-        showingProgressNotification = true
         
-        // Auto-hide after 3 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            self.showingProgressNotification = false
-        }
-    }
-    
-    // MARK: - Public Helpers
-    
-    func getBadgeForUser(userId: String, completion: @escaping (UserVerificationStatus?) -> Void) {
-        db.collection("users").document(userId).collection("stats")
-            .document("progress")
-            .getDocument { snapshot, error in
-                guard let data = snapshot?.data() else {
-                    completion(nil)
-                    return
-                }
-                
-                let partiesHosted = data["partiesHosted"] as? Int ?? 0
-                let partiesAttended = data["partiesAttended"] as? Int ?? 0
-                
-                let status = UserVerificationStatus(
-                    isVerifiedHost: partiesHosted >= 4,
-                    isVerifiedPartyGoer: partiesAttended >= 4,
-                    hostBadgeProgress: partiesHosted,
-                    partyGoerBadgeProgress: partiesAttended
-                )
-                
-                completion(status)
-            }
-    }
-    
-    func getVerificationBadges() -> [UserBadge] {
-        return userBadges.filter { $0.type.isVerificationBadge }
-    }
-    
-    func getProgressBadges() -> [UserBadge] {
-        return userBadges.filter { $0.level == .inProgress }
+        // Fallback emoji as URL-safe string
+        let fallbackEmoji = BadgeEmoji.getEmoji(for: type, level: level)
+        return "data:text/plain;charset=utf-8,\(fallbackEmoji)"
     }
 } 

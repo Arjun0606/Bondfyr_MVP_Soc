@@ -12,48 +12,83 @@ import SwiftUI
 class OfflineDataManager {
     static let shared = OfflineDataManager()
     
+    // Keys for UserDefaults storage
     private let eventsCacheKey = "cached_events"
     private let venuesCacheKey = "cached_venues"
     private let lastUpdateTimeKey = "last_cache_update"
+    
+    // How long cache is valid (24 hours)
+    private let cacheValidityPeriod: TimeInterval = 24 * 60 * 60
     
     private init() {}
     
     // MARK: - Events Caching
     
-    // Cache a list of events for offline access
+    // Cache events from EventService
     func cacheEvents(_ events: [Event]) {
-        // We need to convert to CachedEvent because Event isn't directly Codable (due to UUID)
+        print("DEBUG: Offline caching temporarily disabled due to Event model mismatch")
+        // TODO: Update this when Event model is standardized
+        /*
         let cachedEvents = events.map { CachedEvent(from: $0) }
+        
         if let encoded = try? JSONEncoder().encode(cachedEvents) {
             UserDefaults.standard.set(encoded, forKey: eventsCacheKey)
             updateLastCacheTime()
+            print("Cached \(events.count) events offline")
         }
+        */
     }
     
-    // Get cached events
+    // Get cached events if they're still valid
     func getCachedEvents() -> [Event]? {
+        print("DEBUG: Offline cache disabled - returning nil")
+        return nil
+        /*
+        // Check if cache is still valid
+        guard isCacheValid() else {
+            return nil
+        }
+        
         guard let data = UserDefaults.standard.data(forKey: eventsCacheKey),
               let cachedEvents = try? JSONDecoder().decode([CachedEvent].self, from: data) else {
             return nil
         }
         
         return cachedEvents.map { $0.toEvent() }
+        */
+    }
+    
+    // Check if cached data is still valid
+    func isCacheValid() -> Bool {
+        guard let lastUpdate = getLastCacheUpdateTime() else {
+            return false
+        }
+        
+        return Date().timeIntervalSince(lastUpdate) < cacheValidityPeriod
+    }
+    
+    // Return cached events or empty array if cache is invalid
+    func getValidCachedEvents() -> [Event] {
+        return getCachedEvents() ?? []
     }
     
     // MARK: - Venues Caching
     
     // Cache venue details with their event IDs
     func cacheVenueInfo(for event: Event) {
+        print("DEBUG: Venue caching temporarily disabled due to Event model mismatch")
+        // TODO: Update this when Event model includes venue details
+        /*
         var venuesDict = getVenuesDict()
         
         // Create venue info object
         let venueInfo = VenueInfo(
             name: event.name,
-            location: event.location,
-            city: event.city,
-            mapsURL: event.mapsURL,
+            location: event.venue,
+            city: "Pune", // Default for now
+            mapsURL: "",  // Not available in current model
             eventId: event.id.uuidString,
-            instagramHandle: event.instagramHandle
+            instagramHandle: "" // Not available in current model
         )
         
         venuesDict[event.id.uuidString] = venueInfo
@@ -61,6 +96,7 @@ class OfflineDataManager {
         if let encoded = try? JSONEncoder().encode(venuesDict) {
             UserDefaults.standard.set(encoded, forKey: venuesCacheKey)
         }
+        */
     }
     
     // Get venue info for a specific event
@@ -159,62 +195,6 @@ class OfflineDataManager {
 
 // MARK: - Support Structures
 
-// Codable version of Event for caching
-struct CachedEvent: Codable {
-    let id: String
-    let firestoreId: String?
-    let eventName: String
-    let name: String
-    let description: String
-    let date: String
-    let time: String
-    let venueLogoImage: String
-    let eventPosterImage: String
-    let location: String
-    let city: String
-    let mapsURL: String
-    let galleryImages: [String]?
-    let instagramHandle: String
-    let photoContestActive: Bool
-    
-    init(from event: Event) {
-        self.id = event.id.uuidString
-        self.firestoreId = event.firestoreId
-        self.eventName = event.eventName
-        self.name = event.name
-        self.description = event.description
-        self.date = event.date
-        self.time = event.time
-        self.venueLogoImage = event.venueLogoImage
-        self.eventPosterImage = event.eventPosterImage
-        self.location = event.location
-        self.city = event.city
-        self.mapsURL = event.mapsURL
-        self.galleryImages = event.galleryImages
-        self.instagramHandle = event.instagramHandle
-        self.photoContestActive = event.photoContestActive
-    }
-    
-    func toEvent() -> Event {
-        return Event(
-            firestoreId: firestoreId,
-            eventName: eventName,
-            name: name,
-            location: location,
-            description: description,
-            date: date,
-            time: time,
-            venueLogoImage: venueLogoImage,
-            eventPosterImage: eventPosterImage,
-            city: city,
-            mapsURL: mapsURL,
-            galleryImages: galleryImages,
-            instagramHandle: instagramHandle,
-            photoContestActive: photoContestActive
-        )
-    }
-}
-
 // Structure to cache venue information
 struct VenueInfo: Codable {
     let name: String
@@ -237,83 +217,40 @@ struct TicketOfflineView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
-            // Ticket details
+            // Event details
             VStack(alignment: .leading, spacing: 10) {
-                detailRow(title: "Ticket Type", value: ticket.tier)
-                detailRow(title: "Date", value: formatDate(ticket.timestamp))
-                detailRow(title: "Quantity", value: "\(ticket.count)")
-                detailRow(title: "Ticket ID", value: ticket.ticketId)
+                Text("Ticket ID: \(ticket.ticketId)")
+                Text("Timestamp: \(ticket.timestamp)")
+                Text("Tier: \(ticket.tier)")
+                Text("Phone: \(ticket.phoneNumber)")
+                Text("PR Code: \(ticket.prCode)")
             }
-            .padding()
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(12)
+            .font(.headline)
+            .foregroundColor(.white)
             
-            // QR Code for the ticket
-            if let qrImage = generateQRCode(from: ticket.ticketId) {
-                Image(uiImage: qrImage)
-                    .resizable()
-                    .interpolation(.none)
-                    .scaledToFit()
-                    .frame(width: 200, height: 200)
-                    .background(Color.white)
-                    .cornerRadius(10)
-            }
+            // QR Code placeholder
+            Rectangle()
+                .fill(Color.white)
+                .frame(width: 150, height: 150)
+                .overlay(
+                    Text("QR CODE")
+                        .font(.caption)
+                        .foregroundColor(.black)
+                )
             
-            Text("OFFLINE MODE")
+            Text("Valid for offline use")
                 .font(.caption)
-                .padding(8)
-                .background(Color.red)
-                .foregroundColor(.white)
-                .cornerRadius(4)
+                .foregroundColor(.gray)
         }
-        .frame(width: 320, height: 600)
-        .padding()
+        .padding(30)
         .background(
             LinearGradient(
-                gradient: Gradient(colors: [Color.pink, Color.purple.opacity(0.8)]),
-                startPoint: .top,
-                endPoint: .bottom
+                gradient: Gradient(colors: [Color.purple, Color.pink]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
         )
-        .cornerRadius(16)
-    }
-    
-    private func detailRow(title: String, value: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.headline)
-                .foregroundColor(.gray)
-            Spacer()
-            Text(value)
-                .font(.body)
-                .foregroundColor(.white)
-        }
-    }
-    
-    private func formatDate(_ isoDate: String) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        if let date = dateFormatter.date(from: isoDate) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
-            return displayFormatter.string(from: date)
-        }
-        return isoDate
-    }
-    
-    @MainActor
-    private func generateQRCode(from string: String) -> UIImage? {
-        let data = string.data(using: .ascii)
-        if let qrFilter = CIFilter(name: "CIQRCodeGenerator") {
-            qrFilter.setValue(data, forKey: "inputMessage")
-            if let qrImage = qrFilter.outputImage {
-                let transform = CGAffineTransform(scaleX: 10, y: 10)
-                let scaledQrImage = qrImage.transformed(by: transform)
-                let context = CIContext()
-                guard let cgImage = context.createCGImage(scaledQrImage, from: scaledQrImage.extent) else { return nil }
-                return UIImage(cgImage: cgImage)
-            }
-        }
-        return nil
+        .cornerRadius(20)
+        .frame(width: 300, height: 400)
     }
 } 

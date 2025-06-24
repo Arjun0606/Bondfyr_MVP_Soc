@@ -4,12 +4,39 @@ import UIKit
 
 enum BadgeEmoji {
     static func getEmoji(for type: BadgeType, level: BadgeLevel) -> String {
-        // Since we're using emojis directly from badge types, just return the type emoji
-        return type.emoji
+        let baseEmoji = baseEmoji(for: type)
+        let levelIndicator = levelIndicator(for: level)
+        return "\(baseEmoji)\(levelIndicator)"
+    }
+    
+    private static func baseEmoji(for type: BadgeType) -> String {
+        switch type {
+        case .mostLiked:
+            return "❤️" // Heart for most liked photos
+        case .topThree:
+            return "🏆" // Trophy for top 3 appearances
+        case .afterpartyHost:
+            return "🎉" // Party popper for hosting parties
+        case .afterpartyGuest:
+            return "🦋" // Butterfly for social butterfly
+        case .dailyStreak:
+            return "🔥" // Fire for daily streak
+        }
+    }
+    
+    private static func levelIndicator(for level: BadgeLevel) -> String {
+        switch level {
+        case .bronze:
+            return "🥉"
+        case .silver:
+            return "🥈"
+        case .gold:
+            return "🥇"
+        }
     }
     
     static func generateBadgeImage(type: BadgeType, level: BadgeLevel) -> UIImage {
-        let emoji = type.emoji
+        let emoji = getEmoji(for: type, level: level)
         let fontSize: CGFloat = 60
         let size = CGSize(width: fontSize * 1.2, height: fontSize * 1.2)
         
@@ -18,12 +45,12 @@ enum BadgeEmoji {
             // Draw background circle
             let backgroundColor: UIColor
             switch level {
-            case .earned:
-                backgroundColor = UIColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 0.2) // Gold
-            case .inProgress:
-                backgroundColor = UIColor(red: 1.0, green: 0.4, blue: 0.2, alpha: 0.2) // Orange
-            case .locked:
-                backgroundColor = UIColor(red: 0.4, green: 0.4, blue: 0.4, alpha: 0.2) // Gray
+            case .bronze:
+                backgroundColor = UIColor(red: 0.8, green: 0.5, blue: 0.2, alpha: 0.2)
+            case .silver:
+                backgroundColor = UIColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 0.2)
+            case .gold:
+                backgroundColor = UIColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 0.2)
             }
             
             backgroundColor.setFill()

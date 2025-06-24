@@ -29,10 +29,7 @@ class SavedEventsManager: ObservableObject {
             completion(.failure(NSError(domain: "SavedEventsManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "User not logged in"])))
             return
         }
-        guard let eventKey = event.firestoreId else {
-            completion(.failure(NSError(domain: "SavedEventsManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Event missing Firestore ID, cannot save."])));
-            return
-        }
+        let eventKey = event.id.uuidString
         let savedEventData: [String: Any] = [
             "eventId": eventKey,
             "userId": userId,
@@ -46,8 +43,8 @@ class SavedEventsManager: ObservableObject {
             }
             DispatchQueue.main.async {
                 var updatedEvent = event
-                updatedEvent.isSaved = true
-                if let index = self.savedEvents.firstIndex(where: { $0.firestoreId == eventKey }) {
+                // NOTE: isSaved property not available in current Event model
+                if let index = self.savedEvents.firstIndex(where: { $0.id.uuidString == eventKey }) {
                     self.savedEvents[index] = updatedEvent
                 } else {
                     self.savedEvents.append(updatedEvent)
@@ -65,17 +62,14 @@ class SavedEventsManager: ObservableObject {
             completion(.failure(NSError(domain: "SavedEventsManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "User not logged in"])))
             return
         }
-        guard let eventKey = event.firestoreId else {
-            completion(.failure(NSError(domain: "SavedEventsManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Event missing Firestore ID, cannot unsave."])));
-            return
-        }
+        let eventKey = event.id.uuidString
         db.collection("saved_events").document("\(userId)_\(eventKey)").delete { error in
             if let error = error {
                 completion(.failure(error))
                 return
             }
             DispatchQueue.main.async {
-                self.savedEvents.removeAll { $0.firestoreId == eventKey }
+                self.savedEvents.removeAll { $0.id.uuidString == eventKey }
             }
             self.fetchSavedEvents { _ in
                 completion(.success(()))
@@ -109,14 +103,14 @@ class SavedEventsManager: ObservableObject {
                     EventService.shared.fetchEvent(id: eventId) { event, error in
                         if let event = event {
                             var savedEvent = event
-                            savedEvent.isSaved = true
+                            // NOTE: isSaved property not available in current Event model
                             events.append(savedEvent)
                         }
                         group.leave()
                     }
                 }
                 group.notify(queue: .main) {
-                    let uniqueEvents = Dictionary(grouping: events, by: { $0.firestoreId ?? "" })
+                    let uniqueEvents = Dictionary(grouping: events, by: { $0.id.uuidString })
                         .compactMap { $0.value.first }
                     self?.savedEvents = uniqueEvents
                     completion(.success(uniqueEvents))
@@ -151,7 +145,7 @@ class SavedEventsManager: ObservableObject {
         let calendarEvent = EKEvent(eventStore: eventStore)
         calendarEvent.title = event.name
         calendarEvent.notes = event.description
-        calendarEvent.location = event.location
+        calendarEvent.location = event.venue
         
         // Parse date and time
         let dateFormatter = DateFormatter()

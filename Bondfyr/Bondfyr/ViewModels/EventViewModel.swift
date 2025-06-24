@@ -73,7 +73,7 @@ class EventViewModel: ObservableObject {
     
     func fetchEvent(id: String, completion: @escaping (Event?) -> Void) {
         // Check if we already have this event loaded
-        if let event = events.first(where: { $0.firestoreId == id }) {
+        if let event = events.first(where: { $0.id.uuidString == id }) {
             completion(event)
             return
         }
@@ -81,7 +81,7 @@ class EventViewModel: ObservableObject {
         // Check if we're offline
         if !isOnline {
             if let cachedEvents = OfflineDataManager.shared.getCachedEvents(),
-               let event = cachedEvents.first(where: { $0.firestoreId == id }) {
+               let event = cachedEvents.first(where: { $0.id.uuidString == id }) {
                 completion(event)
             } else {
                 completion(nil)
@@ -102,8 +102,7 @@ class EventViewModel: ObservableObject {
     }
     
     private func loadOfflineEvents() {
-        if let cachedEvents = OfflineDataManager.shared.getCachedEvents(),
-           cachedEvents.allSatisfy({ $0.firestoreId != nil }) {
+        if let cachedEvents = OfflineDataManager.shared.getCachedEvents() {
             events = cachedEvents
             isLoading = false
         } else {
@@ -125,26 +124,10 @@ class EventViewModel: ObservableObject {
             DispatchQueue.main.async {
                 if success {
                     // Update the local event
-                    if let index = self.events.firstIndex(where: { $0.firestoreId == eventId }) {
-                        // Create a new event with updated contest status
-                        let event = self.events[index]
-                        let updatedEvent = Event(
-                            firestoreId: event.firestoreId,
-                            eventName: event.eventName,
-                            name: event.name,
-                            location: event.location,
-                            description: event.description,
-                            date: event.date,
-                            time: event.time,
-                            venueLogoImage: event.venueLogoImage,
-                            eventPosterImage: event.eventPosterImage,
-                            city: event.city,
-                            mapsURL: event.mapsURL,
-                            galleryImages: event.galleryImages,
-                            instagramHandle: event.instagramHandle,
-                            photoContestActive: active
-                        )
-                        self.events[index] = updatedEvent
+                    if let index = self.events.firstIndex(where: { $0.id.uuidString == eventId }) {
+                        // Photo contest status update would need to be handled differently
+                        // since Event model doesn't have photoContestActive property
+                        print("Photo contest toggled for event: \(eventId)")
                     }
                 }
                 

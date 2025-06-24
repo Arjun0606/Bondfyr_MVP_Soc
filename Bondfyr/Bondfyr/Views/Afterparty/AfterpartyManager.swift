@@ -125,9 +125,6 @@ class AfterpartyManager: NSObject, ObservableObject {
         let data = try Firestore.Encoder().encode(afterparty)
         try await db.collection("afterparties").document(afterparty.id).setData(data)
         
-        // Update badge progress for hosting a party
-        await BadgeService.shared.incrementPartiesHosted()
-        
         // Fetch afterparties again to update the UI
         await fetchNearbyAfterparties()
     }
@@ -273,10 +270,6 @@ class AfterpartyManager: NSObject, ObservableObject {
             "pendingRequests": FieldValue.arrayRemove([guestRequestId]),
             "activeUsers": FieldValue.arrayUnion([guestRequestId])
         ])
-        
-        // Update badge progress for attending a party (for the guest)
-        // Note: In a real implementation, we'd get the actual guest's userId from guestRequestId
-        // For now, we'll track it when payment is confirmed in PaymentService
     }
     
     /// Get host earnings dashboard
@@ -315,7 +308,7 @@ class AfterpartyManager: NSObject, ObservableObject {
     func getMarketplaceAfterparties(
         priceRange: ClosedRange<Double>? = nil,
         vibes: [String]? = nil,
-        timeFilter: AfterpartyManager.TimeFilter = .all
+        timeFilter: TimeFilter = .all
     ) async throws -> [Afterparty] {
         // Base query for public afterparties only
         var query = db.collection("afterparties")

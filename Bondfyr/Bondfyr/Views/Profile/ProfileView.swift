@@ -10,25 +10,44 @@ struct ProfileView: View {
     @StateObject private var badgeService = BadgeService.shared
     @State private var showBadges = false
     @State private var showNewBadgeNotification = false
-    @State private var newBadge: UserBadge?
+    @State private var newBadge: PhotoBadge?
+    @State private var showVerificationGuide = false
     
-    // Update computed properties to use actual counts from badge service
+    // Update computed properties to use actual user data from AuthViewModel
     private var totalAttendedParties: Int {
-        badgeService.badgeProgress.partiesAttended
+        authViewModel.currentUser?.attendedPartiesCount ?? 0
     }
     
     private var totalHostedParties: Int {
-        badgeService.badgeProgress.partiesHosted
+        authViewModel.currentUser?.hostedPartiesCount ?? 0
     }
     
     private var maxLikes: Int {
-        badgeService.badgeProgress.totalPhotoLikes
+        authViewModel.currentUser?.totalLikesReceived ?? 0
     }
     
     private var totalBadges: Int {
-        badgeService.userBadges.filter { $0.isEarned }.count
+        badgeService.userBadges.count
     }
     
+    // Verification status
+    private var isHostVerified: Bool {
+        authViewModel.currentUser?.isHostVerified ?? false
+    }
+    
+    private var isGuestVerified: Bool {
+        authViewModel.currentUser?.isGuestVerified ?? false
+    }
+    
+    // Progress towards verification
+    private var hostVerificationProgress: Double {
+        min(Double(totalHostedParties) / 4.0, 1.0) // 4 parties needed for host verification
+    }
+    
+    private var guestVerificationProgress: Double {
+        min(Double(totalAttendedParties) / 8.0, 1.0) // 8 parties needed for guest verification
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -39,99 +58,213 @@ struct ProfileView: View {
                         // Profile Header
                         profileHeader
                         
-                        // Verification Status - Make this prominent
-                        verificationStatusCard
-                        
-                        // Progress Toward Next Badge
-                        if !badgeService.getProgressBadges().isEmpty {
-                            nextBadgeProgressCard
-                        }
-                        
-                        // Stats
-                        HStack(spacing: 40) {
-                            StatView(value: "\(totalAttendedParties)", label: "Attended")
-                            StatView(value: "\(totalHostedParties)", label: "Hosted")
-                            StatView(value: "\(maxLikes)", label: "Photo Likes")
-                            StatView(value: "\(totalBadges)", label: "Badges")
-                        }
-                        .padding(.vertical)
+                        // Verification Status Section
+                        verificationStatusSection
                         
                         // Badges Preview
                         badgesPreview
                         
+                        // Stats with Progress Indicators
+                        statsSection
+                        
                         // Settings
-                        VStack(spacing: 12) {
-                            NavigationLink(destination: SettingsView()) {
-                                SettingsRow(icon: "gear", title: "Settings", subtitle: "App preferences and notifications")
-                            }
-                            
+                        VStack(spacing: 16) {
+                            NavigationButton(icon: "gearshape.fill", text: "Settings")
+                            NavigationButton(icon: "questionmark.circle.fill", text: "Help & Support")
                             Button(action: { showingLogoutAlert = true }) {
-                                SettingsRow(icon: "arrow.right.square", title: "Sign Out", subtitle: "Log out of your account", isDestructive: false)
-                            }
-                            
+                                HStack {
+                                    Image(systemName: "arrow.right.square.fill")
+                                        .foregroundColor(.pink)
+                                    Text("Logout")
+                                            .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                                    }
                             Button(action: { showingDeleteAccountAlert = true }) {
-                                SettingsRow(icon: "trash", title: "Delete Account", subtitle: "Permanently delete your account", isDestructive: true)
+                                HStack {
+                                    Image(systemName: "trash.fill")
+                                        .foregroundColor(.red)
+                                    Text("Delete Account")
+                                    .foregroundColor(.white)
+                                        Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
                             }
                         }
-                        .padding(.top)
+                        .padding(.horizontal)
                     }
                     .padding()
                 }
-                .sheet(isPresented: $showBadges) {
-                    BadgesView(badges: badgeService.userBadges)
+            }
+            .navigationBarHidden(true)
+            .sheet(isPresented: $showBadges) {
+                BadgesView(badges: badgeService.userBadges)
+            }
+            .sheet(isPresented: $showVerificationGuide) {
+                VerificationGuideView(isPresented: $showVerificationGuide)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("BadgeEarned"))) { notification in
+                if let badge = notification.userInfo?["badge"] as? PhotoBadge {
+                    newBadge = badge
+                    showNewBadgeNotification = true
                 }
-                .alert("Sign Out", isPresented: $showingLogoutAlert) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Sign Out", role: .destructive) {
-                        Task {
-                            await authViewModel.logout()
-                        }
-                    }
-                } message: {
-                    Text("Are you sure you want to sign out?")
-                }
-                .alert("Delete Account", isPresented: $showingDeleteAccountAlert) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Delete", role: .destructive) {
-                        // TODO: Implement account deletion
-                    }
-                } message: {
-                    Text("This action cannot be undone. All your data will be permanently deleted.")
-                }
-                
-                // Badge notification overlay
+            }
+            .overlay {
                 if showNewBadgeNotification, let badge = newBadge {
                     Color.black.opacity(0.8)
                         .edgesIgnoringSafeArea(.all)
-                        .onTapGesture {
-                            showNewBadgeNotification = false
-                        }
+                        .transition(.opacity)
                     
                     BadgeNotificationView(badge: badge, isPresented: $showNewBadgeNotification)
-                }
-                
-                // Progress notification overlay
-                if badgeService.showingProgressNotification {
-                    VStack {
-                        ProgressNotificationView(text: badgeService.progressNotificationText)
-                        Spacer()
-                    }
-                    .animation(.spring(), value: badgeService.showingProgressNotification)
+                        .padding()
                 }
             }
-            .navigationBarHidden(true)
-        }
-        .onReceive(badgeService.$newlyEarnedBadge) { badge in
-            if let badge = badge {
-                newBadge = badge
-                showNewBadgeNotification = true
+            .alert("Logout", isPresented: $showingLogoutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Logout", role: .destructive) {
+                    Task {
+                        await authViewModel.logout()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to logout?")
+                        }
+            .alert("Delete Account", isPresented: $showingDeleteAccountAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    Task {
+                        await authViewModel.deleteAccount { error in
+                            if let error = error {
+                                print("Error deleting account: \(error)")
+                            }
+                        }
+                    }
+                }
+            } message: {
+                Text("This action cannot be undone. All your data will be permanently deleted.")
             }
         }
     }
     
+    // New verification status section
+    private var verificationStatusSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Verification Status")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Button(action: { showVerificationGuide = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "info.circle")
+                        Text("Guide")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.pink)
+                }
+            }
+            
+            // Host Verification
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: isHostVerified ? "checkmark.shield.fill" : "shield")
+                        .foregroundColor(isHostVerified ? .green : .gray)
+                    Text("Host Verification")
+                        .foregroundColor(.white)
+                        .fontWeight(.medium)
+                    Spacer()
+                    if isHostVerified {
+                        Text("✓ VERIFIED")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    }
+                }
+                
+                if !isHostVerified {
+                    ProgressView(value: hostVerificationProgress)
+                        .tint(.pink)
+                    Text("\(totalHostedParties)/4 parties hosted • \(4 - totalHostedParties) more to verify")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            // Guest Verification  
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: isGuestVerified ? "checkmark.shield.fill" : "shield")
+                        .foregroundColor(isGuestVerified ? .green : .gray)
+                    Text("Guest Verification")
+                        .foregroundColor(.white)
+                        .fontWeight(.medium)
+                    Spacer()
+                    if isGuestVerified {
+                        Text("✓ VERIFIED")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    }
+                }
+                
+                if !isGuestVerified {
+                    ProgressView(value: guestVerificationProgress)
+                        .tint(.pink)
+                    Text("\(totalAttendedParties)/8 parties attended • \(8 - totalAttendedParties) more to verify")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(15)
+    }
+    
+    // Updated stats section with better context
+    private var statsSection: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 40) {
+                StatView(
+                    value: "\(totalAttendedParties)", 
+                    label: "Attended",
+                    subtitle: isGuestVerified ? "Verified" : "\(max(0, 8 - totalAttendedParties)) to verify"
+                )
+                StatView(
+                    value: "\(totalHostedParties)", 
+                    label: "Hosted",
+                    subtitle: isHostVerified ? "Verified" : "\(max(0, 4 - totalHostedParties)) to verify"
+                )
+                StatView(
+                    value: "\(maxLikes)", 
+                    label: "Max Likes",
+                    subtitle: "From events"
+                )
+                StatView(
+                    value: "\(totalBadges)", 
+                    label: "Badges",
+                    subtitle: "Earned"
+                )
+            }
+        }
+        .padding(.vertical)
+    }
+
     private var profileHeader: some View {
         VStack(spacing: 16) {
-            // Profile Picture
+            // Profile Image
             if let avatarURL = authViewModel.currentUser?.avatarURL,
                let url = URL(string: avatarURL) {
                 AsyncImage(url: url) { image in
@@ -139,153 +272,58 @@ struct ProfileView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
-                    Circle()
-                        .fill(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .overlay(
-                            Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                        )
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
                 }
                 .frame(width: 100, height: 100)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color.pink, lineWidth: 2))
-            } else {
-                Circle()
-                    .fill(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 100, height: 100)
-                    .overlay(
-                        Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "U")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                    )
                     .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+            } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 100, height: 100)
             }
             
-            VStack(spacing: 4) {
-                                    Text(authViewModel.currentUser?.name ?? "User")
+            // User Info with verification badges
+            HStack(spacing: 8) {
+                Text("@\(authViewModel.currentUser?.name ?? "capedpotato")")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
-                // Show verification status prominently
-                if badgeService.verificationStatus.hasAnyVerification {
-                    HStack {
-                        Text(badgeService.verificationStatus.verificationEmoji)
-                        Text(badgeService.verificationStatus.verificationText)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.yellow)
-                    }
-                } else {
-                    Text("Building reputation...")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                if isHostVerified {
+                    Image(systemName: "checkmark.shield.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
                 }
-            }
-        }
-    }
-    
-    private var verificationStatusCard: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("🏅 Verification Status")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            
-            HStack(spacing: 12) {
-                // Host Verification
-                VerificationStatusItem(
-                    emoji: "👑",
-                    title: "Host",
-                    progress: badgeService.badgeProgress.partiesHosted,
-                    requirement: 4,
-                    isVerified: badgeService.verificationStatus.isVerifiedHost
-                )
                 
-                // Party Goer Verification
-                VerificationStatusItem(
-                    emoji: "🎊",
-                    title: "Party Goer", 
-                    progress: badgeService.badgeProgress.partiesAttended,
-                    requirement: 4,
-                    isVerified: badgeService.verificationStatus.isVerifiedPartyGoer
-                )
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6).opacity(0.1))
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(badgeService.verificationStatus.hasAnyVerification ? Color.yellow.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 1)
-        )
-    }
-    
-    private var nextBadgeProgressCard: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("🎯 Next Achievement")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.orange)
-                Spacer()
+                if isGuestVerified {
+                    Image(systemName: "person.badge.shield.checkmark.fill")
+                        .foregroundColor(.blue)
+                        .font(.caption)
+                }
             }
             
-            if let nextBadge = badgeService.getProgressBadges().first {
-                HStack(spacing: 12) {
-                    Text(nextBadge.type.emoji)
-                        .font(.title2)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(nextBadge.name)
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text(nextBadge.progressText)
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        
-                        ProgressView(value: nextBadge.progressPercentage)
-                            .progressViewStyle(LinearProgressViewStyle(tint: .orange))
-                            .scaleEffect(y: 1.5)
-                    }
-                    
-                    Spacer()
-                    
-                    Text("\(Int(nextBadge.progressPercentage * 100))%")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.orange)
-                }
-                .padding()
-                .background(Color(.systemGray6).opacity(0.1))
-                .cornerRadius(12)
-            }
+            Text(authViewModel.currentUser?.city ?? "Pune, Maharashtra, India")
+                .font(.subheadline)
+                .foregroundColor(.gray)
         }
     }
 
     private var badgesPreview: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("🏆 Badges")
-                    .font(.headline)
+                Text("Badges")
+                    .font(.title3)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
+                
                 Spacer()
+                
                 Button(action: { showBadges = true }) {
-                    HStack {
-                        Text("View All")
-                        Image(systemName: "chevron.right")
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(.purple)
+                    Text("See All")
+                        .font(.subheadline)
+                        .foregroundColor(.pink)
                 }
             }
             
@@ -295,193 +333,46 @@ struct ProfileView: View {
                 badgesPreviewGrid
             }
         }
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(15)
     }
     
     private var emptyBadgesView: some View {
-        VStack(spacing: 12) {
-            Text("🌟")
+        VStack(spacing: 8) {
+            Image(systemName: "star.circle")
                 .font(.system(size: 40))
+                .foregroundColor(.gray)
             
             Text("No badges yet")
                 .font(.subheadline)
                 .foregroundColor(.gray)
             
-            Text("Host or attend parties to earn your first badge!")
+            Text("Participate in the community to earn badges!")
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundColor(.gray.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
-        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical)
     }
     
     private var badgesPreviewGrid: some View {
-        let previewBadges = Array(badgeService.userBadges.filter { $0.isEarned }.prefix(4))
-        let lockedBadges = Array(badgeService.userBadges.filter { !$0.isEarned }.prefix(4 - previewBadges.count))
-        let displayBadges = previewBadges + lockedBadges
+        let previewBadges = Array(badgeService.userBadges.prefix(3))
         
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            ForEach(displayBadges.prefix(4)) { badge in
+        return HStack(spacing: 12) {
+            ForEach(previewBadges) { badge in
                 BadgePreviewCell(badge: badge)
             }
             
-            if badgeService.userBadges.count > 4 {
-                VStack {
-                    Text("+\(badgeService.userBadges.count - 4)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.purple)
-                    Text("more")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-                .frame(width: 60, height: 60)
-                .background(Color(.systemGray6).opacity(0.1))
-                .cornerRadius(12)
-            }
-        }
-    }
-}
-
-// MARK: - Verification Status Item
-struct VerificationStatusItem: View {
-    let emoji: String
-    let title: String
-    let progress: Int
-    let requirement: Int
-    let isVerified: Bool
-    
-    private var progressPercentage: Double {
-        return min(Double(progress) / Double(requirement), 1.0)
-    }
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(emoji)
-                .font(.title)
-            
-            Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
-            
-            if isVerified {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
-                    Text("Verified")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
-                }
-            } else {
-                VStack(spacing: 4) {
-                    Text("\(progress)/\(requirement)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    
-                    ProgressView(value: progressPercentage)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .orange))
-                        .scaleEffect(y: 1.0)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(.systemGray6).opacity(0.05))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isVerified ? Color.green.opacity(0.5) : Color.orange.opacity(0.3), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Progress Notification View
-struct ProgressNotificationView: View {
-    let text: String
-    
-    var body: some View {
-        Text(text)
-            .font(.subheadline)
-            .fontWeight(.semibold)
-            .foregroundColor(.white)
-            .padding()
-            .background(Color.orange)
-            .cornerRadius(12)
-            .padding(.horizontal)
-            .padding(.top, 50)
-    }
-}
-
-// MARK: - Badge Notification View (Updated)
-struct BadgeNotificationView: View {
-    let badge: UserBadge
-    @Binding var isPresented: Bool
-    @State private var scale: CGFloat = 0.1
-    @State private var opacity: Double = 0
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("🎉 New Badge Earned! 🎉")
-                .font(.title)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-            
-            VStack(spacing: 16) {
-                Text(badge.type.emoji)
-                    .font(.system(size: 80))
-                    .scaleEffect(scale)
-                
-                VStack(spacing: 8) {
-                    Text(badge.name)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    
-                    Text(badge.description)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                
-                // Perks preview
-                VStack(spacing: 8) {
-                    Text("✨ Perks Unlocked:")
-                        .font(.headline)
-                        .foregroundColor(.yellow)
-                    
-                    Text(badge.type.perk)
-                        .font(.subheadline)
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-                .background(Color(.systemGray6).opacity(0.2))
-                .cornerRadius(12)
-            }
-            
-            Button(action: { isPresented = false }) {
-                Text("Awesome!")
-                    .font(.headline)
+            if badgeService.userBadges.count > 3 {
+                Text("+\(badgeService.userBadges.count - 3)")
+                    .font(.title3)
                     .fontWeight(.bold)
-                    .foregroundColor(.black)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.yellow)
-                    .cornerRadius(12)
-            }
-        }
-        .padding(24)
-        .background(Color.black.opacity(0.9))
-        .cornerRadius(20)
-        .padding(.horizontal, 20)
-        .opacity(opacity)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                scale = 1.0
-                opacity = 1.0
+                    .foregroundColor(.gray)
+                    .frame(width: 60, height: 60)
+                    .background(Color.white.opacity(0.1))
+                    .clipShape(Circle())
             }
         }
     }
@@ -490,82 +381,85 @@ struct BadgeNotificationView: View {
 struct StatView: View {
     let value: String
     let label: String
+    let subtitle: String?
+    
+    init(value: String, label: String, subtitle: String? = nil) {
+        self.value = value
+        self.label = label
+        self.subtitle = subtitle
+    }
     
     var body: some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.title2)
+                .font(.title3)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-            
             Text(label)
                 .font(.caption)
                 .foregroundColor(.gray)
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundColor(.gray.opacity(0.8))
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 }
 
-struct SettingsRow: View {
+struct NavigationButton: View {
     let icon: String
-    let title: String
-    let subtitle: String
-    var isDestructive: Bool = false
+    let text: String
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack {
             Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(isDestructive ? .red : .purple)
-                .frame(width: 30)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(isDestructive ? .red : .white)
-                
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-            
+                .foregroundColor(.pink)
+            Text(text)
+                .foregroundColor(.white)
             Spacer()
-            
             Image(systemName: "chevron.right")
-                .font(.caption)
                 .foregroundColor(.gray)
         }
         .padding()
-        .background(Color(.systemGray6).opacity(0.1))
-        .cornerRadius(12)
+        .background(Color(.systemGray6))
+        .cornerRadius(10)
     }
 }
 
 struct BadgePreviewCell: View {
-    let badge: UserBadge
+    let badge: PhotoBadge
     
     var body: some View {
         VStack(spacing: 4) {
-            Text(badge.type.emoji)
-                .font(.title3)
-                .frame(width: 40, height: 40)
-                .background(
-                    Circle()
-                        .fill(Color(hex: badge.level.color).opacity(badge.isEarned ? 0.3 : 0.1))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color(hex: badge.level.color), lineWidth: 1)
-                        .opacity(badge.isEarned ? 1.0 : 0.5)
-                )
-                .saturation(badge.isEarned ? 1.0 : 0.3)
+            AsyncImage(url: URL(string: badge.imageURL)) { phase in
+                switch phase {
+                case .empty:
+                    Image(systemName: "star.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(Color(hex: badge.level.color))
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                case .failure:
+                    Image(systemName: "star.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(Color(hex: badge.level.color))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(width: 60, height: 60)
+            .background(
+                Circle()
+                    .fill(Color(hex: badge.level.color).opacity(0.2))
+            )
             
-            Text(badge.name)
+            Text(badge.level.rawValue)
                 .font(.caption2)
-                .fontWeight(.medium)
-                .foregroundColor(badge.isEarned ? .white : .gray)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
+                .foregroundColor(Color(hex: badge.level.color))
         }
-        .frame(width: 60)
     }
 } 

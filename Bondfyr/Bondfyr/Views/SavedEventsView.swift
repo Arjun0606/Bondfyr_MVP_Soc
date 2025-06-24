@@ -119,7 +119,7 @@ struct EventRow: View {
                 Text(event.date)
                     .font(.subheadline)
                     .foregroundColor(.gray)
-                Text(event.location)
+                Text(event.venue)
                     .font(.caption)
                     .foregroundColor(.gray)
             }

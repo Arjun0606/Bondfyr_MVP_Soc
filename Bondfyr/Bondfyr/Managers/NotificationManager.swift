@@ -260,7 +260,7 @@ class NotificationManager: NSObject {
         
         let content = UNMutableNotificationContent()
         content.title = "Event Reminder: \(event.name)"
-        content.body = "Your event at \(event.location) starts in \(hoursInAdvance) hours!"
+        content.body = "Your event at \(event.venue) starts in \(hoursInAdvance) hours!"
         content.sound = .default
         content.userInfo = ["eventId": event.id.uuidString]
         

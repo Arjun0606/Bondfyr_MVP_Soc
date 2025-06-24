@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Firebase
+import UIKit
 import FirebaseAppCheck
 import UserNotifications
 import FirebaseMessaging
@@ -124,6 +125,17 @@ struct BondfyrApp: App {
                     .environmentObject(cityManager)
                     .environment(\.pendingEventNavigation, pendingNavigationEventId)
                     .environment(\.pendingEventAction, pendingNavigationAction)
+                    .preferredColorScheme(.dark)
+                    .onReceive(NotificationCenter.default.publisher(for: UIScene.didActivateNotification)) { _ in
+                        // Force dark mode whenever any scene becomes active
+                        DispatchQueue.main.async {
+                            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.forEach { windowScene in
+                                windowScene.windows.forEach { window in
+                                    window.overrideUserInterfaceStyle = .dark
+                                }
+                            }
+                        }
+                    } // Force dark mode always
                     .onChange(of: pendingNavigationEventId) { newValue in
                         if newValue != nil {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -200,7 +212,30 @@ struct BondfyrApp: App {
 
 // Add app delegate to handle notifications
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
+    
+    // Force dark mode when scenes connect
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        // Don't set delegateClass - let SwiftUI handle the scene lifecycle
+        return configuration
+    }
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        
+        // Force dark mode for the entire app
+        DispatchQueue.main.async {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                for window in windowScene.windows {
+                    window.overrideUserInterfaceStyle = .dark
+                }
+            }
+            
+            // Also force dark mode on any future windows
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.forEach { windowScene in
+                windowScene.windows.forEach { window in
+                    window.overrideUserInterfaceStyle = .dark
+                }
+            }
+        }
         
         // Set notification delegate
         UNUserNotificationCenter.current().delegate = self

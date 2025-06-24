@@ -83,20 +83,17 @@ struct EventPhotoGalleryView: View {
         
         // Create a properly initialized placeholder event with all required parameters
         self.event = Event(
-            firestoreId: stringEventId,
-            eventName: "Photo Contest", // Placeholder event name
+            id: UUID(),
             name: "Photo Contest",
-            location: "Loading...",
-            description: "Loading event details...",
             date: "Today",
             time: "Now",
-            venueLogoImage: "placeholder",
-            eventPosterImage: "placeholder",
-            city: "Loading...",
-            mapsURL: "",
-            galleryImages: [],
-            instagramHandle: "",
-            photoContestActive: true
+            venue: "Loading...",
+            description: "Loading event details...",
+            hostId: stringEventId,
+            host: "Unknown Host",
+            coverPhoto: "placeholder",
+            ticketTiers: [],
+            venueLogoImage: "placeholder"
         )
         self.stringEventId = stringEventId
         print("📸 EventPhotoGalleryView initialized with string ID: \(stringEventId)")

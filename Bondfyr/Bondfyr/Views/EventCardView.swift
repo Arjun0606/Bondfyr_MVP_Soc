@@ -50,7 +50,7 @@ struct EventCardView: View {
                         .foregroundColor(.gray)
                         .font(.caption)
                     
-                    Text(event.location)
+                    Text(event.venue)
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }

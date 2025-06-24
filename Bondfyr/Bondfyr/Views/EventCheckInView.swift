@@ -18,6 +18,10 @@ struct EventCheckInView: View {
     @State private var showEventChat = false
     @Environment(\.presentationMode) var presentationMode
     
+    // For Rating System
+    @State private var showRatingSheet = false
+    @State private var userToRate: AppUser?
+    
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -228,11 +232,7 @@ struct EventCheckInView: View {
                                                 .font(.headline)
                                         }
                                         
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(user.name)
-                                                .foregroundColor(.white)
-                                                .font(.body)
-                                        }
+                                        ReputationView(user: user)
                                         
                                         Spacer()
                                     }
@@ -240,6 +240,15 @@ struct EventCheckInView: View {
                                     .padding(.horizontal, 15)
                                     .background(Color.white.opacity(0.05))
                                     .cornerRadius(8)
+                                    .onTapGesture {
+                                        // Allow host to rate a guest
+                                        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+                                        // Make sure host can't rate themselves
+                                        if user.uid != currentUserId {
+                                            userToRate = user
+                                            showRatingSheet = true
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -248,36 +257,28 @@ struct EventCheckInView: View {
                 }
                 .padding(.top)
                 
-                Spacer()
+            }
+        }
+        .sheet(isPresented: $showRatingSheet) {
+            if let userToRate = userToRate {
+                UserPartyProfileView(
+                    isPresented: $showRatingSheet,
+                    user: userToRate,
+                    eventId: event.id.uuidString
+                )
             }
         }
         .onAppear {
-            isLoading = true
-            loadData()
+            fetchAttendees()
+            fetchUserTickets()
+            checkInManager.fetchActiveCheckIn()
         }
         .alert(isPresented: $showCheckInAlert) {
-            Alert(
-                title: Text(alertTitle),
-                message: Text(alertMessage),
-                dismissButton: .default(Text("OK"))
-            )
+            Alert(title: Text(alertTitle), message: Text(alertMessage), dismissButton: .default(Text("OK")))
         }
         .sheet(isPresented: $showEventChat) {
             EventChatView(event: event)
         }
-    }
-    
-    private func loadData() {
-        // Fetch check-in status
-        checkInManager.fetchActiveCheckIn()
-        
-        // Fetch user's tickets for this event
-        userTickets = TicketStorage.load().filter { $0.event == event.name }
-        
-        // Fetch attendees
-        fetchAttendees()
-        
-        isLoading = false
     }
     
     private func fetchAttendees() {
@@ -305,7 +306,34 @@ struct EventCheckInView: View {
                        let phoneNumber = data["phoneNumber"] as? String {
                         
                         let dob = dobTimestamp.dateValue()
-                        let user = AppUser(uid: userId, name: name, email: email, dob: dob, phoneNumber: phoneNumber)
+                        
+                        // --- Verification & Reputation ---
+                        let isHostVerified = data["isHostVerified"] as? Bool ?? false
+                        let isGuestVerified = data["isGuestVerified"] as? Bool ?? false
+                        let hostedPartiesCount = data["hostedPartiesCount"] as? Int ?? 0
+                        let attendedPartiesCount = data["attendedPartiesCount"] as? Int ?? 0
+                        let hostRating = data["hostRating"] as? Double ?? 0.0
+                        let guestRating = data["guestRating"] as? Double ?? 0.0
+                        let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
+                        let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
+                        let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
+
+                        let user = AppUser(
+                            uid: userId,
+                            name: name,
+                            email: email,
+                            dob: dob,
+                            phoneNumber: phoneNumber,
+                            isHostVerified: isHostVerified,
+                            isGuestVerified: isGuestVerified,
+                            hostedPartiesCount: hostedPartiesCount,
+                            attendedPartiesCount: attendedPartiesCount,
+                            hostRating: hostRating,
+                            guestRating: guestRating,
+                            hostRatingsCount: hostRatingsCount,
+                            guestRatingsCount: guestRatingsCount,
+                            totalLikesReceived: totalLikesReceived
+                        )
                         users.append(user)
                     }
                 }
@@ -317,45 +345,82 @@ struct EventCheckInView: View {
         }
     }
     
+    private func fetchUserTickets() {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        let db = Firestore.firestore()
+        db.collection("users").document(userId).collection("tickets")
+            .whereField("event", isEqualTo: event.id.uuidString)
+            .getDocuments { snapshot, error in
+                if let snapshot = snapshot {
+                    userTickets = snapshot.documents.compactMap { doc -> TicketModel? in
+                        var data = doc.data()
+                        data["ticketId"] = doc.documentID // Set the document ID as ticketId
+                        return try? TicketModel(
+                            event: data["event"] as? String ?? "",
+                            tier: data["tier"] as? String ?? "",
+                            count: data["count"] as? Int ?? 0,
+                            genders: data["genders"] as? [String] ?? [],
+                            prCode: data["prCode"] as? String ?? "",
+                            timestamp: data["timestamp"] as? String ?? "",
+                            ticketId: doc.documentID,
+                            phoneNumber: data["phoneNumber"] as? String ?? ""
+                        )
+                    }
+                }
+            }
+    }
+    
     private func checkIn() {
-        guard let ticket = selectedTicket else { return }
+        guard let ticketId = selectedTicket?.ticketId else {
+            alertTitle = "Error"
+            alertMessage = "Please select a ticket to check in."
+            showCheckInAlert = true
+            return
+        }
         
         isLoading = true
-        checkInManager.checkInToEvent(eventId: event.id.uuidString, ticketId: ticket.ticketId) { success, message in
-            isLoading = false
-            alertTitle = success ? "Success" : "Error"
-            alertMessage = message
-            isSuccess = success
-            showCheckInAlert = true
-            
-            if success {
-                loadData()
-                // After successful check-in, show event chat option
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    showEventChat = true
+        
+        checkInManager.checkInToEvent(eventId: event.id.uuidString, ticketId: ticketId) { success, message in
+            DispatchQueue.main.async {
+                isLoading = false
+                if success {
+                    self.isSuccess = true
+                    self.alertTitle = "Success"
+                    self.alertMessage = message
+                } else {
+                    self.isSuccess = false
+                    self.alertTitle = "Check-in Failed"
+                    self.alertMessage = message
                 }
+                self.showCheckInAlert = true
             }
         }
     }
     
     private func checkOut() {
         isLoading = true
+        
         checkInManager.checkOut { success, message in
-            isLoading = false
-            alertTitle = success ? "Success" : "Error"
-            alertMessage = message
-            isSuccess = success
-            showCheckInAlert = true
-            
-            if success {
-                loadData()
+            DispatchQueue.main.async {
+                isLoading = false
+                if success {
+                    self.isSuccess = true
+                    self.alertTitle = "Checked Out"
+                    self.alertMessage = message
+                } else {
+                    self.isSuccess = false
+                    self.alertTitle = "Check-out Failed"
+                    self.alertMessage = message
+                }
+                self.showCheckInAlert = true
             }
         }
     }
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.timeStyle = .short
         return formatter.string(from: date)
     }
-} 
+}

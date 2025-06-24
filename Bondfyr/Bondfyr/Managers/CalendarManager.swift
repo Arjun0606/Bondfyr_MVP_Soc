@@ -145,7 +145,7 @@ class CalendarManager {
         // Create the event
         let calendarEvent = EKEvent(eventStore: eventStore)
         calendarEvent.title = event.name
-        calendarEvent.location = event.location
+        calendarEvent.location = event.venue
         calendarEvent.notes = event.description
         calendarEvent.startDate = startTime
         calendarEvent.endDate = endTime
