@@ -12,6 +12,8 @@ struct ProfileView: View {
     @State private var showNewBadgeNotification = false
     @State private var newBadge: PhotoBadge?
     @State private var showVerificationGuide = false
+    @State private var showSettings = false
+    @State private var showHelpSupport = false
     
     // Update computed properties to use actual user data from AuthViewModel
     private var totalAttendedParties: Int {
@@ -69,8 +71,36 @@ struct ProfileView: View {
                         
                         // Settings
                         VStack(spacing: 16) {
-                            NavigationButton(icon: "gearshape.fill", text: "Settings")
-                            NavigationButton(icon: "questionmark.circle.fill", text: "Help & Support")
+                            Button(action: { showSettings = true }) {
+                                HStack {
+                                    Image(systemName: "gearshape.fill")
+                                        .foregroundColor(.pink)
+                                    Text("Settings")
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                            }
+                            
+                            Button(action: { showHelpSupport = true }) {
+                                HStack {
+                                    Image(systemName: "questionmark.circle.fill")
+                                        .foregroundColor(.pink)
+                                    Text("Help & Support")
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.gray)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                            }
+                            
                             Button(action: { showingLogoutAlert = true }) {
                                 HStack {
                                     Image(systemName: "arrow.right.square.fill")
@@ -111,6 +141,13 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showVerificationGuide) {
                 VerificationGuideView(isPresented: $showVerificationGuide)
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(authViewModel)
+            }
+            .sheet(isPresented: $showHelpSupport) {
+                HelpFAQView()
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("BadgeEarned"))) { notification in
                 if let badge = notification.userInfo?["badge"] as? PhotoBadge {
@@ -408,25 +445,7 @@ struct StatView: View {
     }
 }
 
-struct NavigationButton: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(.pink)
-            Text(text)
-                .foregroundColor(.white)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundColor(.gray)
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(10)
-    }
-}
+
 
 struct BadgePreviewCell: View {
     let badge: PhotoBadge

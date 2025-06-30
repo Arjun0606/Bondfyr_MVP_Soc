@@ -210,8 +210,9 @@ class AfterpartyManager: NSObject, ObservableObject {
     
     // MARK: - New Paid Marketplace Methods
     
-    /// Request paid access to an afterparty
-    func requestPaidAccess(
+    /// TESTFLIGHT VERSION: Request free access (no payment)
+    /// TODO: Replace with paid access after validation
+    func requestFreeAccess(
         to afterparty: Afterparty,
         userHandle: String,
         userName: String
@@ -220,42 +221,65 @@ class AfterpartyManager: NSObject, ObservableObject {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
         }
         
-        // Check if party is sold out
-        if afterparty.isSoldOut {
-            throw NSError(domain: "AfterpartyError", code: 403, userInfo: [NSLocalizedDescriptionKey: "This party is sold out!"])
+        // Check if user already requested or is already going
+        if afterparty.activeUsers.contains(userId) {
+            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You're already going to this afterparty"])
         }
         
-        // Check if user already requested access
         if afterparty.guestRequests.contains(where: { $0.userId == userId }) {
-            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You already requested access to this party"])
+            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You've already requested to join this afterparty"])
         }
         
-        // Create guest request with payment processing
-        let success = try await PaymentService.shared.requestAfterpartyAccess(
-            afterparty: afterparty,
+        // Create a guest request (for TestFlight - host still needs to approve)
+        let guestRequest = GuestRequest(
             userId: userId,
             userName: userName,
-            userHandle: userHandle
+            userHandle: userHandle,
+            requestedAt: Date(),
+            paymentStatus: .paid // Mark as "paid" since it's free for TestFlight
         )
         
-        if success {
-            // Add to Firebase with pending payment status
-            let guestRequest = GuestRequest(
-                userId: userId,
-                userName: userName,
-                userHandle: userHandle,
-                paymentStatus: .pending,
-                stripePaymentIntentId: "pi_placeholder_\(UUID().uuidString)"
-            )
-            
-            // Update Firestore
-            var updatedRequests = afterparty.guestRequests
-            updatedRequests.append(guestRequest)
-            
-            try await db.collection("afterparties").document(afterparty.id).updateData([
-                "guestRequests": updatedRequests.map { try Firestore.Encoder().encode($0) }
-            ])
+        // Update Firestore
+        try await db.collection("afterparties").document(afterparty.id).updateData([
+            "guestRequests": FieldValue.arrayUnion([try Firestore.Encoder().encode(guestRequest)])
+        ])
+        
+        print("✅ TestFlight: Free access requested for afterparty \(afterparty.id)")
+    }
+    
+    /// Track estimated transaction value for analytics (TestFlight version)
+    func trackEstimatedTransaction(afterpartyId: String, estimatedValue: Double) async {
+        let analyticsData: [String: Any] = [
+            "afterpartyId": afterpartyId,
+            "estimatedValue": estimatedValue,
+            "timestamp": Timestamp(date: Date()),
+            "type": "testflight_estimated_transaction",
+            "platform": "ios"
+        ]
+        
+        do {
+            try await db.collection("analytics").addDocument(data: analyticsData)
+            print("📊 Tracked estimated transaction: $\(estimatedValue) for party \(afterpartyId)")
+        } catch {
+            print("❌ Failed to track estimated transaction: \(error)")
         }
+    }
+    
+    /// Get estimated total transaction volume (for TestFlight analytics)
+    func getEstimatedRevenue() async throws -> (totalVolume: Double, commission: Double, transactionCount: Int) {
+        let snapshot = try await db.collection("analytics")
+            .whereField("type", isEqualTo: "testflight_estimated_transaction")
+            .getDocuments()
+        
+        let totalVolume = snapshot.documents.reduce(0.0) { total, doc in
+            let value = doc.data()["estimatedValue"] as? Double ?? 0.0
+            return total + value
+        }
+        
+        let commission = totalVolume * 0.12 // 12% commission
+        let transactionCount = snapshot.documents.count
+        
+        return (totalVolume, commission, transactionCount)
     }
     
     /// Approve a paid guest request (host action)

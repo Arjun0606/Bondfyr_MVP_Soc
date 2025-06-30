@@ -41,7 +41,9 @@ struct GuestRequest: Identifiable, Codable {
     let userHandle: String
     let requestedAt: Date
     let paymentStatus: PaymentStatus
-    let stripePaymentIntentId: String?
+    let paypalOrderId: String?
+    let paidAt: Date?
+    let refundedAt: Date?
     
     init(id: String = UUID().uuidString,
          userId: String,
@@ -49,14 +51,18 @@ struct GuestRequest: Identifiable, Codable {
          userHandle: String,
          requestedAt: Date = Date(),
          paymentStatus: PaymentStatus = .pending,
-         stripePaymentIntentId: String? = nil) {
+         paypalOrderId: String? = nil,
+         paidAt: Date? = nil,
+         refundedAt: Date? = nil) {
         self.id = id
         self.userId = userId
         self.userName = userName
         self.userHandle = userHandle
         self.requestedAt = requestedAt
         self.paymentStatus = paymentStatus
-        self.stripePaymentIntentId = stripePaymentIntentId
+        self.paypalOrderId = paypalOrderId
+        self.paidAt = paidAt
+        self.refundedAt = refundedAt
     }
 }
 

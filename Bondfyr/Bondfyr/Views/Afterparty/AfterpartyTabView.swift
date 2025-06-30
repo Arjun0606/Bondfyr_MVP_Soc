@@ -649,6 +649,7 @@ struct ActionButtonsView: View {
     @Binding var showingEditSheet: Bool
     @Binding var showingDeleteConfirmation: Bool
     @Binding var showingShareSheet: Bool
+    @Binding var showingContactHost: Bool
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
     
@@ -698,19 +699,8 @@ struct ActionButtonsView: View {
         
         return Button(action: {
             if !hasRequested && !isConfirmed {
-                Task {
-                    isJoining = true
-                    do {
-                        try await afterpartyManager.requestPaidAccess(
-                            to: afterparty,
-                            userHandle: authViewModel.currentUser?.instagramHandle ?? authViewModel.currentUser?.snapchatHandle ?? authViewModel.currentUser?.name ?? "",
-                            userName: authViewModel.currentUser?.name ?? ""
-                        )
-                    } catch {
-                        print("Error requesting access: \(error)")
-                    }
-                    isJoining = false
-                }
+                // TESTFLIGHT VERSION: Show contact host sheet
+                showingContactHost = true
             }
         }) {
             HStack {
@@ -743,8 +733,9 @@ struct ActionButtonsView: View {
             Image(systemName: "xmark.circle.fill")
             Text("Sold Out")
         } else {
-            Image(systemName: "dollarsign.circle.fill")
-            Text("Request $\(Int(afterparty.ticketPrice))")
+            // TESTFLIGHT VERSION: Contact host for payment
+            Image(systemName: "message.circle.fill")
+            Text("Contact Host ($\(Int(afterparty.ticketPrice)))")
         }
     }
     
@@ -779,6 +770,7 @@ struct AfterpartyCard: View {
     @State private var showingEditSheet = false
     @State private var showingShareSheet = false
     @State private var showingDeleteConfirmation = false
+    @State private var showingContactHost = false // TESTFLIGHT: Contact host sheet
     
     private var isHost: Bool {
         afterparty.userId == authViewModel.currentUser?.uid
@@ -949,7 +941,8 @@ struct AfterpartyCard: View {
                 showingGuestList: $showingGuestList,
                 showingEditSheet: $showingEditSheet,
                 showingDeleteConfirmation: $showingDeleteConfirmation,
-                showingShareSheet: $showingShareSheet
+                showingShareSheet: $showingShareSheet,
+                showingContactHost: $showingContactHost
             )
         }
         .padding(16)
@@ -970,6 +963,9 @@ struct AfterpartyCard: View {
                 "Hosting an afterparty at \(afterparty.locationName)! Join me!" :
                 "Heading to \(afterparty.hostHandle)'s afterparty at \(afterparty.locationName)!"
             ShareSheet(activityItems: [message])
+        }
+        .sheet(isPresented: $showingContactHost) {
+            ContactHostSheet(afterparty: afterparty, isJoining: $isJoining)
         }
         .alert("Stop Invitation?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -1380,6 +1376,9 @@ struct CreateAfterpartyView: View {
                             ageRestriction: $ageRestriction,
                             maxMaleRatio: $maxMaleRatio
                         )
+                        
+                        // MARK: - TestFlight Notice
+                        TestFlightDisclaimerSection()
                         
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
@@ -2441,6 +2440,222 @@ struct LegalDisclaimerSection: View {
                         .foregroundColor(.gray)
                 }
             }
+        }
+    }
+}
+
+struct TestFlightDisclaimerSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "info.circle.fill")
+                    .foregroundColor(.blue)
+                Text("TestFlight Version")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("🧪 This is a test version to validate the concept")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                
+                Text("💰 Guests contact hosts directly for payment (Venmo/CashApp)")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                
+                Text("📊 We're tracking estimated transaction volumes for analytics")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                
+                Text("🚀 After validation, we'll launch with:")
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.top, 8)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("   • Automatic payment processing")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    Text("   • 12% Bondfyr commission (88% to host)")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    Text("   • Secure dispute resolution")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+            }
+            .padding()
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+}
+
+struct ContactHostSheet: View {
+    let afterparty: Afterparty
+    @Binding var isJoining: Bool
+    @Environment(\.presentationMode) var presentationMode
+    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @EnvironmentObject private var authViewModel: AuthViewModel
+    @State private var showingSuccess = false
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    Image(systemName: "party.popper.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.pink)
+                    
+                    Text("Join \(afterparty.title)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text("Hosted by @\(afterparty.hostHandle)")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                
+                // TestFlight Notice
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("TestFlight Version")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    
+                    Text("For this test version, please contact the host directly for payment instructions.")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
+                
+                // Payment Info
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Payment Details")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    HStack {
+                        Text("Ticket Price:")
+                        Spacer()
+                        Text("$\(Int(afterparty.ticketPrice))")
+                            .fontWeight(.bold)
+                    }
+                    .foregroundColor(.white)
+                    
+                    Text("Contact host via:")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    
+                    VStack(spacing: 12) {
+                        Button("Open Messages") {
+                            // Open default messaging app
+                            if let url = URL(string: "sms:") {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        
+                        Text("Ask for their Venmo/CashApp to send $\(Int(afterparty.ticketPrice))")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding()
+                .background(Color(.systemGray6).opacity(0.1))
+                .cornerRadius(12)
+                
+                Spacer()
+                
+                // Action Buttons
+                VStack(spacing: 12) {
+                    Button(action: joinParty) {
+                        HStack {
+                            if isJoining {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Text("I'll Contact Host")
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(isJoining)
+                    
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .foregroundColor(.gray)
+                }
+            }
+            .padding()
+            .background(Color.black.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(
+                trailing: Button("Done") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .foregroundColor(.white)
+            )
+        }
+        .preferredColorScheme(.dark)
+        .alert("Request Sent!", isPresented: $showingSuccess) {
+            Button("OK") {
+                presentationMode.wrappedValue.dismiss()
+            }
+        } message: {
+            Text("Your request has been sent to the host. They'll approve you once payment is received.")
+        }
+    }
+    
+    private func joinParty() {
+        isJoining = true
+        Task {
+            do {
+                // Track estimated transaction for analytics
+                await afterpartyManager.trackEstimatedTransaction(
+                    afterpartyId: afterparty.id,
+                    estimatedValue: afterparty.ticketPrice
+                )
+                
+                // Simple join request (no payment)
+                try await afterpartyManager.requestFreeAccess(
+                    to: afterparty,
+                    userHandle: authViewModel.currentUser?.instagramHandle ?? authViewModel.currentUser?.snapchatHandle ?? authViewModel.currentUser?.name ?? "",
+                    userName: authViewModel.currentUser?.name ?? ""
+                )
+                
+                await MainActor.run {
+                    showingSuccess = true
+                }
+            } catch {
+                print("Error requesting access: \(error)")
+            }
+            isJoining = false
         }
     }
 }

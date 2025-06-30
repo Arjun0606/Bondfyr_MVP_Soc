@@ -1,10 +1,12 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
+const crypto = require('crypto');
 
 admin.initializeApp();
 
 const GOOGLE_PLACES_API_KEY = functions.config().google.places_key; // Set this in Firebase env
+const LEMONSQUEEZY_WEBHOOK_SECRET = functions.config().lemonsqueezy?.webhook_secret; // Set webhook secret
 
 exports.scrapeVenuesForCity = functions.https.onCall(async (data, context) => {
   const city = data.city;
@@ -58,3 +60,363 @@ exports.scrapeVenuesForCity = functions.https.onCall(async (data, context) => {
 
   return { count: venueDocs.length, city: cityKey };
 });
+
+// MARK: - PayPal Webhook Handler
+exports.paypalWebhook = functions.https.onRequest(async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  try {
+    // Verify webhook signature (PayPal uses different signature verification)
+    const paypalSignature = req.headers['paypal-transmission-sig'];
+    const transmissionId = req.headers['paypal-transmission-id'];
+    const transmissionTime = req.headers['paypal-transmission-time'];
+    const body = JSON.stringify(req.body);
+    
+    // Note: PayPal webhook signature verification would go here
+    // For now, we'll process the webhook without verification in development
+    
+    const { event_type, resource } = req.body;
+    
+    console.log(`Received PayPal webhook: ${event_type}`);
+
+    switch (event_type) {
+      case 'PAYMENT.CAPTURE.COMPLETED':
+        await handlePaymentCaptured(resource);
+        break;
+      case 'PAYMENT.CAPTURE.REFUNDED':
+        await handlePaymentRefunded(resource);
+        break;
+      case 'CHECKOUT.ORDER.APPROVED':
+        await handleOrderApproved(resource);
+        break;
+      default:
+        console.log(`Unhandled PayPal webhook event: ${event_type}`);
+    }
+
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Error processing PayPal webhook:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Handle successful PayPal payment capture
+async function handlePaymentCaptured(resource) {
+  try {
+    const customId = resource.custom_id;
+    const captureId = resource.id;
+    const amount = parseFloat(resource.amount?.value || '0');
+
+    if (!customId) {
+      console.error('Missing custom_id in PayPal payment capture');
+      return;
+    }
+
+    // Parse custom_id: "userId|afterpartyId|userHandle"
+    const [userId, afterpartyId, userHandle] = customId.split('|');
+
+    if (!userId || !afterpartyId) {
+      console.error('Invalid custom_id format in PayPal payment capture');
+      return;
+    }
+
+    console.log(`Processing PayPal payment capture for user ${userId} in afterparty ${afterpartyId}`);
+
+    const db = admin.firestore();
+    
+    // Get the afterparty document
+    const afterpartyRef = db.collection('afterparties').doc(afterpartyId);
+    const afterpartyDoc = await afterpartyRef.get();
+    
+    if (!afterpartyDoc.exists) {
+      console.error(`Afterparty ${afterpartyId} not found`);
+      return;
+    }
+
+    const afterpartyData = afterpartyDoc.data();
+    const guestRequests = afterpartyData.guestRequests || [];
+    
+    // Find and update the guest request
+    const updatedRequests = guestRequests.map(request => {
+      if (request.userId === userId) {
+        return {
+          ...request,
+          paymentStatus: 'paid',
+          paypalOrderId: captureId,
+          paidAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+      }
+      return request;
+    });
+
+    // Update the afterparty document
+    await afterpartyRef.update({
+      guestRequests: updatedRequests
+    });
+
+    // Create transaction record
+    await db.collection('transactions').add({
+      id: captureId,
+      userId: userId,
+      afterpartyId: afterpartyId,
+      afterpartyTitle: afterpartyData.title,
+      amount: amount,
+      type: 'purchase',
+      status: 'paid',
+      paypalOrderId: captureId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Send notification to user
+    await sendPaymentConfirmationNotification(userId, afterpartyData.title);
+
+    console.log(`✅ Successfully processed PayPal payment for user ${userId}`);
+  } catch (error) {
+    console.error('Error handling PayPal payment capture:', error);
+  }
+}
+
+// Handle PayPal payment refund
+async function handlePaymentRefunded(resource) {
+  try {
+    const refundId = resource.id;
+    const amount = parseFloat(resource.amount?.value || '0');
+    const captureId = resource.links?.find(link => link.rel === 'up')?.href?.split('/').pop();
+
+    console.log(`Processing PayPal refund ${refundId} for capture ${captureId}`);
+
+    const db = admin.firestore();
+    
+    // Find the transaction by PayPal order ID
+    const transactionQuery = await db.collection('transactions')
+      .where('paypalOrderId', '==', captureId)
+      .get();
+
+    if (transactionQuery.empty) {
+      console.error(`Transaction not found for PayPal capture ${captureId}`);
+      return;
+    }
+
+    const transactionDoc = transactionQuery.docs[0];
+    const transactionData = transactionDoc.data();
+    
+    // Update transaction status
+    await transactionDoc.ref.update({
+      status: 'refunded',
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      refundAmount: amount
+    });
+
+    // Update guest request status in afterparty
+    const afterpartyRef = db.collection('afterparties').doc(transactionData.afterpartyId);
+    const afterpartyDoc = await afterpartyRef.get();
+    
+    if (afterpartyDoc.exists) {
+      const afterpartyData = afterpartyDoc.data();
+      const guestRequests = afterpartyData.guestRequests || [];
+      
+      const updatedRequests = guestRequests.map(request => {
+        if (request.userId === transactionData.userId) {
+          return {
+            ...request,
+            paymentStatus: 'refunded',
+            refundedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+        }
+        return request;
+      });
+
+      await afterpartyRef.update({
+        guestRequests: updatedRequests
+      });
+    }
+
+    // Send refund notification
+    await sendRefundNotification(transactionData.userId, transactionData.afterpartyTitle);
+
+    console.log(`✅ Successfully processed PayPal refund for capture ${captureId}`);
+  } catch (error) {
+    console.error('Error handling PayPal refund:', error);
+  }
+}
+
+// Handle PayPal order approval (user approved but not yet captured)
+async function handleOrderApproved(resource) {
+  try {
+    const orderId = resource.id;
+    const customId = resource.purchase_units?.[0]?.custom_id;
+
+    console.log(`PayPal order approved: ${orderId}`);
+
+    if (customId) {
+      // Parse custom_id: "userId|afterpartyId|userHandle"
+      const [userId, afterpartyId, userHandle] = customId.split('|');
+      
+      if (userId && afterpartyId) {
+        console.log(`Order approved for user ${userId} in afterparty ${afterpartyId} - awaiting capture`);
+      }
+    }
+  } catch (error) {
+    console.error('Error handling PayPal order approval:', error);
+  }
+}
+
+// Send payment confirmation notification
+async function sendPaymentConfirmationNotification(userId, afterpartyTitle) {
+  try {
+    // Get user's FCM token
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) return;
+
+    const userData = userDoc.data();
+    const fcmToken = userData.fcmToken;
+
+    if (fcmToken) {
+      const message = {
+        notification: {
+          title: 'Payment Confirmed! 🎉',
+          body: `Your ticket for ${afterpartyTitle} is confirmed!`
+        },
+        data: {
+          type: 'payment_confirmation',
+          afterpartyTitle: afterpartyTitle
+        },
+        token: fcmToken
+      };
+
+      await admin.messaging().send(message);
+    }
+  } catch (error) {
+    console.error('Error sending payment confirmation:', error);
+  }
+}
+
+// Send refund notification
+async function sendRefundNotification(userId, afterpartyTitle) {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) return;
+
+    const userData = userDoc.data();
+    const fcmToken = userData.fcmToken;
+
+    if (fcmToken) {
+      const message = {
+        notification: {
+          title: 'Refund Processed 💳',
+          body: `Your refund for ${afterpartyTitle} has been processed.`
+        },
+        data: {
+          type: 'refund_notification',
+          afterpartyTitle: afterpartyTitle
+        },
+        token: fcmToken
+      };
+
+      await admin.messaging().send(message);
+    }
+  } catch (error) {
+    console.error('Error sending refund notification:', error);
+  }
+}
+
+// MARK: - Host Payout Functions
+exports.processHostPayouts = functions.pubsub.schedule('0 9 * * 1').onRun(async (context) => {
+  // Run every Monday at 9 AM to process host payouts
+  try {
+    const db = admin.firestore();
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Get completed afterparties from the past week
+    const afterpartiesSnapshot = await db.collection('afterparties')
+      .where('endTime', '<=', oneWeekAgo)
+      .where('payoutProcessed', '==', false)
+      .get();
+
+    const batch = db.batch();
+    
+    for (const doc of afterpartiesSnapshot.docs) {
+      const afterparty = doc.data();
+      const confirmedGuests = afterparty.guestRequests?.filter(req => req.paymentStatus === 'paid') || [];
+      
+      if (confirmedGuests.length > 0) {
+        const totalRevenue = confirmedGuests.length * afterparty.ticketPrice;
+        const hostEarnings = totalRevenue * 0.88; // 88% to host
+        const platformFee = totalRevenue * 0.12; // 12% platform fee
+
+        // Create payout record
+        const payoutRef = db.collection('payouts').doc();
+        batch.set(payoutRef, {
+          hostId: afterparty.userId,
+          afterpartyId: doc.id,
+          afterpartyTitle: afterparty.title,
+          totalRevenue: totalRevenue,
+          hostEarnings: hostEarnings,
+          platformFee: platformFee,
+          guestCount: confirmedGuests.length,
+          status: 'pending',
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Mark afterparty as payout processed
+        batch.update(doc.ref, {
+          payoutProcessed: true,
+          payoutAmount: hostEarnings,
+          payoutCreatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+
+    await batch.commit();
+    console.log(`Processed payouts for ${afterpartiesSnapshot.size} afterparties`);
+  } catch (error) {
+    console.error('Error processing host payouts:', error);
+  }
+});
+
+// MARK: - Analytics and Reporting
+exports.generateWeeklyReport = functions.pubsub.schedule('0 10 * * 1').onRun(async (context) => {
+  try {
+    const db = admin.firestore();
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Get metrics for the past week
+    const transactionsSnapshot = await db.collection('transactions')
+      .where('createdAt', '>=', oneWeekAgo)
+      .where('type', '==', 'purchase')
+      .where('status', '==', 'paid')
+      .get();
+
+    const totalRevenue = transactionsSnapshot.docs.reduce((sum, doc) => {
+      return sum + (doc.data().amount || 0);
+    }, 0);
+
+    const totalTransactions = transactionsSnapshot.size;
+    const averageTransactionValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+    // Store weekly report
+    await db.collection('analytics').doc(`week_${now.getFullYear()}_${getWeekNumber(now)}`).set({
+      weekStart: oneWeekAgo,
+      weekEnd: now,
+      totalRevenue: totalRevenue,
+      totalTransactions: totalTransactions,
+      averageTransactionValue: averageTransactionValue,
+      generatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`Generated weekly report: $${totalRevenue} revenue, ${totalTransactions} transactions`);
+  } catch (error) {
+    console.error('Error generating weekly report:', error);
+  }
+});
+
+function getWeekNumber(date) {
+  const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+  const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
+  return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+}
