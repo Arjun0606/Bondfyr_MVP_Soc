@@ -99,6 +99,9 @@ struct Afterparty: Identifiable, Codable {
     let earnings: Double // Host earnings (price * confirmed guests * 0.88)
     let bondfyrFee: Double // 12% fee
     
+    // MARK: - TESTFLIGHT: Payment details
+    let venmoHandle: String? // Host's Venmo handle for direct payments
+    
     // MARK: - Computed properties
     var isExpired: Bool {
         return Date() > endTime
@@ -196,6 +199,9 @@ struct Afterparty: Identifiable, Codable {
         case title, ticketPrice, coverPhotoURL, maxGuestCount
         case visibility, approvalType, ageRestriction, maxMaleRatio
         case legalDisclaimerAccepted, guestRequests, earnings, bondfyrFee
+        
+        // TESTFLIGHT: Payment details
+        case venmoHandle
     }
     
     // MARK: - Initializer
@@ -228,7 +234,10 @@ struct Afterparty: Identifiable, Codable {
          legalDisclaimerAccepted: Bool = false,
          guestRequests: [GuestRequest] = [],
          earnings: Double = 0.0,
-         bondfyrFee: Double = 0.12) {
+         bondfyrFee: Double = 0.12,
+         
+         // TESTFLIGHT: Payment details
+         venmoHandle: String? = nil) {
         
         self.id = id
         self.userId = userId
@@ -260,6 +269,9 @@ struct Afterparty: Identifiable, Codable {
         self.guestRequests = guestRequests
         self.earnings = earnings
         self.bondfyrFee = bondfyrFee
+        
+        // TESTFLIGHT: Payment details
+        self.venmoHandle = venmoHandle
     }
     
     // Helper to convert GeoPoint to CLLocationCoordinate2D
@@ -312,6 +324,9 @@ struct Afterparty: Identifiable, Codable {
         guestRequests = (try? container.decode([GuestRequest].self, forKey: .guestRequests)) ?? []
         earnings = (try? container.decode(Double.self, forKey: .earnings)) ?? 0.0
         bondfyrFee = (try? container.decode(Double.self, forKey: .bondfyrFee)) ?? 0.12
+        
+        // TESTFLIGHT: Payment details
+        venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)
         
         // Handle Timestamps
         if let startTimestamp = try? container.decode(Timestamp.self, forKey: .startTime) {
@@ -378,5 +393,8 @@ struct Afterparty: Identifiable, Codable {
         try container.encode(guestRequests, forKey: .guestRequests)
         try container.encode(earnings, forKey: .earnings)
         try container.encode(bondfyrFee, forKey: .bondfyrFee)
+        
+        // TESTFLIGHT: Payment details
+        try container.encode(venmoHandle, forKey: .venmoHandle)
     }
 } 

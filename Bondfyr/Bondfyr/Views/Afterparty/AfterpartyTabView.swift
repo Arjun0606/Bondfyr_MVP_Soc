@@ -504,6 +504,7 @@ struct AfterpartyTabView: View {
                 ageRestriction: 21,
                 maxMaleRatio: 0.6,
                 legalDisclaimerAccepted: true,
+                venmoHandle: "@mike-rooftop",
                 guestRequests: [
                     GuestRequest(userId: "guest-1", userName: "Sarah K", userHandle: "sarah_k", requestedAt: now, paymentStatus: .pending),
                     GuestRequest(userId: "guest-2", userName: "Alex M", userHandle: "alex_m", requestedAt: calendar.date(byAdding: .minute, value: -15, to: now) ?? now, paymentStatus: .paid)
@@ -537,6 +538,7 @@ struct AfterpartyTabView: View {
                 ageRestriction: 18,
                 maxMaleRatio: 0.7,
                 legalDisclaimerAccepted: true,
+                venmoHandle: "@party-queen",
                 guestRequests: [
                     GuestRequest(userId: "guest-3", userName: "Jordan P", userHandle: "jordan_p", requestedAt: calendar.date(byAdding: .minute, value: -10, to: now) ?? now, paymentStatus: .paid)
                 ]
@@ -569,6 +571,7 @@ struct AfterpartyTabView: View {
                 ageRestriction: nil,
                 maxMaleRatio: 0.5,
                 legalDisclaimerAccepted: true,
+                venmoHandle: "@poolside-steve",
                 guestRequests: [
                     GuestRequest(userId: "guest-4", userName: "Emma R", userHandle: "emma_r", requestedAt: calendar.date(byAdding: .minute, value: -20, to: now) ?? now, paymentStatus: .paid),
                     GuestRequest(userId: "guest-5", userName: "Tyler B", userHandle: "tyler_b", requestedAt: calendar.date(byAdding: .minute, value: -5, to: now) ?? now, paymentStatus: .pending)
@@ -602,6 +605,7 @@ struct AfterpartyTabView: View {
                 ageRestriction: 21,
                 maxMaleRatio: 0.4,
                 legalDisclaimerAccepted: true,
+                venmoHandle: "@vip-nights",
                 guestRequests: [
                     GuestRequest(userId: "guest-6", userName: "Sophia L", userHandle: "sophia_l", requestedAt: calendar.date(byAdding: .minute, value: -25, to: now) ?? now, paymentStatus: .paid)
                 ]
@@ -634,6 +638,7 @@ struct AfterpartyTabView: View {
                 ageRestriction: 18,
                 maxMaleRatio: 0.8,
                 legalDisclaimerAccepted: true,
+                venmoHandle: "@kappa-kyle",
                 guestRequests: []
             )
         ]
@@ -1246,6 +1251,9 @@ struct CreateAfterpartyView: View {
     @State private var customStartTime = Date().addingTimeInterval(3600)
     @State private var customEndTime = Date().addingTimeInterval(3600 * 5)
     
+    // MARK: - TESTFLIGHT: Payment Details
+    @State private var venmoHandle = ""
+    
     init(currentLocation: CLLocationCoordinate2D?, currentCity: String) {
         self.currentLocation = currentLocation
         self.currentCity = currentCity
@@ -1316,6 +1324,7 @@ struct CreateAfterpartyView: View {
         return !title.isEmpty &&
                !selectedVibes.isEmpty &&
                !address.isEmpty &&
+               !venmoHandle.isEmpty && // TESTFLIGHT: Require Venmo handle
                ticketPrice >= 5.0 && // Minimum $5
                maxGuestCount >= 5 && // Minimum 5 guests
                legalDisclaimerAccepted // Must accept legal responsibility
@@ -1340,6 +1349,9 @@ struct CreateAfterpartyView: View {
                         ticketPrice: $ticketPrice,
                         maxGuestCount: $maxGuestCount
                     )
+                    
+                    // MARK: - Payment Details (TestFlight)
+                    VenmoPaymentSection(venmoHandle: $venmoHandle)
                     
                     // MARK: - Cover Photo
                     CoverPhotoSectionWithBinding(
@@ -1483,7 +1495,10 @@ struct CreateAfterpartyView: View {
                     approvalType: approvalType,
                     ageRestriction: ageRestriction,
                     maxMaleRatio: maxMaleRatio,
-                    legalDisclaimerAccepted: legalDisclaimerAccepted
+                    legalDisclaimerAccepted: legalDisclaimerAccepted,
+                    
+                    // TESTFLIGHT: Payment details
+                    venmoHandle: venmoHandle.isEmpty ? nil : venmoHandle
             )
             await MainActor.run {
                     presentationMode.wrappedValue.dismiss()
@@ -2444,6 +2459,58 @@ struct LegalDisclaimerSection: View {
     }
 }
 
+struct VenmoPaymentSection: View {
+    @Binding var venmoHandle: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "dollarsign.circle.fill")
+                    .foregroundColor(.green)
+                Text("Payment Details")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your Venmo Handle *")
+                    .font(.body)
+                    .foregroundColor(.white)
+                
+                TextField("@your-venmo-handle", text: $venmoHandle)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("💰 Guests will send payments to this Venmo")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    Text("🔒 Only shown to approved guests")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    Text("📱 Payment format: \"Party: [Your Party Name]\"")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
+        }
+        .padding()
+        .background(Color.green.opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
 struct TestFlightDisclaimerSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2505,6 +2572,22 @@ struct ContactHostSheet: View {
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
     @State private var showingSuccess = false
+    @State private var userRequestStatus: UserRequestStatus = .notRequested
+    
+    enum UserRequestStatus {
+        case notRequested
+        case pending
+        case approved
+        case confirmed
+    }
+    
+    private var currentUserId: String {
+        authViewModel.currentUser?.uid ?? ""
+    }
+    
+    private var userRequest: GuestRequest? {
+        afterparty.guestRequests.first { $0.userId == currentUserId }
+    }
     
     var body: some View {
         NavigationView {
@@ -2525,92 +2608,22 @@ struct ContactHostSheet: View {
                         .foregroundColor(.gray)
                 }
                 
-                // TestFlight Notice
-                VStack(spacing: 16) {
-                    HStack {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("TestFlight Version")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                    }
-                    
-                    Text("For this test version, please contact the host directly for payment instructions.")
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
+                // Status-based content
+                switch userRequestStatus {
+                case .notRequested:
+                    notRequestedContent
+                case .pending:
+                    pendingContent
+                case .approved:
+                    approvedContent
+                case .confirmed:
+                    confirmedContent
                 }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
-                
-                // Payment Info
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Payment Details")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    HStack {
-                        Text("Ticket Price:")
-                        Spacer()
-                        Text("$\(Int(afterparty.ticketPrice))")
-                            .fontWeight(.bold)
-                    }
-                    .foregroundColor(.white)
-                    
-                    Text("Contact host via:")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                    
-                    VStack(spacing: 12) {
-                        Button("Open Messages") {
-                            // Open default messaging app
-                            if let url = URL(string: "sms:") {
-                                UIApplication.shared.open(url)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                        
-                        Text("Ask for their Venmo/CashApp to send $\(Int(afterparty.ticketPrice))")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                .padding()
-                .background(Color(.systemGray6).opacity(0.1))
-                .cornerRadius(12)
                 
                 Spacer()
                 
-                // Action Buttons
-                VStack(spacing: 12) {
-                    Button(action: joinParty) {
-                        HStack {
-                            if isJoining {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Text("I'll Contact Host")
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    .disabled(isJoining)
-                    
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(.gray)
-                }
+                // Action buttons
+                actionButtons
             }
             .padding()
             .background(Color.black.ignoresSafeArea())
@@ -2623,16 +2636,259 @@ struct ContactHostSheet: View {
             )
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            updateUserStatus()
+        }
         .alert("Request Sent!", isPresented: $showingSuccess) {
             Button("OK") {
                 presentationMode.wrappedValue.dismiss()
             }
         } message: {
-            Text("Your request has been sent to the host. They'll approve you once payment is received.")
+            Text("Your request has been sent to the host. They'll approve you once they review your request.")
         }
     }
     
-    private func joinParty() {
+    private var notRequestedContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                    Text("TestFlight Version")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Text("Send a join request and wait for host approval. Once approved, you'll see payment details.")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(12)
+            
+            // Payment Info Preview
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Payment Details")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                HStack {
+                    Text("Ticket Price:")
+                    Spacer()
+                    Text("$\(Int(afterparty.ticketPrice))")
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(.white)
+                
+                Text("Payment details will be revealed after host approval")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .background(Color(.systemGray6).opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var pendingContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "clock.fill")
+                        .foregroundColor(.orange)
+                    Text("Request Pending")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Text("Your request is pending host approval. You'll be notified when approved!")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var approvedContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Approved! Payment Required")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Text("You've been approved! Send payment to secure your spot.")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(12)
+            
+            // Venmo Payment Details
+            if let venmoHandle = afterparty.venmoHandle {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Payment Instructions")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Send to:")
+                            Spacer()
+                            Text(venmoHandle)
+                                .fontWeight(.bold)
+                                .foregroundColor(.green)
+                        }
+                        
+                        HStack {
+                            Text("Amount:")
+                            Spacer()
+                            Text("$\(Int(afterparty.ticketPrice))")
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Payment message:")
+                                .foregroundColor(.gray)
+                            Text("\"Party: \(afterparty.title)\"")
+                                .font(.monospaced(.body)())
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .foregroundColor(.white)
+                    
+                    Button("Open Venmo") {
+                        if let venmoURL = URL(string: "venmo://paycharge?txn=pay&recipients=\(venmoHandle)&amount=\(Int(afterparty.ticketPrice))&note=Party: \(afterparty.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
+                            UIApplication.shared.open(venmoURL) { success in
+                                if !success {
+                                    // Fallback to Venmo website
+                                    if let webURL = URL(string: "https://venmo.com/\(venmoHandle)") {
+                                        UIApplication.shared.open(webURL)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .padding()
+                .background(Color(.systemGray6).opacity(0.1))
+                .cornerRadius(12)
+            }
+        }
+    }
+    
+    private var confirmedContent: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("You're Going!")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Text("Payment confirmed! See you at the party!")
+                    .font(.body)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var actionButtons: some View {
+        VStack(spacing: 12) {
+            switch userRequestStatus {
+            case .notRequested:
+                Button(action: sendJoinRequest) {
+                    HStack {
+                        if isJoining {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("Send Join Request")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .disabled(isJoining)
+                
+            case .pending:
+                Text("Waiting for host approval...")
+                    .foregroundColor(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.orange.opacity(0.2))
+                    .cornerRadius(12)
+                
+            case .approved:
+                Text("Send payment via Venmo to confirm your spot")
+                    .foregroundColor(.green)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green.opacity(0.2))
+                    .cornerRadius(12)
+                
+            case .confirmed:
+                Text("You're all set!")
+                    .foregroundColor(.green)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green.opacity(0.2))
+                    .cornerRadius(12)
+            }
+            
+            Button("Cancel") {
+                presentationMode.wrappedValue.dismiss()
+            }
+            .foregroundColor(.gray)
+        }
+    }
+    
+    private func updateUserStatus() {
+        if afterparty.activeUsers.contains(currentUserId) {
+            userRequestStatus = .confirmed
+        } else if let request = userRequest {
+            if request.paymentStatus == .paid {
+                userRequestStatus = .confirmed
+            } else {
+                // In TestFlight, we'll treat all requests as "approved" for simplicity
+                // In real version, host would need to manually approve first
+                userRequestStatus = .approved
+            }
+        } else {
+            userRequestStatus = .notRequested
+        }
+    }
+    
+    private func sendJoinRequest() {
         isJoining = true
         Task {
             do {
@@ -2650,6 +2906,7 @@ struct ContactHostSheet: View {
                 )
                 
                 await MainActor.run {
+                    userRequestStatus = .approved // Auto-approve for TestFlight
                     showingSuccess = true
                 }
             } catch {

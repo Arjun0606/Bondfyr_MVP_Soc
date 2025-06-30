@@ -76,7 +76,10 @@ class AfterpartyManager: NSObject, ObservableObject {
         approvalType: ApprovalType = .manual,
         ageRestriction: Int? = nil,
         maxMaleRatio: Double = 1.0,
-        legalDisclaimerAccepted: Bool = false
+        legalDisclaimerAccepted: Bool = false,
+        
+        // TESTFLIGHT: Payment details
+        venmoHandle: String? = nil
     ) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
@@ -119,7 +122,10 @@ class AfterpartyManager: NSObject, ObservableObject {
             approvalType: approvalType,
             ageRestriction: ageRestriction,
             maxMaleRatio: maxMaleRatio,
-            legalDisclaimerAccepted: legalDisclaimerAccepted
+            legalDisclaimerAccepted: legalDisclaimerAccepted,
+            
+            // TESTFLIGHT: Payment details
+            venmoHandle: venmoHandle
         )
         
         let data = try Firestore.Encoder().encode(afterparty)
