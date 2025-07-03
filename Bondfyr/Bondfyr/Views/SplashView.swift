@@ -12,15 +12,12 @@ struct SplashView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var isChecking = true
     @State private var showSplash = true
-    @State private var hasSeenOnboarding = UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
     @State private var opacity: Double = 0
     @State private var navigateToMainView = false
     @State private var navigateToProfileForm = false
     @State private var navigateToSignIn = false
-    @State private var navigateToOnboarding = false
     @State private var forceShowSocialLink = false
     
-    // Debug flag to force showing GoogleSignInView
     @State private var forceShowSignIn = false
 
     var body: some View {
@@ -45,23 +42,20 @@ struct SplashView: View {
             GoogleSignInView()
                 .environmentObject(authViewModel)
                 .onDisappear {
-                    print("GoogleSignInView disappeared, checking auth...")
                     // When GoogleSignInView disappears, check if we are logged in
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         if let user = Auth.auth().currentUser {
-                            print("Found authenticated user after GoogleSignInView disappeared: \(user.uid)")
-                            
-                            // Check for social link
-                            let hasSocial = (self.authViewModel.currentUser?.instagramHandle?.isEmpty == false) || (self.authViewModel.currentUser?.snapchatHandle?.isEmpty == false)
-                            if hasSocial {
+                            // Check for profile completion
+                            let hasUsername = (self.authViewModel.currentUser?.username?.isEmpty == false)
+                            let hasCity = (self.authViewModel.currentUser?.city?.isEmpty == false)
+                            if hasUsername && hasCity {
                                 self.navigateToMainView = true
                             } else {
                                 self.navigateToProfileForm = true
                             }
                         } else {
-                            print("No authenticated user after GoogleSignInView disappeared")
                             // If we get here with no user, we need to ensure the sign-in view stays presented
-                            if !navigateToMainView && !navigateToProfileForm && !navigateToOnboarding {
+                            if !navigateToMainView && !navigateToProfileForm {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                     navigateToSignIn = true
                                 }
@@ -70,16 +64,8 @@ struct SplashView: View {
                     }
                 }
         }
-        .fullScreenCover(isPresented: $navigateToOnboarding) {
-            OnboardingView(hasSeenOnboarding: $hasSeenOnboarding)
-        }
+
         .onAppear {
-            // For testing, allow direct navigation to sign-in
-            if forceShowSignIn {
-                navigateToSignIn = true
-                return
-            }
-            
             startSplashAnimation()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserDidLogin"))) { _ in
@@ -88,12 +74,9 @@ struct SplashView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserDidLogout"))) { _ in
             // Listen for logout notification
-            print("Received UserDidLogout notification, navigating to sign in")
-            
             // First ensure we're not showing other screens
             navigateToMainView = false
             navigateToProfileForm = false
-            navigateToOnboarding = false
             
             // Clear auth state in view model
             DispatchQueue.main.async {
@@ -105,9 +88,8 @@ struct SplashView: View {
             if Auth.auth().currentUser != nil {
                 do {
                     try Auth.auth().signOut()
-                    print("Successfully signed out from Firebase Auth")
                 } catch {
-                    print("Error signing out: \(error)")
+                    // Silent error handling
                 }
             }
             
@@ -115,7 +97,6 @@ struct SplashView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 // Force show sign in view
                 navigateToSignIn = true
-                print("Navigation to sign-in triggered after logout")
             }
         }
     }
@@ -141,35 +122,23 @@ struct SplashView: View {
     }
 
     func checkAuthStatus() {
-        print("Checking auth status using AuthViewModel...")
-        
         // Reset all navigation flags
         navigateToMainView = false
         navigateToProfileForm = false
         navigateToSignIn = false
-        navigateToOnboarding = false
 
         // Give the AuthStateListener a moment to update AuthViewModel
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { 
             if !self.authViewModel.isLoggedIn || Auth.auth().currentUser == nil {
-                print("AuthViewModel says user is NOT logged in.")
-                if !self.hasSeenOnboarding {
-                    print("Navigating to Onboarding.")
-                    self.navigateToOnboarding = true
-                } else {
-                    print("Navigating to Sign In.")
-                    self.navigateToSignIn = true
-                }
+                self.navigateToSignIn = true
                 return
             }
             
             // User is logged in according to AuthViewModel, now check profile completeness
-            print("AuthViewModel says user IS logged in. Checking profile...")
             // Ensure currentUser is fetched if not already available
             if self.authViewModel.currentUser == nil {
                 self.authViewModel.fetchUserProfile { success in 
                     if !success {
-                        print("Failed to fetch user profile, navigating to sign in")
                         self.navigateToSignIn = true
                         return
                     }
@@ -183,19 +152,17 @@ struct SplashView: View {
 
     private func evaluateProfileAndNavigate() {
         guard let user = authViewModel.currentUser else {
-            print("Profile check: No currentUser in AuthViewModel. Navigating to profile form.")
             navigateToProfileForm = true
             return
         }
 
-        let hasSocial = (user.instagramHandle?.isEmpty == false) || (user.snapchatHandle?.isEmpty == false)
+        let hasUsername = (user.username?.isEmpty == false)
+        let hasGender = (user.gender?.isEmpty == false)
         let hasCity = (user.city?.isEmpty == false)
 
-        if hasSocial && hasCity {
-            print("Profile complete. Navigating to main view.")
+        if hasUsername && hasGender && hasCity {
             navigateToMainView = true
         } else {
-            print("Profile incomplete. Navigating to profile form.")
             navigateToProfileForm = true
         }
     }

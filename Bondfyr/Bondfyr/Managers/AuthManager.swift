@@ -114,7 +114,7 @@ class AuthManager {
             
             self.db.collection("users").document(user.uid).setData(userData) { error in
                 if let error = error {
-                    print("Error writing user document: \(error)")
+                    
                     completion(.failure(.serverError))
                     return
                 }
@@ -125,13 +125,13 @@ class AuthManager {
                 
                 changeRequest.commitChanges { error in
                     if let error = error {
-                        print("Error updating user profile: \(error)")
+                        
                     }
                     
                     // Send verification email
                     user.sendEmailVerification { error in
                         if let error = error {
-                            print("Error sending verification email: \(error)")
+                            
                         }
                         
                         completion(.success(user))
@@ -156,7 +156,7 @@ class AuthManager {
             guard let self = self else { return }
             
             if let error = error {
-                print("Google Sign In error: \(error)")
+                
                 completion(.failure(.googleSignInFailed))
                 return
             }
@@ -186,7 +186,7 @@ class AuthManager {
                         // Use setData with merge to update existing or create new
                         self.db.collection("users").document(user.uid).setData(userData, merge: true) { error in
                             if let error = error {
-                                print("Error updating user document: \(error)")
+                                
                             }
                             completion(.success(user))
                         }
@@ -207,7 +207,7 @@ class AuthManager {
             try auth.signOut()
             return .success(())
         } catch {
-            print("Error signing out: \(error)")
+            
             return .failure(.unknownError)
         }
     }
@@ -253,7 +253,7 @@ class AuthManager {
         
         user.sendEmailVerification { error in
             if let error = error {
-                print("Error sending verification email: \(error)")
+                
                 completion(.failure(.serverError))
                 return
             }
@@ -280,7 +280,7 @@ class AuthManager {
         
         changeRequest.commitChanges { error in
             if let error = error {
-                print("Error updating profile: \(error)")
+                
                 completion(.failure(.serverError))
                 return
             }
@@ -299,7 +299,7 @@ class AuthManager {
             if !userData.isEmpty {
                 self.db.collection("users").document(user.uid).updateData(userData) { error in
                     if let error = error {
-                        print("Error updating user document: \(error)")
+                        
                         completion(.failure(.serverError))
                         return
                     }
@@ -322,7 +322,7 @@ class AuthManager {
             "phoneNumber": phoneNumber
         ]) { error in
             if let error = error {
-                print("Error updating phone number: \(error)")
+                
                 completion(.failure(.serverError))
                 return
             }
@@ -339,7 +339,7 @@ class AuthManager {
         
         db.collection("users").document(userId).getDocument { snapshot, error in
             if let error = error {
-                print("Error fetching user data: \(error)")
+                
                 completion(.failure(.serverError))
                 return
             }
@@ -380,7 +380,7 @@ class AuthManager {
             "lastLogin": Timestamp()
         ]) { error in
             if let error = error {
-                print("Error updating last login: \(error)")
+                
             }
         }
     }
@@ -389,7 +389,7 @@ class AuthManager {
         let authErrorCode = AuthErrorCode(_bridgedNSError: error)
         
         guard let errorCode = authErrorCode else {
-            print("Unknown auth error (could not create AuthErrorCode): \(error)")
+            
             return .unknownError
         }
         
@@ -409,7 +409,7 @@ class AuthManager {
         case .userDisabled:
             return .userDisabled
         default:
-            print("Unknown auth error: \(error)")
+            
             return .unknownError
         }
     }

@@ -12,11 +12,34 @@ import FirebaseFirestore
 import FirebaseMessaging
 import FirebaseAuth
 
+
+
 enum NotificationType {
+    // Event notifications
     case photoContestUnlocked(eventId: String, eventName: String)
     case newEventAnnouncement(eventId: String, eventName: String)
     case ticketPurchaseConfirmation(eventId: String, eventName: String, ticketId: String)
     case upcomingEvent(eventId: String, eventName: String, daysUntilEvent: Int)
+    
+    // Party notifications - For Hosts
+    case guestRequestReceived(partyId: String, partyTitle: String, guestName: String)
+    case guestApprovalDeadline(partyId: String, partyTitle: String, pendingCount: Int)
+    case partyCapacityAlert(partyId: String, partyTitle: String, currentCount: Int, maxCount: Int)
+    case partyStartReminder(partyId: String, partyTitle: String, hoursUntil: Int)
+    case paymentReceived(partyId: String, partyTitle: String, guestName: String, amount: String)
+    
+    // Party notifications - For Guests
+    case requestApproved(partyId: String, partyTitle: String, hostName: String)
+    case requestDenied(partyId: String, partyTitle: String, hostName: String)
+    case partyLocationUpdate(partyId: String, partyTitle: String, newLocation: String)
+    case partyTimeUpdate(partyId: String, partyTitle: String, newTime: String)
+    case hostMessage(partyId: String, partyTitle: String, hostName: String, message: String)
+    case partyStartingSoon(partyId: String, partyTitle: String, minutesUntil: Int)
+    case partyEnding(partyId: String, partyTitle: String, minutesLeft: Int)
+    
+    // System notifications
+    case systemMaintenance(scheduledTime: Date)
+    case newFeatureAvailable(featureName: String)
     
     var title: String {
         switch self {
@@ -28,6 +51,37 @@ enum NotificationType {
             return "Ticket Confirmed for \(eventName)"
         case .upcomingEvent(_, let eventName, let days):
             return "\(eventName) is in \(days) days!"
+        // Host notifications
+        case .guestRequestReceived(_, let partyTitle, let guestName):
+            return "New Guest Request 👋"
+        case .guestApprovalDeadline(_, let partyTitle, let pendingCount):
+            return "Approval Deadline Approaching ⏰"
+        case .partyCapacityAlert(_, let partyTitle, _, _):
+            return "Party Almost Full! 🎉"
+        case .partyStartReminder(_, let partyTitle, let hoursUntil):
+            return "Party Starting in \(hoursUntil)h ⭐"
+        case .paymentReceived(_, let partyTitle, let guestName, _):
+            return "Payment Received 💰"
+        // Guest notifications
+        case .requestApproved(_, let partyTitle, _):
+            return "Request Approved! 🎉"
+        case .requestDenied(_, let partyTitle, _):
+            return "Request Update 📝"
+        case .partyLocationUpdate(_, let partyTitle, _):
+            return "Location Update 📍"
+        case .partyTimeUpdate(_, let partyTitle, _):
+            return "Time Change ⏰"
+        case .hostMessage(_, let partyTitle, let hostName, _):
+            return "Message from \(hostName) 💬"
+        case .partyStartingSoon(_, let partyTitle, let minutesUntil):
+            return "Party Starting Soon! 🚀"
+        case .partyEnding(_, let partyTitle, let minutesLeft):
+            return "Last Call! ⏰"
+        // System
+        case .systemMaintenance(_):
+            return "Scheduled Maintenance 🔧"
+        case .newFeatureAvailable(let featureName):
+            return "New Feature: \(featureName) ✨"
         }
     }
     
@@ -41,6 +95,40 @@ enum NotificationType {
             return "Your ticket for \(eventName) has been confirmed. It's available in the app."
         case .upcomingEvent(_, let eventName, let days):
             return "Get ready! \(eventName) is coming up in \(days) days."
+        // Host notifications
+        case .guestRequestReceived(_, let partyTitle, let guestName):
+            return "\(guestName) wants to join \(partyTitle). Tap to review their request."
+        case .guestApprovalDeadline(_, let partyTitle, let pendingCount):
+            return "You have \(pendingCount) pending requests for \(partyTitle). Approve soon!"
+        case .partyCapacityAlert(_, let partyTitle, let currentCount, let maxCount):
+            return "\(partyTitle) is at \(currentCount)/\(maxCount) capacity. Consider closing requests!"
+        case .partyStartReminder(_, let partyTitle, let hoursUntil):
+            return "Don't forget to prep for \(partyTitle)! Make sure you're ready to host."
+        case .paymentReceived(_, let partyTitle, let guestName, let amount):
+            return "\(guestName) paid \(amount) for \(partyTitle). Check your Venmo!"
+        // Guest notifications
+        case .requestApproved(_, let partyTitle, let hostName):
+            return "You're in! \(hostName) approved your request for \(partyTitle). Check party details."
+        case .requestDenied(_, let partyTitle, let hostName):
+            return "Your request for \(partyTitle) wasn't approved this time. Keep looking for other parties!"
+        case .partyLocationUpdate(_, let partyTitle, let newLocation):
+            return "\(partyTitle) location changed to \(newLocation). Update your plans!"
+        case .partyTimeUpdate(_, let partyTitle, let newTime):
+            return "\(partyTitle) time changed to \(newTime). Mark your calendar!"
+        case .hostMessage(_, let partyTitle, let hostName, let message):
+            return "\(message)"
+        case .partyStartingSoon(_, let partyTitle, let minutesUntil):
+            return "\(partyTitle) starts in \(minutesUntil) minutes! Time to head over."
+        case .partyEnding(_, let partyTitle, let minutesLeft):
+            return "\(partyTitle) ends in \(minutesLeft) minutes. Last chance to join!"
+        // System
+        case .systemMaintenance(let scheduledTime):
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            return "Bondfyr will be down for maintenance on \(formatter.string(from: scheduledTime))."
+        case .newFeatureAvailable(let featureName):
+            return "Try out \(featureName) in the latest app update!"
         }
     }
     
@@ -54,6 +142,37 @@ enum NotificationType {
             return "ticket-confirmation-\(ticketId)"
         case .upcomingEvent(let eventId, _, _):
             return "upcoming-event-\(eventId)"
+        // Host notifications
+        case .guestRequestReceived(let partyId, _, _):
+            return "guest-request-\(partyId)-\(UUID().uuidString)"
+        case .guestApprovalDeadline(let partyId, _, _):
+            return "approval-deadline-\(partyId)"
+        case .partyCapacityAlert(let partyId, _, _, _):
+            return "capacity-alert-\(partyId)"
+        case .partyStartReminder(let partyId, _, _):
+            return "party-start-reminder-\(partyId)"
+        case .paymentReceived(let partyId, _, _, _):
+            return "payment-received-\(partyId)-\(UUID().uuidString)"
+        // Guest notifications
+        case .requestApproved(let partyId, _, _):
+            return "request-approved-\(partyId)"
+        case .requestDenied(let partyId, _, _):
+            return "request-denied-\(partyId)"
+        case .partyLocationUpdate(let partyId, _, _):
+            return "location-update-\(partyId)"
+        case .partyTimeUpdate(let partyId, _, _):
+            return "time-update-\(partyId)"
+        case .hostMessage(let partyId, _, _, _):
+            return "host-message-\(partyId)-\(UUID().uuidString)"
+        case .partyStartingSoon(let partyId, _, _):
+            return "party-starting-\(partyId)"
+        case .partyEnding(let partyId, _, _):
+            return "party-ending-\(partyId)"
+        // System
+        case .systemMaintenance(_):
+            return "system-maintenance"
+        case .newFeatureAvailable(let featureName):
+            return "new-feature-\(featureName.lowercased().replacingOccurrences(of: " ", with: "-"))"
         }
     }
     
@@ -85,6 +204,106 @@ enum NotificationType {
                 "eventName": eventName,
                 "daysUntilEvent": daysUntilEvent
             ]
+        // Host notifications
+        case .guestRequestReceived(let partyId, let partyTitle, let guestName):
+            return [
+                "type": "guest_request_received",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "guestName": guestName
+            ]
+        case .guestApprovalDeadline(let partyId, let partyTitle, let pendingCount):
+            return [
+                "type": "guest_approval_deadline",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "pendingCount": pendingCount
+            ]
+        case .partyCapacityAlert(let partyId, let partyTitle, let currentCount, let maxCount):
+            return [
+                "type": "party_capacity_alert",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "currentCount": currentCount,
+                "maxCount": maxCount
+            ]
+        case .partyStartReminder(let partyId, let partyTitle, let hoursUntil):
+            return [
+                "type": "party_start_reminder",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "hoursUntil": hoursUntil
+            ]
+        case .paymentReceived(let partyId, let partyTitle, let guestName, let amount):
+            return [
+                "type": "payment_received",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "guestName": guestName,
+                "amount": amount
+            ]
+        // Guest notifications
+        case .requestApproved(let partyId, let partyTitle, let hostName):
+            return [
+                "type": "request_approved",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "hostName": hostName
+            ]
+        case .requestDenied(let partyId, let partyTitle, let hostName):
+            return [
+                "type": "request_denied",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "hostName": hostName
+            ]
+        case .partyLocationUpdate(let partyId, let partyTitle, let newLocation):
+            return [
+                "type": "party_location_update",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "newLocation": newLocation
+            ]
+        case .partyTimeUpdate(let partyId, let partyTitle, let newTime):
+            return [
+                "type": "party_time_update",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "newTime": newTime
+            ]
+        case .hostMessage(let partyId, let partyTitle, let hostName, let message):
+            return [
+                "type": "host_message",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "hostName": hostName,
+                "message": message
+            ]
+        case .partyStartingSoon(let partyId, let partyTitle, let minutesUntil):
+            return [
+                "type": "party_starting_soon",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "minutesUntil": minutesUntil
+            ]
+        case .partyEnding(let partyId, let partyTitle, let minutesLeft):
+            return [
+                "type": "party_ending",
+                "partyId": partyId,
+                "partyTitle": partyTitle,
+                "minutesLeft": minutesLeft
+            ]
+        // System
+        case .systemMaintenance(let scheduledTime):
+            return [
+                "type": "system_maintenance",
+                "scheduledTime": scheduledTime.timeIntervalSince1970
+            ]
+        case .newFeatureAvailable(let featureName):
+            return [
+                "type": "new_feature_available",
+                "featureName": featureName
+            ]
         }
     }
 }
@@ -105,30 +324,34 @@ class NotificationManager: NSObject {
     private func checkNotificationStatus() {
         self.notificationCenter.getNotificationSettings { settings in
             if settings.authorizationStatus != .authorized {
-                print("Notifications not authorized, will request permission")
+                
                 DispatchQueue.main.async {
                     self.requestAuthorization()
                 }
             } else {
-                print("Notification permissions already granted")
+                
             }
         }
     }
 
     func requestAuthorization() {
-        print("Requesting notification permission with alert, sound, badge")
+        
         self.notificationCenter.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("✅ Notification permission granted")
+                
                 
                 // Register for remote notifications on main thread
                 DispatchQueue.main.async {
                     UIApplication.shared.registerForRemoteNotifications()
+                    
+                    
+                    // FCM token will be handled in AppDelegate after APNS token is set
+                    
                 }
             } else if let error = error {
-                print("❌ Notification permission error: \(error.localizedDescription)")
+                
             } else {
-                print("❌ Notification permission denied by user")
+                
             }
         }
     }
@@ -162,9 +385,9 @@ class NotificationManager: NSObject {
         
         self.notificationCenter.add(request) { error in
             if let error = error {
-                print("❌ Error sending test notification: \(error.localizedDescription)")
+                
             } else {
-                print("✅ Test notification scheduled successfully")
+                
             }
         }
     }
@@ -180,7 +403,7 @@ class NotificationManager: NSObject {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
         self.notificationCenter.add(request) { error in
             if let error = error {
-                print("Failed to schedule notification: \(error)")
+                
             }
         }
     }
@@ -211,7 +434,7 @@ class NotificationManager: NSObject {
             
             self.notificationCenter.add(request) { error in
                 if let error = error {
-                    print("Error scheduling contest notification: \(error.localizedDescription)")
+                    
                 }
             }
         }
@@ -236,7 +459,7 @@ class NotificationManager: NSObject {
         
         self.notificationCenter.add(request) { error in
             if let error = error {
-                print("Error scheduling new photos notification: \(error.localizedDescription)")
+                
             }
         }
     }
@@ -247,7 +470,7 @@ class NotificationManager: NSObject {
         dateFormatter.dateFormat = "MMMM d, yyyy HH:mm"
         
         guard let eventDate = dateFormatter.date(from: "\(event.date) \(event.time)") else {
-            print("Failed to parse event date")
+            
             return
         }
         
@@ -277,7 +500,7 @@ class NotificationManager: NSObject {
         
         self.notificationCenter.add(request) { error in
             if let error = error {
-                print("Error scheduling event reminder: \(error.localizedDescription)")
+                
             }
         }
     }
@@ -288,7 +511,7 @@ class NotificationManager: NSObject {
         // Check if notifications are authorized
         self.notificationCenter.getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized else {
-                print("Notifications not authorized")
+                
                 return
             }
             
@@ -312,7 +535,7 @@ class NotificationManager: NSObject {
             // Schedule the notification
             self.notificationCenter.add(request) { error in
                 if let error = error {
-                    print("Error scheduling notification: \(error)")
+                    
                 }
             }
         }
@@ -321,39 +544,77 @@ class NotificationManager: NSObject {
     // MARK: - Remote Notifications
     
     func registerDeviceToken(_ deviceToken: Data) {
-        Messaging.messaging().apnsToken = deviceToken
         
-        // Get the FCM token
-        Messaging.messaging().token { token, error in
-            if let error = error {
-                print("Error getting FCM token: \(error)")
-                return
-            }
+        // The APNS token is already set in AppDelegate, so we don't need to do it again here
+        // Just confirm it's set
+        
+    }
+    
+    // Add method to save FCM token after user signs in
+    func saveFCMTokenIfNeeded() {
+        
+        
+        // Check if we have a stored FCM token
+        if let savedToken = UserDefaults.standard.string(forKey: "fcmToken"),
+           let userId = Auth.auth().currentUser?.uid {
             
-            if let token = token {
-                self.saveTokenToFirestore(token)
+            saveFCMTokenToFirestore(token: savedToken, userId: userId)
+        } else {
+            
+            // Request a new FCM token
+            Messaging.messaging().token { token, error in
+                if let error = error {
+                    
+                } else if let token = token {
+                    
+                    UserDefaults.standard.set(token, forKey: "fcmToken")
+                    
+                    if let userId = Auth.auth().currentUser?.uid {
+                        self.saveFCMTokenToFirestore(token: token, userId: userId)
+                    }
+                }
             }
         }
     }
     
-    private func saveTokenToFirestore(_ token: String) {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            print("User not logged in, can't save device token")
-            return
-        }
+    private func saveFCMTokenToFirestore(token: String, userId: String) {
+        
         
         let db = Firestore.firestore()
         let tokenData: [String: Any] = [
             "token": token,
             "device": "iOS",
-            "lastUpdated": FieldValue.serverTimestamp()
+            "platform": "ios",
+            "lastUpdated": FieldValue.serverTimestamp(),
+            "createdAt": FieldValue.serverTimestamp()
         ]
         
+        // Save in both the old location and new location for compatibility
         db.collection("users").document(userId).collection("deviceTokens").document(token).setData(tokenData) { error in
             if let error = error {
-                print("Error saving device token: \(error)")
+                
+            } else {
+                
             }
         }
+        
+        // Also save in the fcmTokens collection as expected by the cloud function
+        db.collection("users").document(userId).collection("fcmTokens").document(token).setData(tokenData) { error in
+            if let error = error {
+                
+            } else {
+                
+            }
+        }
+    }
+
+    private func saveTokenToFirestore(_ token: String) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            
+            return
+        }
+        
+        saveFCMTokenToFirestore(token: token, userId: userId)
     }
     
     // MARK: - Photo Contest Specific
@@ -371,7 +632,7 @@ class NotificationManager: NSObject {
             guard let self = self,
                   let data = snapshot?.data(),
                   let eventName = data["name"] as? String else {
-                print("Error getting event data for contest notification")
+                
                 return
             }
             
@@ -381,9 +642,9 @@ class NotificationManager: NSObject {
             // 2. Update event's contest status in Firestore
             EventService.shared.togglePhotoContest(eventId: eventId, active: true) { success, error in
                 if let error = error {
-                    print("Error updating contest status: \(error.localizedDescription)")
+                    
                 } else {
-                    print("Contest status updated successfully")
+                    
                 }
             }
         }
@@ -414,9 +675,9 @@ class NotificationManager: NSObject {
         // Schedule notification
         self.notificationCenter.add(request) { error in
             if let error = error {
-                print("Error scheduling vendor-triggered contest notification: \(error)")
+                
             } else {
-                print("Vendor-triggered contest notification scheduled successfully")
+                
             }
         }
         
@@ -433,9 +694,9 @@ class NotificationManager: NSObject {
             "photoContestEndTime": FieldValue.serverTimestamp()
         ]) { error in
             if let error = error {
-                print("Error ending event contest: \(error)")
+                
             } else {
-                print("Event contest ended successfully")
+                
             }
         }
     }
@@ -471,7 +732,7 @@ class NotificationManager: NSObject {
         
         notificationCenter.add(request) { error in
             if let error = error {
-                print("Failed to schedule afterparty reminder: \(error)")
+                
             }
         }
     }
@@ -490,7 +751,7 @@ class NotificationManager: NSObject {
         
         notificationCenter.add(request) { error in
             if let error = error {
-                print("Failed to send join request notification: \(error)")
+                
             }
         }
     }
@@ -509,7 +770,7 @@ class NotificationManager: NSObject {
         
         notificationCenter.add(request) { error in
             if let error = error {
-                print("Failed to send request accepted notification: \(error)")
+                
             }
         }
     }
@@ -528,9 +789,135 @@ class NotificationManager: NSObject {
         
         notificationCenter.add(request) { error in
             if let error = error {
-                print("Failed to send afterparty join notification: \(error)")
+                
             }
         }
+    }
+    
+    // MARK: - Settings-Based Notification Methods
+    
+    func scheduleNotificationIfEnabled(type: NotificationType, delaySeconds: TimeInterval = 0) {
+        // Check user settings before sending notification
+        let userDefaults = UserDefaults.standard
+        let shouldSend: Bool
+        
+        switch type {
+        case .upcomingEvent, .partyStartReminder, .partyStartingSoon:
+            shouldSend = userDefaults.bool(forKey: "eventReminders")
+        case .guestRequestReceived, .partyLocationUpdate, .partyTimeUpdate, .hostMessage, .requestApproved, .requestDenied:
+            shouldSend = userDefaults.bool(forKey: "partyUpdates")
+        default:
+            shouldSend = true // Always send system notifications
+        }
+        
+        if shouldSend {
+            scheduleLocalNotification(for: type, delaySeconds: delaySeconds)
+        }
+    }
+    
+    // MARK: - Host Notification Methods
+    
+    func notifyHostOfGuestRequest(partyId: String, partyTitle: String, guestName: String) {
+        let notification = NotificationType.guestRequestReceived(partyId: partyId, partyTitle: partyTitle, guestName: guestName)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func notifyHostOfCapacityAlert(partyId: String, partyTitle: String, currentCount: Int, maxCount: Int) {
+        let notification = NotificationType.partyCapacityAlert(partyId: partyId, partyTitle: partyTitle, currentCount: currentCount, maxCount: maxCount)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func notifyHostOfApprovalDeadline(partyId: String, partyTitle: String, pendingCount: Int) {
+        let notification = NotificationType.guestApprovalDeadline(partyId: partyId, partyTitle: partyTitle, pendingCount: pendingCount)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func notifyHostOfPayment(partyId: String, partyTitle: String, guestName: String, amount: String) {
+        let notification = NotificationType.paymentReceived(partyId: partyId, partyTitle: partyTitle, guestName: guestName, amount: amount)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func schedulePartyStartReminder(partyId: String, partyTitle: String, startTime: Date) {
+        let hoursUntil = Int(startTime.timeIntervalSinceNow / 3600)
+        let notification = NotificationType.partyStartReminder(partyId: partyId, partyTitle: partyTitle, hoursUntil: hoursUntil)
+        
+        // Schedule for 2 hours before start time
+        let reminderTime = startTime.addingTimeInterval(-2 * 3600)
+        let delaySeconds = reminderTime.timeIntervalSinceNow
+        
+        if delaySeconds > 0 {
+            scheduleNotificationIfEnabled(type: notification, delaySeconds: delaySeconds)
+        }
+    }
+    
+    // MARK: - Guest Notification Methods
+    
+    func notifyGuestOfApproval(partyId: String, partyTitle: String, hostName: String) {
+        let notification = NotificationType.requestApproved(partyId: partyId, partyTitle: partyTitle, hostName: hostName)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func notifyGuestOfDenial(partyId: String, partyTitle: String, hostName: String) {
+        let notification = NotificationType.requestDenied(partyId: partyId, partyTitle: partyTitle, hostName: hostName)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func notifyGuestOfLocationUpdate(partyId: String, partyTitle: String, newLocation: String) {
+        let notification = NotificationType.partyLocationUpdate(partyId: partyId, partyTitle: partyTitle, newLocation: newLocation)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func notifyGuestOfTimeUpdate(partyId: String, partyTitle: String, newTime: String) {
+        let notification = NotificationType.partyTimeUpdate(partyId: partyId, partyTitle: partyTitle, newTime: newTime)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func sendHostMessage(partyId: String, partyTitle: String, hostName: String, message: String) {
+        let notification = NotificationType.hostMessage(partyId: partyId, partyTitle: partyTitle, hostName: hostName, message: message)
+        scheduleNotificationIfEnabled(type: notification)
+    }
+    
+    func schedulePartyStartingSoonNotification(partyId: String, partyTitle: String, startTime: Date) {
+        let notification = NotificationType.partyStartingSoon(partyId: partyId, partyTitle: partyTitle, minutesUntil: 30)
+        
+        // Schedule for 30 minutes before start time
+        let reminderTime = startTime.addingTimeInterval(-30 * 60)
+        let delaySeconds = reminderTime.timeIntervalSinceNow
+        
+        if delaySeconds > 0 {
+            scheduleNotificationIfEnabled(type: notification, delaySeconds: delaySeconds)
+        }
+    }
+    
+    func schedulePartyEndingNotification(partyId: String, partyTitle: String, endTime: Date) {
+        let notification = NotificationType.partyEnding(partyId: partyId, partyTitle: partyTitle, minutesLeft: 30)
+        
+        // Schedule for 30 minutes before end time
+        let reminderTime = endTime.addingTimeInterval(-30 * 60)
+        let delaySeconds = reminderTime.timeIntervalSinceNow
+        
+        if delaySeconds > 0 {
+            scheduleNotificationIfEnabled(type: notification, delaySeconds: delaySeconds)
+        }
+    }
+    
+    // MARK: - System Notifications
+    
+    func scheduleMaintenanceNotification(scheduledTime: Date) {
+        let notification = NotificationType.systemMaintenance(scheduledTime: scheduledTime)
+        
+        // Schedule for 24 hours before maintenance
+        let reminderTime = scheduledTime.addingTimeInterval(-24 * 3600)
+        let delaySeconds = reminderTime.timeIntervalSinceNow
+        
+        if delaySeconds > 0 {
+            scheduleLocalNotification(for: notification, delaySeconds: delaySeconds)
+        }
+    }
+    
+    func announceNewFeature(featureName: String) {
+        let notification = NotificationType.newFeatureAvailable(featureName: featureName)
+        scheduleLocalNotification(for: notification, delaySeconds: 2)
     }
 }
 
@@ -552,10 +939,6 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
             switch type {
             case "photo_contest_unlocked":
                 if let eventId = userInfo["eventId"] as? String {
-                    // Handle navigation to photo contest (this would be implemented by the app's navigation system)
-                    print("Should navigate to photo contest for event \(eventId)")
-                    
-                    // Post a notification that can be observed by the app to navigate
                     NotificationCenter.default.post(
                         name: Notification.Name("NavigateToPhotoContest"),
                         object: nil,
@@ -564,7 +947,6 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
                 }
             case "new_event", "upcoming_event":
                 if let eventId = userInfo["eventId"] as? String {
-                    // Handle navigation to event details
                     NotificationCenter.default.post(
                         name: Notification.Name("NavigateToEvent"),
                         object: nil,
@@ -573,13 +955,75 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
                 }
             case "ticket_confirmation":
                 if let ticketId = userInfo["ticketId"] as? String {
-                    // Handle navigation to ticket details
                     NotificationCenter.default.post(
                         name: Notification.Name("NavigateToTicket"),
                         object: nil,
                         userInfo: userInfo
                     )
                 }
+            // Host notification handlers
+            case "guest_request_received", "guest_approval_deadline", "party_capacity_alert", "payment_received":
+                if let partyId = userInfo["partyId"] as? String {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToHostDashboard"),
+                        object: nil,
+                        userInfo: ["partyId": partyId]
+                    )
+                }
+            case "party_start_reminder":
+                if let partyId = userInfo["partyId"] as? String {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToPartyDetails"),
+                        object: nil,
+                        userInfo: ["partyId": partyId, "action": "prep"]
+                    )
+                }
+            // Guest notification handlers
+            case "request_approved", "request_denied":
+                if let partyId = userInfo["partyId"] as? String {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToPartyDetails"),
+                        object: nil,
+                        userInfo: ["partyId": partyId]
+                    )
+                }
+            case "party_location_update", "party_time_update", "host_message":
+                if let partyId = userInfo["partyId"] as? String {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToPartyDetails"),
+                        object: nil,
+                        userInfo: ["partyId": partyId, "action": "update"]
+                    )
+                }
+            case "party_starting_soon":
+                if let partyId = userInfo["partyId"] as? String {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToPartyDetails"),
+                        object: nil,
+                        userInfo: ["partyId": partyId, "action": "directions"]
+                    )
+                }
+            case "party_ending":
+                if let partyId = userInfo["partyId"] as? String {
+                    NotificationCenter.default.post(
+                        name: Notification.Name("NavigateToPartyDetails"),
+                        object: nil,
+                        userInfo: ["partyId": partyId, "action": "ending"]
+                    )
+                }
+            // System handlers
+            case "system_maintenance":
+                NotificationCenter.default.post(
+                    name: Notification.Name("ShowMaintenanceInfo"),
+                    object: nil,
+                    userInfo: userInfo
+                )
+            case "new_feature_available":
+                NotificationCenter.default.post(
+                    name: Notification.Name("ShowFeatureAnnouncement"),
+                    object: nil,
+                    userInfo: userInfo
+                )
             default:
                 break
             }

@@ -45,12 +45,26 @@ class AfterpartyManager: NSObject, ObservableObject {
             .whereField("userId", isEqualTo: userId)
             .getDocuments()
             
-        // Check if any of the user's afterparties are still active
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // Only consider a party "active" if it's currently happening or starts within 2 hours
         return snapshot.documents.contains { doc in
-            guard let endTime = (doc.data()["endTime"] as? Timestamp)?.dateValue() else {
+            let data = doc.data()
+            guard let startTime = (data["startTime"] as? Timestamp)?.dateValue(),
+                  let endTime = (data["endTime"] as? Timestamp)?.dateValue() else {
                 return false
             }
-            return endTime > Date()
+            
+            // Party is active if:
+            // 1. It's currently happening (between start and end time)
+            // 2. It starts within the next 2 hours
+            let twoHoursFromNow = calendar.date(byAdding: .hour, value: 2, to: now) ?? now
+            
+            let isCurrentlyHappening = now >= startTime && now <= endTime
+            let startsWithinTwoHours = startTime > now && startTime <= twoHoursFromNow
+            
+            return isCurrentlyHappening || startsWithinTwoHours
         }
     }
     
@@ -137,7 +151,7 @@ class AfterpartyManager: NSObject, ObservableObject {
     
     func fetchNearbyAfterparties() async {
         guard let location = currentLocation else { 
-            print("No current location available")
+            
             return
         }
         
@@ -146,19 +160,19 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         do {
             let currentCity = UserDefaults.standard.string(forKey: "selectedCity") ?? "Unknown"
-            print("Fetching afterparties for city: \(currentCity)")
+            
             
             // First just get all afterparties for the city
             let snapshot = try await db.collection("afterparties")
                 .whereField("city", isEqualTo: currentCity)
                 .getDocuments()
             
-            print("Found \(snapshot.documents.count) afterparties in \(currentCity)")
+            
             
             let afterparties = try snapshot.documents.compactMap { doc -> Afterparty? in
-                print("Processing document: \(doc.documentID)")
+                
                 let data = doc.data()
-                print("Document data: \(data)")
+                
                 
                 // Add document ID to data for decoding
                 var docData = data
@@ -167,7 +181,7 @@ class AfterpartyManager: NSObject, ObservableObject {
                 // Check if the afterparty is still active
                 if let endTime = (data["endTime"] as? Timestamp)?.dateValue(),
                    endTime < Date() {
-                    print("Skipping expired afterparty")
+                    
                     return nil
                 }
                 
@@ -183,25 +197,25 @@ class AfterpartyManager: NSObject, ObservableObject {
                 let distanceInMeters = userLocation.distance(from: partyLocation)
                 let radiusInMeters = afterparty.radius // radius is already in meters
                 
-                print("Afterparty distance: \(distanceInMeters)m, radius: \(radiusInMeters)m")
+                
                 
                 // Include if within radius
                 if distanceInMeters <= radiusInMeters {
-                    print("Afterparty is within radius")
+                    
                     return afterparty
                 } else {
-                    print("Afterparty is outside radius")
+                    
                     return nil
                 }
             }
             
-            print("Filtered to \(afterparties.count) nearby afterparties")
+            
             
             await MainActor.run {
                 self.nearbyAfterparties = afterparties
             }
         } catch {
-            print("Error fetching afterparties: \(error)")
+            
             self.error = error
         }
     }
@@ -241,6 +255,7 @@ class AfterpartyManager: NSObject, ObservableObject {
             userId: userId,
             userName: userName,
             userHandle: userHandle,
+            introMessage: "", // Empty intro for legacy TestFlight flow
             requestedAt: Date(),
             paymentStatus: .paid // Mark as "paid" since it's free for TestFlight
         )
@@ -250,7 +265,122 @@ class AfterpartyManager: NSObject, ObservableObject {
             "guestRequests": FieldValue.arrayUnion([try Firestore.Encoder().encode(guestRequest)])
         ])
         
-        print("✅ TestFlight: Free access requested for afterparty \(afterparty.id)")
+        
+    }
+    
+    /// Submit guest request with intro message (NEW FLOW)
+    func submitGuestRequest(afterpartyId: String, guestRequest: GuestRequest) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        // Check if user already requested or is already going
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        if afterparty.activeUsers.contains(userId) {
+            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You're already going to this afterparty"])
+        }
+        
+        if afterparty.guestRequests.contains(where: { $0.userId == userId }) {
+            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You've already requested to join this afterparty"])
+        }
+        
+        // Add request to Firestore
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "guestRequests": FieldValue.arrayUnion([try Firestore.Encoder().encode(guestRequest)])
+        ])
+        
+        // Get party details and notify host of new request
+        let partyDoc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        if let data = partyDoc.data(),
+           let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) {
+            NotificationManager.shared.notifyHostOfGuestRequest(
+                partyId: afterpartyId,
+                partyTitle: afterparty.title,
+                guestName: guestRequest.userHandle
+            )
+        }
+        
+        
+    }
+    
+    /// Approve guest request (Host action)
+    func approveGuestRequest(afterpartyId: String, guestRequestId: String) async throws {
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        // Find and update the guest request
+        if let index = afterparty.guestRequests.firstIndex(where: { $0.id == guestRequestId }) {
+            let originalRequest = afterparty.guestRequests[index]
+            let updatedRequest = GuestRequest(
+                id: originalRequest.id,
+                userId: originalRequest.userId,
+                userName: originalRequest.userName,
+                userHandle: originalRequest.userHandle,
+                introMessage: originalRequest.introMessage,
+                requestedAt: originalRequest.requestedAt,
+                paymentStatus: .pending,
+                approvalStatus: .approved,
+                paypalOrderId: originalRequest.paypalOrderId,
+                paidAt: originalRequest.paidAt,
+                refundedAt: originalRequest.refundedAt,
+                approvedAt: Date()
+            )
+            
+            var updatedRequests = afterparty.guestRequests
+            updatedRequests[index] = updatedRequest
+            
+            // Update Firestore
+            try await db.collection("afterparties").document(afterpartyId).updateData([
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
+            ])
+            
+            // Send approval notification to guest
+            NotificationManager.shared.notifyGuestOfApproval(
+                partyId: afterpartyId,
+                partyTitle: afterparty.title,
+                hostName: afterparty.hostHandle
+            )
+            
+            
+        }
+    }
+    
+    /// Deny guest request (Host action)
+    func denyGuestRequest(afterpartyId: String, guestRequestId: String) async throws {
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        // Find the guest request before removing it (for notification)
+        if afterparty.guestRequests.contains(where: { $0.id == guestRequestId }) {
+            // Send denial notification to guest
+            NotificationManager.shared.notifyGuestOfDenial(
+                partyId: afterpartyId,
+                partyTitle: afterparty.title,
+                hostName: afterparty.hostHandle
+            )
+        }
+        
+        // Remove the guest request
+        var updatedRequests = afterparty.guestRequests
+        updatedRequests.removeAll { $0.id == guestRequestId }
+        
+        // Update Firestore
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
+        ])
+        
+        
     }
     
     /// Track estimated transaction value for analytics (TestFlight version)
@@ -265,9 +395,9 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         do {
             try await db.collection("analytics").addDocument(data: analyticsData)
-            print("📊 Tracked estimated transaction: $\(estimatedValue) for party \(afterpartyId)")
+            
         } catch {
-            print("❌ Failed to track estimated transaction: \(error)")
+            
         }
     }
     
@@ -282,7 +412,7 @@ class AfterpartyManager: NSObject, ObservableObject {
             return total + value
         }
         
-        let commission = totalVolume * 0.12 // 12% commission
+        let commission = totalVolume * 0.20 // 20% commission
         let transactionCount = snapshot.documents.count
         
         return (totalVolume, commission, transactionCount)
@@ -308,7 +438,7 @@ class AfterpartyManager: NSObject, ObservableObject {
             .whereField("userId", isEqualTo: hostId)
             .getDocuments()
         
-        let afterparties = try snapshot.documents.compactMap { doc -> Afterparty? in
+        let afterparties = snapshot.documents.compactMap { doc -> Afterparty? in
             var docData = doc.data()
             docData["id"] = doc.documentID
             return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
@@ -334,26 +464,42 @@ class AfterpartyManager: NSObject, ObservableObject {
         )
     }
     
+    /// Get parties hosted by a specific user
+    func getHostParties(hostId: String) async throws -> [Afterparty] {
+        // Simplified query - just filter by userId (no orderBy to avoid index requirement)
+        let snapshot = try await db.collection("afterparties")
+            .whereField("userId", isEqualTo: hostId)
+            .getDocuments()
+        
+        let afterparties = snapshot.documents.compactMap { doc -> Afterparty? in
+            var docData = doc.data()
+            docData["id"] = doc.documentID
+            return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
+        }
+        
+        // Filter out expired parties (older than 9 hours from creation) and sort in memory
+        let now = Date()
+        let activeParties = afterparties.filter { afterparty in
+            let nineHoursAfterCreation = Calendar.current.date(byAdding: .hour, value: 9, to: afterparty.createdAt) ?? Date()
+            return nineHoursAfterCreation > now
+        }
+        
+        // Sort by creation date in memory (most recent first)
+        return activeParties.sorted { $0.createdAt > $1.createdAt }
+    }
+    
     /// Filter afterparties for marketplace discovery
     func getMarketplaceAfterparties(
         priceRange: ClosedRange<Double>? = nil,
         vibes: [String]? = nil,
         timeFilter: TimeFilter = .all
     ) async throws -> [Afterparty] {
-        // Base query for public afterparties only
-        var query = db.collection("afterparties")
+        // Simplified query - just get public parties (no compound queries to avoid index requirement)
+        let snapshot = try await db.collection("afterparties")
             .whereField("visibility", isEqualTo: PartyVisibility.publicFeed.rawValue)
+            .getDocuments()
         
-        // Add price filter if specified
-        if let priceRange = priceRange {
-            query = query
-                .whereField("ticketPrice", isGreaterThanOrEqualTo: priceRange.lowerBound)
-                .whereField("ticketPrice", isLessThanOrEqualTo: priceRange.upperBound)
-        }
-        
-        let snapshot = try await query.getDocuments()
-        
-        var afterparties = try snapshot.documents.compactMap { doc -> Afterparty? in
+        var afterparties = snapshot.documents.compactMap { doc -> Afterparty? in
             var docData = doc.data()
             docData["id"] = doc.documentID
             
@@ -366,7 +512,15 @@ class AfterpartyManager: NSObject, ObservableObject {
             return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
         }
         
-        // Apply client-side filters
+        // Apply price range filter in memory
+        if let priceRange = priceRange {
+            afterparties = afterparties.filter { afterparty in
+                afterparty.ticketPrice >= priceRange.lowerBound &&
+                afterparty.ticketPrice <= priceRange.upperBound
+            }
+        }
+        
+        // Apply vibe filters in memory
         if let vibes = vibes, !vibes.isEmpty {
             afterparties = afterparties.filter { afterparty in
                 vibes.allSatisfy { afterparty.vibeTag.contains($0) }
@@ -464,7 +618,7 @@ class AfterpartyManager: NSObject, ObservableObject {
 extension AfterpartyManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last?.coordinate else { return }
-        print("📍 Location updated: \(location.latitude), \(location.longitude)")
+        
         currentLocation = location
         Task {
             await fetchNearbyAfterparties()
@@ -472,6 +626,6 @@ extension AfterpartyManager: CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("❌ Location error: \(error.localizedDescription)")
+        
     }
 } 

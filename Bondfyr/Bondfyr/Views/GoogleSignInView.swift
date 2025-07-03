@@ -84,11 +84,6 @@ struct GoogleSignInView: View {
                     .fontWeight(.heavy)
                     .foregroundColor(.white)
                     .shadow(color: .pink.opacity(0.5), radius: 10, x: 0, y: 0)
-                
-                // Tagline
-                Text("Your passport to exclusive nightlife")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
                     .padding(.bottom, 20)
                 
                 // Error message
@@ -197,12 +192,12 @@ struct GoogleSignInView: View {
                 self.isLoading = false
                 
                 if let error = error {
-                    print("❌ Google Sign-In Error: \(error.localizedDescription)")
+                    
                     self.errorMessage = "Sign-in failed: \(error.localizedDescription)"
                     self.showError = true
                 } else if success {
                     // Post notification that login succeeded
-                    print("✅ Posting UserDidLogin notification")
+                    
                     NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
                     // Force onboarding state update
                     if let splash = UIApplication.shared.connectedScenes

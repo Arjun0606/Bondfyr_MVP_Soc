@@ -186,7 +186,7 @@ struct EventAttendeesView: View {
                 // Follow venue button (removed Instagram reference since Event model doesn't have instagramHandle)
                 Button(action: {
                     // For now, just show an alert since we don't have Instagram handle
-                    print("Venue social feature not available")
+                    
                 }) {
                     HStack {
                         Image(systemName: "heart.fill")

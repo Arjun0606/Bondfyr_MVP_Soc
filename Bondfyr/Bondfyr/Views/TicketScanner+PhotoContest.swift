@@ -34,13 +34,13 @@ extension TicketScannerView {
             .whereField("eventId", isEqualTo: eventId)
             .getDocuments { snapshot, error in
                 if let error = error {
-                    print("Error fetching tickets: \(error)")
+                    
                     completion(false)
                     return
                 }
                 
                 guard let documents = snapshot?.documents, !documents.isEmpty else {
-                    print("No tickets found for this event")
+                    
                     completion(false)
                     return
                 }
@@ -53,10 +53,10 @@ extension TicketScannerView {
                     "scanTimestamp": FieldValue.serverTimestamp()
                 ]) { error in
                     if let error = error {
-                        print("Error updating ticket: \(error)")
+                        
                         completion(false)
                     } else {
-                        print("Ticket successfully marked as scanned")
+                        
                         completion(true)
                     }
                 }
@@ -138,7 +138,7 @@ struct PhotoContestUnlockedBanner_Previews: PreviewProvider {
                 isShowing: .constant(true),
                 eventName: "Summer Party"
             ) {
-                print("Banner tapped")
+                
             }
             .padding(.top, 50)
         }

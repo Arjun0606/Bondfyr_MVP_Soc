@@ -12,6 +12,26 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       // Allow reading user profiles for other authenticated users
       allow read: if request.auth != null;
+      
+      // FCM tokens subcollection
+      match /fcmTokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Device tokens subcollection
+      match /deviceTokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Stats subcollection
+      match /stats/{statId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Badges subcollection
+      match /badges/{badgeId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // Venues collection

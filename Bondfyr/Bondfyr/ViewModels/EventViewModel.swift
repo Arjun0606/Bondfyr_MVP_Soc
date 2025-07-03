@@ -48,7 +48,7 @@ class EventViewModel: ObservableObject {
                 self.isLoading = false
                 
                 if let error = error {
-                    print("Error fetching events: \(error.localizedDescription)")
+                    
                     self.errorMessage = "Failed to load events: \(error.localizedDescription)"
                     self.loadOfflineEvents()
                     return
@@ -127,7 +127,7 @@ class EventViewModel: ObservableObject {
                     if let index = self.events.firstIndex(where: { $0.id.uuidString == eventId }) {
                         // Photo contest status update would need to be handled differently
                         // since Event model doesn't have photoContestActive property
-                        print("Photo contest toggled for event: \(eventId)")
+                        
                     }
                 }
                 

@@ -40,7 +40,7 @@ class ChatManager: ObservableObject {
     
     func enableTestMode() {
         testMode = true
-        print("Chat Manager Test Mode Enabled")
+        
     }
     
     // MARK: - Username Management
@@ -131,7 +131,7 @@ class ChatManager: ObservableObject {
                 guard let self = self else { return }
                 
                 if let error = error {
-                    print("Error loading cities: \(error.localizedDescription)")
+                    
                     self.error = "Failed to load cities"
                     self.isLoading = false
                     return
@@ -304,7 +304,7 @@ class ChatManager: ObservableObject {
             "lastActiveTimestamp": Timestamp(date: Date())
         ]) { error in
             if let error = error {
-                print("Error updating city member count: \(error.localizedDescription)")
+                
             }
         }
     }
@@ -341,11 +341,11 @@ class ChatManager: ObservableObject {
         do {
             try db.collection("chat_messages").document(message.id).setData(from: message) { error in
                 if let error = error {
-                    print("Error saving message: \(error.localizedDescription)")
+                    
                 }
             }
         } catch {
-            print("Error encoding message: \(error.localizedDescription)")
+            
         }
     }
     
@@ -543,7 +543,7 @@ class ChatManager: ObservableObject {
             "lastActiveTimestamp": Timestamp(date: Date())
         ]) { error in
             if let error = error {
-                print("Error updating event chat participant count: \(error.localizedDescription)")
+                
             }
         }
     }
@@ -580,11 +580,11 @@ class ChatManager: ObservableObject {
         do {
             try db.collection("chat_messages").document(message.id).setData(from: message) { error in
                 if let error = error {
-                    print("Error saving event message: \(error.localizedDescription)")
+                    
                 }
             }
         } catch {
-            print("Error encoding event message: \(error.localizedDescription)")
+            
         }
     }
     

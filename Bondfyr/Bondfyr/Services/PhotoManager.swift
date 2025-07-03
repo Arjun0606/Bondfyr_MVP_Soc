@@ -178,7 +178,7 @@ class PhotoManager: ObservableObject {
             let snapshot = try await query.getDocuments()
             isEligibleForContest = snapshot.documents.isEmpty
         } catch {
-            print("Error checking contest eligibility: \(error)")
+            
             isEligibleForContest = false
         }
     }
@@ -200,7 +200,7 @@ class PhotoManager: ObservableObject {
                     }
                 }
             } catch {
-                print("Error cleaning up expired photos: \(error)")
+                
             }
         }
     }

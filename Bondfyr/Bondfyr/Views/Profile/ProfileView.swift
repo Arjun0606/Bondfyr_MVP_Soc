@@ -7,6 +7,7 @@ struct ProfileView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @State private var showingLogoutAlert = false
     @State private var showingDeleteAccountAlert = false
+    @State private var showEditProfile = false
     @StateObject private var badgeService = BadgeService.shared
     @State private var showBadges = false
     @State private var showNewBadgeNotification = false
@@ -39,6 +40,15 @@ struct ProfileView: View {
     
     private var isGuestVerified: Bool {
         authViewModel.currentUser?.isGuestVerified ?? false
+    }
+    
+    // Social media connection status
+    private var hasInstagram: Bool {
+        authViewModel.currentUser?.instagramHandle?.isEmpty == false
+    }
+    
+    private var hasSnapchat: Bool {
+        authViewModel.currentUser?.snapchatHandle?.isEmpty == false
     }
     
     // Progress towards verification
@@ -149,6 +159,14 @@ struct ProfileView: View {
             .sheet(isPresented: $showHelpSupport) {
                 HelpFAQView()
             }
+            .sheet(isPresented: $showEditProfile) {
+                ProfileFormView()
+                    .environmentObject(authViewModel)
+                    .onDisappear {
+                        // Refresh profile data when edit sheet is dismissed
+                        authViewModel.fetchUserProfile { _ in }
+                    }
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("BadgeEarned"))) { notification in
                 if let badge = notification.userInfo?["badge"] as? PhotoBadge {
                     newBadge = badge
@@ -181,7 +199,7 @@ struct ProfileView: View {
                     Task {
                         await authViewModel.deleteAccount { error in
                             if let error = error {
-                                print("Error deleting account: \(error)")
+                                
                             }
                         }
                     }
@@ -301,49 +319,144 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         VStack(spacing: 16) {
-            // Profile Image
-            if let avatarURL = authViewModel.currentUser?.avatarURL,
-               let url = URL(string: avatarURL) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
+            // Profile Image with Edit Button
+            ZStack(alignment: .bottomTrailing) {
+                if let avatarURL = authViewModel.currentUser?.avatarURL,
+                   !avatarURL.isEmpty,
+                   let url = URL(string: avatarURL) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
                         Circle()
                             .fill(Color.gray.opacity(0.3))
-                }
-                .frame(width: 100, height: 100)
-                .clipShape(Circle())
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            )
+                    }
+                    .frame(width: 100, height: 100)
+                    .clipShape(Circle())
                     .overlay(Circle().stroke(Color.pink, lineWidth: 2))
-            } else {
+                } else {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
                         .frame(width: 100, height: 100)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray)
+                        )
+                        .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+                }
+                
+                // Edit Profile Picture Button
+                Button(action: { showEditProfile = true }) {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                        .background(Color.pink)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                }
             }
             
             // User Info with verification badges
-            HStack(spacing: 8) {
-                Text("@\(authViewModel.currentUser?.name ?? "capedpotato")")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                
-                if isHostVerified {
-                    Image(systemName: "checkmark.shield.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    if let username = authViewModel.currentUser?.username, !username.isEmpty {
+                        Text("@\(username)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    } else {
+                        Text("@username_not_set")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.gray)
+                            .italic()
+                    }
+                    
+                    if isHostVerified {
+                        Image(systemName: "checkmark.shield.fill")
+                            .foregroundColor(.green)
+                            .font(.caption)
+                    }
+                    
+                    if isGuestVerified {
+                        Image(systemName: "person.badge.shield.checkmark.fill")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                    }
                 }
                 
-                if isGuestVerified {
-                    Image(systemName: "person.badge.shield.checkmark.fill")
-                        .foregroundColor(.blue)
-                        .font(.caption)
-                }
+                Text(authViewModel.currentUser?.name ?? "")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                
+                Text(authViewModel.currentUser?.city ?? "Pune, Maharashtra, India")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
             }
             
-            Text(authViewModel.currentUser?.city ?? "Pune, Maharashtra, India")
-                .font(.subheadline)
-                .foregroundColor(.gray)
+            // Edit Profile Button
+            Button(action: { showEditProfile = true }) {
+                Text("Edit Profile")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(Color.pink)
+                    .cornerRadius(18)
+            }
+            .padding(.horizontal, 40)
+            
+            // Social Media Status
+            HStack(spacing: 20) {
+                // Instagram Button
+                Button(action: { 
+                    if hasInstagram {
+                        openInstagram()
+                    } else {
+                        showEditProfile = true
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: hasInstagram ? "checkmark.circle.fill" : "plus.circle")
+                            .foregroundColor(hasInstagram ? .green : .gray)
+                        Text("Instagram")
+                            .font(.subheadline)
+                            .foregroundColor(hasInstagram ? .white : .gray)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(hasInstagram ? Color.pink.opacity(0.2) : Color.gray.opacity(0.2))
+                    .cornerRadius(20)
+                }
+                
+                // Snapchat Button
+                Button(action: { 
+                    if hasSnapchat {
+                        openSnapchat()
+                    } else {
+                        showEditProfile = true
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: hasSnapchat ? "checkmark.circle.fill" : "plus.circle")
+                            .foregroundColor(hasSnapchat ? .green : .gray)
+                        Text("Snapchat")
+                            .font(.subheadline)
+                            .foregroundColor(hasSnapchat ? .white : .gray)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(hasSnapchat ? Color.yellow.opacity(0.2) : Color.gray.opacity(0.2))
+                    .cornerRadius(20)
+                }
+            }
         }
     }
 
@@ -413,6 +526,37 @@ struct ProfileView: View {
             }
         }
     }
+    
+    // MARK: - Social Media Actions
+    private func openInstagram() {
+        guard let instagramHandle = authViewModel.currentUser?.instagramHandle,
+              !instagramHandle.isEmpty else { return }
+        
+        let cleanHandle = instagramHandle.replacingOccurrences(of: "@", with: "")
+        let instagramAppURL = URL(string: "instagram://user?username=\(cleanHandle)")
+        let instagramWebURL = URL(string: "https://www.instagram.com/\(cleanHandle)")
+        
+        if let appURL = instagramAppURL, UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = instagramWebURL {
+            UIApplication.shared.open(webURL)
+        }
+    }
+    
+    private func openSnapchat() {
+        guard let snapchatHandle = authViewModel.currentUser?.snapchatHandle,
+              !snapchatHandle.isEmpty else { return }
+        
+        let cleanHandle = snapchatHandle.replacingOccurrences(of: "@", with: "")
+        let snapchatAppURL = URL(string: "snapchat://add/\(cleanHandle)")
+        let snapchatWebURL = URL(string: "https://www.snapchat.com/add/\(cleanHandle)")
+        
+        if let appURL = snapchatAppURL, UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL = snapchatWebURL {
+            UIApplication.shared.open(webURL)
+        }
+    }
 }
 
 struct StatView: View {
@@ -444,8 +588,6 @@ struct StatView: View {
         }
     }
 }
-
-
 
 struct BadgePreviewCell: View {
     let badge: PhotoBadge

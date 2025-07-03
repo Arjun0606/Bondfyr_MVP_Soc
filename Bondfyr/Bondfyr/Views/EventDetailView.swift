@@ -953,10 +953,10 @@ class StorageManager {
         
         storageRef.putData(imageData, metadata: nil) { metadata, error in
             if let error = error {
-                print("Error uploading image: \(error.localizedDescription)")
+                
                 completion(.failure(error))
             } else {
-                print("Image uploaded successfully")
+                
                 storageRef.downloadURL { url, error in
                     if let error = error {
                         completion(.failure(error))

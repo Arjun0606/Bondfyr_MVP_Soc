@@ -289,7 +289,7 @@ class BadgeService: ObservableObject {
                 userInfo: ["badge": badge]
             )
         } catch {
-            print("Error awarding badge: \(error)")
+            
             self.error = error
         }
     }

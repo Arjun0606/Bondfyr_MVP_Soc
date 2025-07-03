@@ -9,6 +9,7 @@ import Foundation
 import Firebase
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 import GoogleSignIn
 
 class AuthViewModel: ObservableObject {
@@ -44,7 +45,7 @@ class AuthViewModel: ObservableObject {
                 self.authStateKnown = true
                 
                 if let user = user {
-                    print("🔥 Auth state changed: User is logged in with UID: \(user.uid)")
+                    
                     
                     // Check if we need to refresh the token
                     self.checkAndRefreshTokenIfNeeded(user: user)
@@ -57,14 +58,14 @@ class AuthViewModel: ObservableObject {
                                 self.isLoggedIn = true
                             } else {
                                 // For new users, we still want them logged in but without a profile
-                                print("🔥 No user profile found, but keeping auth state")
+                                
                                 self.isLoggedIn = true
                                 self.currentUser = nil
                             }
                         }
                     }
                 } else {
-                    print("🔥 Auth state changed: User is logged out")
+                    
                     self.isLoggedIn = false
                     self.currentUser = nil
                 }
@@ -76,7 +77,7 @@ class AuthViewModel: ObservableObject {
     private func checkAndRefreshTokenIfNeeded(user: User) {
         user.getIDTokenResult { tokenResult, error in
             if let error = error {
-                print("❌ Error getting token: \(error.localizedDescription)")
+                
                 return
             }
             
@@ -86,14 +87,14 @@ class AuthViewModel: ObservableObject {
             let expirationDate = tokenResult.expirationDate
             if expirationDate.timeIntervalSinceNow < 600 { // 10 minutes in seconds
                 
-                print("⚠️ Token expiring soon, refreshing...")
+                
                 
                 // Force token refresh
                 user.getIDTokenForcingRefresh(true) { _, error in
                     if let error = error {
-                        print("❌ Error refreshing token: \(error.localizedDescription)")
+                        
                     } else {
-                        print("✅ Token refreshed successfully")
+                        
                     }
                 }
             }
@@ -102,7 +103,7 @@ class AuthViewModel: ObservableObject {
 
     func signInWithGoogle(presenting: UIViewController, completion: @escaping (Bool, Error?) -> Void) {
         guard let clientID = FirebaseApp.app()?.options.clientID else {
-            print("❌ Firebase clientID missing")
+            
             let error = NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing Firebase client ID"])
             completion(false, error)
             return
@@ -113,7 +114,7 @@ class AuthViewModel: ObservableObject {
             self.error = nil
         }
 
-        print("Starting Google Sign-In flow...")
+        
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
 
         GIDSignIn.sharedInstance.signIn(withPresenting: presenting) { [weak self] result, error in
@@ -127,7 +128,7 @@ class AuthViewModel: ObservableObject {
             }
 
             if let error = error {
-                print("❌ Google Sign-In failed: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     self.error = error.localizedDescription
                 }
@@ -135,7 +136,7 @@ class AuthViewModel: ObservableObject {
                 return
             }
 
-            print("✅ Google Sign-In success, getting credentials...")
+            
             guard let user = result?.user,
                   let idToken = user.idToken?.tokenString else {
                 
@@ -149,19 +150,19 @@ class AuthViewModel: ObservableObject {
 
             let accessToken = user.accessToken.tokenString
             let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: accessToken)
-            print("Authenticating with Firebase...")
+            
 
             // First sign out to ensure clean auth state
             do {
                 try Auth.auth().signOut()
             } catch {
-                print("⚠️ Warning while signing out before new sign in: \(error.localizedDescription)")
+                
                 // Continue anyway
             }
 
             self.auth.signIn(with: credential) { authResult, authError in
                 if let authError = authError {
-                    print("❌ Firebase auth failed: \(authError.localizedDescription)")
+                    
                     
                     DispatchQueue.main.async {
                         self.error = authError.localizedDescription
@@ -169,12 +170,15 @@ class AuthViewModel: ObservableObject {
                     
                     completion(false, authError)
                 } else {
-                    print("✅ Firebase auth success")
+                    
+                    
+                    // Save FCM token to Firestore after successful authentication
+                    self.saveFCMTokenAfterSignIn()
                     
                     // After successful authentication, fetch the user profile
                     self.fetchUserProfile { success in
                         if success {
-                            print("✅ User profile loaded successfully")
+                            
                             
                             // Save the last sign-in time
                             UserDefaults.standard.set(Date(), forKey: "lastSignInTime")
@@ -187,7 +191,7 @@ class AuthViewModel: ObservableObject {
                                 NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: userId)
                             }
                         } else {
-                            print("⚠️ User profile not found, proceeding with new user flow")
+                            
                             DispatchQueue.main.async {
                                 // For new users, we still want to consider the sign-in successful
                                 self.isLoggedIn = true
@@ -211,7 +215,7 @@ class AuthViewModel: ObservableObject {
         let db = Firestore.firestore()
         db.collection("users").document(uid).getDocument { [weak self] snapshot, error in
             if let error = error {
-                print("Error fetching user profile: \(error.localizedDescription)")
+                
                 completion(false)
                 return
             }
@@ -225,6 +229,9 @@ class AuthViewModel: ObservableObject {
                 let dob = dobTimestamp.dateValue()
                 let roleString = data["role"] as? String ?? "user"
                 let role = AppUser.UserRole(rawValue: roleString) ?? .user
+                let username = data["username"] as? String
+                let gender = data["gender"] as? String
+                let bio = data["bio"] as? String
                 let instagramHandle = data["instagramHandle"] as? String
                 let snapchatHandle = data["snapchatHandle"] as? String
                 let avatarURL = data["avatarURL"] as? String
@@ -241,6 +248,7 @@ class AuthViewModel: ObservableObject {
                 let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
                 let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
                 let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
+                let successfulPartiesCount = data["successfulPartiesCount"] as? Int ?? 0
 
                 let user = AppUser(
                     uid: uid,
@@ -249,6 +257,9 @@ class AuthViewModel: ObservableObject {
                     dob: dob,
                     phoneNumber: phoneNumber,
                     role: role,
+                    username: username,
+                    gender: gender,
+                    bio: bio,
                     instagramHandle: instagramHandle,
                     snapchatHandle: snapchatHandle,
                     avatarURL: avatarURL,
@@ -262,26 +273,28 @@ class AuthViewModel: ObservableObject {
                     guestRating: guestRating,
                     hostRatingsCount: hostRatingsCount,
                     guestRatingsCount: guestRatingsCount,
-                    totalLikesReceived: totalLikesReceived
+                    totalLikesReceived: totalLikesReceived,
+                    successfulPartiesCount: successfulPartiesCount
                 )
                 
                 DispatchQueue.main.async {
                     self?.currentUser = user
-                    // Check if profile is complete (has either Instagram or Snapchat AND has city)
-                    let hasSocialHandle = (instagramHandle?.isEmpty == false) || (snapchatHandle?.isEmpty == false)
+                    // Check if profile is complete (has username AND gender AND has city - social media now optional)
+                    let hasUsername = username?.isEmpty == false
+                    let hasGender = gender?.isEmpty == false
                     let hasCity = city?.isEmpty == false
-                    self?.isProfileComplete = hasSocialHandle && hasCity
+                    self?.isProfileComplete = hasUsername && hasGender && hasCity
                     completion(true)
                 }
             } else {
-                print("User profile data incomplete or missing")
+                
                 completion(false)
             }
         }
     }
 
     func logout(completion: ((Error?) -> Void)? = nil) {
-        print("Logging out user")
+        
         
         // First, send the logout notification before actual logout
         // to make sure all observers get notified
@@ -310,7 +323,7 @@ class AuthViewModel: ObservableObject {
             
             completion?(nil)
         } catch {
-            print("❌ Logout Error: \(error.localizedDescription)")
+            
             
             DispatchQueue.main.async {
                 self.error = "Failed to log out: \(error.localizedDescription)"
@@ -321,13 +334,27 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    // Save FCM token to Firestore after successful sign-in
+    private func saveFCMTokenAfterSignIn() {
+        // Use the NotificationManager to handle FCM token saving
+        NotificationManager.shared.saveFCMTokenIfNeeded()
+    }
+    
     private func resetAppToInitialState() {
         // Clear user-specific data from UserDefaults
         UserDefaults.standard.removeObject(forKey: "lastViewedEventId")
         UserDefaults.standard.removeObject(forKey: "chat_username")
         UserDefaults.standard.removeObject(forKey: "chat_username_updated")
+        UserDefaults.standard.removeObject(forKey: "lastSignInTime")
         
-        // Don't clear onboarding status
+        // For account deletion, also clear profile completion status
+        UserDefaults.standard.removeObject(forKey: "profileCompleted")
+        
+        // Clear any cached tickets or saved events
+        UserDefaults.standard.removeObject(forKey: "savedEvents")
+        UserDefaults.standard.removeObject(forKey: "myTickets")
+        
+        // Don't clear onboarding status - user has already seen it
         // UserDefaults.standard.removeObject(forKey: "hasSeenOnboarding")
         
         UserDefaults.standard.synchronize()
@@ -353,13 +380,13 @@ class AuthViewModel: ObservableObject {
             }
             
             if let error = error {
-                print("Error updating user in Firestore: \(error.localizedDescription)")
+                
                 
                 DispatchQueue.main.async {
                     self.error = "Failed to update profile: \(error.localizedDescription)"
                 }
             } else {
-                print("User data updated successfully in Firestore")
+                
                 
                 DispatchQueue.main.async {
                     self.currentUser = user
@@ -386,59 +413,92 @@ class AuthViewModel: ObservableObject {
         // Send notification that user will be deleted
         NotificationCenter.default.post(name: NSNotification.Name("UserWillBeDeleted"), object: nil)
         
-        // Delete Firebase Auth user first - this is more secure and allows us to use a Cloud Function 
-        // to clean up the user data in Firestore (which will have proper admin permissions)
-        user.delete { [weak self] error in
+        // First, delete the user's Firestore data manually (since Cloud Function isn't working)
+        // Delete user subcollections first, then the main user document
+        let userRef = db.collection("users").document(uid)
+        
+        // Delete user subcollections
+        let subcollections = ["stats", "badges", "tickets", "fcmTokens", "deviceTokens"]
+        let group = DispatchGroup()
+        
+        for subcollection in subcollections {
+            group.enter()
+            userRef.collection(subcollection).getDocuments { snapshot, error in
+                if let documents = snapshot?.documents {
+                    for document in documents {
+                        document.reference.delete()
+                    }
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
             
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
-            
-            if let error = error {
-                print("❌ Error deleting auth user: \(error.localizedDescription)")
+            // Now delete the main user document
+            userRef.delete { [weak self] firestoreError in
+                guard let self = self else { return }
                 
-                // Check if error is due to requiring recent authentication
-                let authError = error as NSError
-                if authError.domain == AuthErrorDomain && 
-                   authError.code == AuthErrorCode.requiresRecentLogin.rawValue {
+                if let firestoreError = firestoreError {
                     
-                    print("⚠️ Requires recent login, logging out user")
-                    
-                    DispatchQueue.main.async {
-                        self.error = "For security reasons, you need to sign in again before deleting your account"
-                    }
-                    
-                    // Force logout in this case
-                    self.logout { _ in
-                        completion(error)
-                    }
+                    // Continue anyway - we'll still try to delete the auth user
                 } else {
+                    
+                }
+                
+                // Now delete Firebase Auth user
+                user.delete { [weak self] authError in
+                    guard let self = self else { return }
+                    
                     DispatchQueue.main.async {
-                        self.error = "Failed to delete account: \(error.localizedDescription)"
+                        self.isLoading = false
                     }
                     
-                    completion(error)
+                    if let authError = authError {
+                        
+                        
+                        // Check if error is due to requiring recent authentication
+                        let error = authError as NSError
+                        if error.domain == AuthErrorDomain && 
+                           error.code == AuthErrorCode.requiresRecentLogin.rawValue {
+                            
+                            
+                            
+                            DispatchQueue.main.async {
+                                self.error = "For security reasons, you need to sign in again before deleting your account"
+                            }
+                            
+                            // Force logout in this case
+                            self.logout { _ in
+                                completion(authError)
+                            }
+                        } else {
+                            DispatchQueue.main.async {
+                                self.error = "Failed to delete account: \(authError.localizedDescription)"
+                            }
+                            
+                            completion(authError)
+                        }
+                    } else {
+                        
+                        
+                        // Clear local state
+                        DispatchQueue.main.async {
+                            self.currentUser = nil
+                            self.isLoggedIn = false
+                            self.isProfileComplete = false // Reset profile completion status
+                        }
+                        
+                        // Post notification that user was deleted
+                        NotificationCenter.default.post(name: NSNotification.Name("UserWasDeleted"), object: nil)
+                        
+                        // Reset app state
+                        self.resetAppToInitialState()
+                        
+                        completion(nil)
+                    }
                 }
-            } else {
-                print("✅ User auth deleted successfully")
-                
-                // Note: Firestore data for this user should be deleted by a Cloud Function trigger
-                // that listens for user deletion events
-                
-                // Clear local state
-                DispatchQueue.main.async {
-                    self.currentUser = nil
-                    self.isLoggedIn = false
-                }
-                
-                // Post notification that user was deleted
-                NotificationCenter.default.post(name: NSNotification.Name("UserWasDeleted"), object: nil)
-                
-                // Reset app state
-                self.resetAppToInitialState()
-                
-                completion(nil)
             }
         }
     }
@@ -475,7 +535,7 @@ class AuthViewModel: ObservableObject {
             }
             
             if let error = error {
-                print("❌ Error creating user profile: \(error.localizedDescription)")
+                
                 
                 DispatchQueue.main.async {
                     self.error = "Failed to create profile: \(error.localizedDescription)"
@@ -483,7 +543,7 @@ class AuthViewModel: ObservableObject {
                 
                 completion(false, error)
             } else {
-                print("✅ User profile created successfully")
+                
                 
                 // Create local user object
                 let appUser = AppUser(
@@ -510,6 +570,187 @@ class AuthViewModel: ObservableObject {
                 }
                 
                 completion(true, nil)
+            }
+        }
+    }
+
+    func updateProfile(
+        username: String? = nil,
+        gender: String? = nil,
+        bio: String? = nil,
+        instagramHandle: String? = nil,
+        snapchatHandle: String? = nil,
+        avatarURL: String? = nil,
+        city: String? = nil,
+        dob: Date? = nil,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard let user = Auth.auth().currentUser,
+              let email = user.email,
+              let displayName = user.displayName else {
+            completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user signed in"])))
+            return
+        }
+        
+        let uid = user.uid
+        
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.error = nil
+        }
+        
+        // First check if user document exists
+        db.collection("users").document(uid).getDocument { [weak self] document, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = error.localizedDescription
+                    completion(.failure(error))
+                }
+                return
+            }
+            
+            let documentExists = document?.exists == true
+            var userData: [String: Any] = [:]
+            
+            if documentExists {
+                // For existing users, only update provided fields
+                if let username = username {
+                    userData["username"] = username
+                }
+                if let gender = gender {
+                    userData["gender"] = gender.isEmpty ? NSNull() : gender
+                }
+                if let bio = bio {
+                    userData["bio"] = bio.isEmpty ? NSNull() : bio
+                }
+                if let instagramHandle = instagramHandle {
+                    userData["instagramHandle"] = instagramHandle.isEmpty ? NSNull() : instagramHandle
+                }
+                if let snapchatHandle = snapchatHandle {
+                    userData["snapchatHandle"] = snapchatHandle.isEmpty ? NSNull() : snapchatHandle
+                }
+                if let avatarURL = avatarURL {
+                    userData["avatarURL"] = avatarURL.isEmpty ? NSNull() : avatarURL
+                }
+                if let city = city {
+                    userData["city"] = city
+                }
+                if let dob = dob {
+                    userData["dob"] = Timestamp(date: dob)
+                }
+                userData["lastUpdated"] = Timestamp()
+            } else {
+                // For new users, create complete profile with required fields
+                userData = [
+                    "uid": uid,
+                    "name": displayName,
+                    "email": email,
+                    "dob": dob != nil ? Timestamp(date: dob!) : Timestamp(date: Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()),
+                    "phoneNumber": user.phoneNumber ?? "",
+                    "role": "user",
+                    "username": username ?? "",
+                    "gender": gender?.isEmpty == false ? gender : NSNull(),
+                    "bio": bio?.isEmpty == false ? bio : NSNull(),
+                    "instagramHandle": instagramHandle?.isEmpty == false ? instagramHandle : NSNull(),
+                    "snapchatHandle": snapchatHandle?.isEmpty == false ? snapchatHandle : NSNull(),
+                    "avatarURL": avatarURL?.isEmpty == false ? avatarURL : NSNull(),
+                    "googleID": uid,
+                    "city": city ?? "",
+                    "isHostVerified": false,
+                    "isGuestVerified": false,
+                    "hostedPartiesCount": 0,
+                    "attendedPartiesCount": 0,
+                    "hostRating": 0.0,
+                    "guestRating": 0.0,
+                    "hostRatingsCount": 0,
+                    "guestRatingsCount": 0,
+                    "totalEarnings": 0.0,
+                    "totalSpent": 0.0,
+                    "totalLikesReceived": 0,
+                    "partyReviews": [],
+                    "socialProfiles": [:],
+                    "preferences": [:],
+                    "createdAt": Timestamp(date: Date()),
+                    "lastActiveAt": Timestamp(date: Date()),
+                    "lastUpdated": Timestamp()
+                ]
+            }
+            
+            // Use appropriate Firestore operation
+            let operation: (([String: Any], @escaping (Error?) -> Void) -> Void) = documentExists ? 
+                { data, completion in
+                    self.db.collection("users").document(uid).updateData(data, completion: completion)
+                } : 
+                { data, completion in
+                    self.db.collection("users").document(uid).setData(data, completion: completion)
+                }
+            
+            // Perform the operation
+            operation(userData) { [weak self] error in
+                DispatchQueue.main.async {
+                    self?.isLoading = false
+                }
+                
+                if let error = error {
+                    
+                    completion(.failure(error))
+                } else {
+                    
+                    // Refresh user profile to get updated data
+                    self?.fetchUserProfile { success in
+                        if success {
+                            // Update profile completion status
+                            DispatchQueue.main.async {
+                                let hasUsername = self?.currentUser?.username?.isEmpty == false
+                                let hasGender = self?.currentUser?.gender?.isEmpty == false
+                                let hasCity = self?.currentUser?.city?.isEmpty == false
+                                self?.isProfileComplete = hasUsername && hasGender && hasCity
+                            }
+                            completion(.success(()))
+                        } else {
+                            completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to refresh profile data"])))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func uploadProfileImage(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user signed in"])))
+            return
+        }
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to process image"])))
+            return
+        }
+        
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
+        let profileImageRef = storageRef.child("profile_images/\(uid).jpg")
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        profileImageRef.putData(imageData, metadata: metadata) { metadata, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            profileImageRef.downloadURL { url, error in
+                if let error = error {
+                    completion(.failure(error))
+                } else if let downloadURL = url {
+                    completion(.success(downloadURL.absoluteString))
+                } else {
+                    completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to get download URL"])))
+                }
             }
         }
     }

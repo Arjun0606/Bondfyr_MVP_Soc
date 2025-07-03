@@ -1,2 +1,17 @@
 firebase/serviceAccountKey.json
 *.xcuserstate
+
+# Xcode build files
+build/
+*/build/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Firebase
+firebase-debug.log
+
+# Node modules
+node_modules/

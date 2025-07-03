@@ -136,7 +136,7 @@ struct EventListView: View {
     private func handlePendingNavigation(eventId: String?) {
         guard let eventId = eventId else { return }
         
-        print("EventListView handling navigation for event: \(eventId)")
+        
         
         // Find the event in the list
         if let event = eventViewModel.events.first(where: { $0.id.uuidString == eventId }) {
@@ -150,7 +150,7 @@ struct EventListView: View {
                 self.navigateToGallery = false
             }
         } else {
-            print("⚠️ Event not found for ID: \(eventId)")
+            
         }
     }
     

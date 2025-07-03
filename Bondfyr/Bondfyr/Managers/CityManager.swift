@@ -93,7 +93,7 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location manager error: \(error.localizedDescription)")
+        
         self.error = "Failed to get location: \(error.localizedDescription)"
     }
     

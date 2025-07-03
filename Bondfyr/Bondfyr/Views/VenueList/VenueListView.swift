@@ -26,7 +26,7 @@ struct VenueListView: View {
     
     // MARK: - View Lifecycle
     init() {
-        print("📱 VenueListView initialized")
+        
     }
     
     var body: some View {
@@ -88,18 +88,7 @@ struct VenueListView: View {
         }
     }
     
-    // MARK: - Debug Helpers
-    private func debugState(from location: String) {
-        print("""
-        🔍 VenueListView State [\(location)]:
-        - isFetchingGoogleVenues: \(isFetchingGoogleVenues)
-        - Venues count: \(googleVenues.count)
-        - isLoadingNextPage: \(isLoadingNextPage)
-        - totalFetched: \(totalFetched)
-        - selectedCity: \(cityManager.selectedCity ?? "nil")
-        - errorMessage: \(errorMessage ?? "nil")
-        """)
-    }
+
 
     private var cityHeader: some View {
         HStack {
@@ -230,7 +219,7 @@ struct VenueListView: View {
                 .foregroundColor(.red)
                 .multilineTextAlignment(.center)
             Button("Try Again") {
-                print("🔄 Retry button tapped")
+                
                 Task {
                     await fetchGoogleVenuesForSelectedCity()
                 }
@@ -247,7 +236,7 @@ struct VenueListView: View {
     private var venueListView: some View {
         let sortedVenues = sortVenues(filteredGoogleVenues)
         
-        print("📱 Building venueListView with \(sortedVenues.count) venues")
+        
         
         return ScrollView {
             LazyVStack(spacing: 0) {
@@ -260,12 +249,12 @@ struct VenueListView: View {
                             rank: index + 1
                         )
                         .onTapGesture { 
-                            print("📱 Selected venue: \(venue.name)")
+                            
                             selectedVenue = venue 
                         }
                         .onAppear {
                             if index == sortedVenues.count - 5 && !isLoadingNextPage {
-                                print("📱 Near end of list, loading more venues")
+                                
                                 if let token = nextPageToken {
                                     fetchNextGoogleVenuesPage(token: token)
                                 }
@@ -284,7 +273,7 @@ struct VenueListView: View {
             .padding(.top, 8)
         }
         .refreshable {
-            print("🔄 Manual refresh triggered")
+            
             await fetchGoogleVenuesForSelectedCity()
         }
         .sheet(item: $selectedVenue) { venue in
@@ -295,10 +284,10 @@ struct VenueListView: View {
     }
 
     private var filteredGoogleVenues: [SimpleVenue] {
-        print("📱 Filtering \(googleVenues.count) venues with search: '\(searchText)'")
+        
         if searchText.isEmpty { return googleVenues }
         let filtered = googleVenues.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        print("📱 Found \(filtered.count) venues matching search")
+        
         return filtered
     }
 
@@ -328,13 +317,11 @@ struct VenueListView: View {
 
     private func fetchGoogleVenuesForSelectedCity() async {
         guard let city = cityManager.selectedCity, !isFetchingGoogleVenues else { 
-            print("⚠️ Skipping fetch - no city selected or already fetching")
-            debugState(from: "fetchGoogleVenuesForSelectedCity - guard")
+            
             return 
         }
         
-        print("🔄 Starting venue fetch for \(city)")
-        debugState(from: "fetchGoogleVenuesForSelectedCity - before")
+        
         
         await MainActor.run {
             isFetchingGoogleVenues = true
@@ -342,15 +329,14 @@ struct VenueListView: View {
             nextPageToken = nil
             totalFetched = 0
             errorMessage = nil
-            print("📱 Reset venue state and started loading")
-            debugState(from: "fetchGoogleVenuesForSelectedCity - after reset")
+            
         }
         
         do {
             let (venues, token) = try await fetchGoogleVenues(for: city, pageToken: nil, accumulated: [])
             
             await MainActor.run {
-                print("✅ Fetch completed with \(venues.count) venues")
+                
                 self.googleVenues = venues
                 self.nextPageToken = token
                 self.totalFetched = venues.count
@@ -358,22 +344,20 @@ struct VenueListView: View {
                 if venues.isEmpty {
                     self.errorMessage = "No venues found in \(city). Please try a different search."
                 }
-                print("📱 Updated UI with \(venues.count) venues")
-                debugState(from: "fetchGoogleVenuesForSelectedCity - completion")
+                
             }
         } catch {
             await MainActor.run {
-                print("❌ Venue fetch error: \(error.localizedDescription)")
+                
                 self.errorMessage = "Failed to load venues: \(error.localizedDescription)"
                 self.isFetchingGoogleVenues = false
-                debugState(from: "fetchGoogleVenuesForSelectedCity - error")
             }
         }
     }
 
     private func fetchNextGoogleVenuesPage(token: String) {
         guard !isLoadingNextPage else { return }
-        print("🔄 Loading next page with token: \(token)")
+        
         
         isLoadingNextPage = true
         
@@ -381,7 +365,7 @@ struct VenueListView: View {
         let urlString = "https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=\(token)&key=\(apiKey)"
         
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid next page URL")
+            
             isLoadingNextPage = false
             return
         }
@@ -392,9 +376,9 @@ struct VenueListView: View {
                 let response = try JSONDecoder().decode(GooglePlacesResponse.self, from: data)
                 
                 if response.status != "OK" {
-                    print("⚠️ Next page API response status not OK: \(response.status)")
+                    
                     if let error = response.error_message {
-                        print("⚠️ Next page API error: \(error)")
+                        
                     }
                     await MainActor.run {
                         isLoadingNextPage = false
@@ -429,7 +413,7 @@ struct VenueListView: View {
                 }
                 
                 await MainActor.run {
-                    print("✅ Found \(newVenues.count) venues in next page")
+                    
                     var updatedVenues = Set(googleVenues)
                     updatedVenues.formUnion(newVenues)
                     googleVenues = Array(updatedVenues).sorted { (v1: SimpleVenue, v2: SimpleVenue) -> Bool in
@@ -440,10 +424,10 @@ struct VenueListView: View {
                     totalFetched = googleVenues.count
                     nextPageToken = response.next_page_token
                     isLoadingNextPage = false
-                    print("✅ Total venues after next page: \(googleVenues.count)")
+                    
                 }
             } catch {
-                print("❌ Error fetching next page: \(error.localizedDescription)")
+                
                 await MainActor.run {
                     isLoadingNextPage = false
                 }
@@ -452,7 +436,7 @@ struct VenueListView: View {
     }
 
     private func fetchGoogleVenues(for city: String, pageToken: String?, accumulated: [SimpleVenue]) async throws -> ([SimpleVenue], String?) {
-        print("🔍 Starting venue fetch for \(city) with \(accumulated.count) accumulated venues")
+        
         
         let apiKey = "AIzaSyAuPBQCEYfG9C0wwH5MoHRbNe4xJ8Y_3zk"
         
@@ -468,11 +452,11 @@ struct VenueListView: View {
         var nextToken: String? = nil
         
         for strategy in searchStrategies {
-            print("🔍 Using search strategy: \(strategy)")
+            
             
             let urlString = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=\(strategy.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&key=\(apiKey)"
             guard let url = URL(string: urlString) else {
-                print("❌ Invalid URL for strategy: \(strategy)")
+                
                 continue
             }
             
@@ -481,9 +465,9 @@ struct VenueListView: View {
                 let response = try JSONDecoder().decode(GooglePlacesResponse.self, from: data)
                 
                 if response.status != "OK" {
-                    print("⚠️ API response status not OK: \(response.status)")
+                    
                     if let error = response.error_message {
-                        print("⚠️ API error: \(error)")
+                        
                     }
                     continue
                 }
@@ -526,7 +510,7 @@ struct VenueListView: View {
                     )
                 }
                 
-                print("✅ Found \(venues.count) venues for strategy: \(strategy)")
+                
                 allVenues.formUnion(venues)
                 
                 if let token = response.next_page_token {
@@ -536,7 +520,7 @@ struct VenueListView: View {
                 // Reduced delay to 0.5 seconds
                 try await Task.sleep(nanoseconds: 500_000_000)
             } catch {
-                print("❌ Error fetching venues for strategy \(strategy): \(error.localizedDescription)")
+                
                 continue
             }
         }
@@ -548,7 +532,7 @@ struct VenueListView: View {
             return score1 > score2
         }
         
-        print("✅ Total unique venues found: \(sortedVenues.count)")
+        
         return (sortedVenues, nextToken)
     }
 }

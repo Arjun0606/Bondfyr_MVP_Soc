@@ -10,13 +10,6 @@ struct EventCard: View {
     }
     
     var body: some View {
-        // Debug print to check IDs
-        let _ = {
-            print("[EventCard] Current event: \(event.name), id: \(event.id.uuidString)")
-            for saved in savedEventsManager.savedEvents {
-                print("[EventCard] Saved event: \(saved.name), id: \(saved.id.uuidString)")
-            }
-        }()
         VStack(alignment: .leading, spacing: 8) {
             // Event name at the top, bold
             Text(event.name)

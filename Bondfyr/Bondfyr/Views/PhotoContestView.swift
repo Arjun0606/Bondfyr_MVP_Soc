@@ -145,7 +145,7 @@ struct PhotoContestView: View {
                 isLoading = false
                 
                 if let error = error {
-                    print("Error loading photos: \(error)")
+                    
                     return
                 }
                 

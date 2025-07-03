@@ -97,8 +97,8 @@ class PhotoContestManager: ObservableObject {
     private let db = Firestore.firestore()
     private let storage = Storage.storage().reference()
     
-    // DEBUG MODE - Set to true to bypass upload window checks
-    private let DEBUG_MODE = true
+    // DEBUG MODE - Set to false for production
+    private let DEBUG_MODE = false
     
     // Published properties for reactivity
     @Published var isLoading: Bool = false
@@ -139,7 +139,7 @@ class PhotoContestManager: ObservableObject {
     func setupPhotoListener(for eventId: String) {
         // Special case for test-event-id
         if eventId == "test-event-id" {
-            print("📷 Setting up real photo listener for test-event-id")
+            
             
             // First check for real photos in Firestore
             fetchRealPhotosForTestEvent()
@@ -157,15 +157,15 @@ class PhotoContestManager: ObservableObject {
                     guard let self = self else { return }
                     
                     if let error = error {
-                        print("❌ Error listening for test event photos: \(error.localizedDescription)")
+                        
                         return
                     }
                     
                     if let documents = snapshot?.documents, !documents.isEmpty {
-                        print("📷 Found \(documents.count) real photos for test-event-id")
+                        
                         self.processPhotoDocuments(documents, for: eventId)
                     } else {
-                        print("📷 No real photos found for test-event-id")
+                        
                     }
                 }
             
@@ -176,7 +176,7 @@ class PhotoContestManager: ObservableObject {
         // Normal case - proceed with regular listener setup
         removeListener(for: eventId)
         
-        print("📷 Setting up photo listener for event ID: \(eventId)")
+        
         
         let listener = db.collection("photo_contests")
             .whereField("eventId", isEqualTo: eventId)
@@ -188,7 +188,7 @@ class PhotoContestManager: ObservableObject {
                 guard let self = self else { return }
                 
                 if let error = error {
-                    print("❌ Error listening for photo updates: \(error.localizedDescription)")
+                    
                     DispatchQueue.main.async {
                         self.error = .databaseError
                     }
@@ -196,7 +196,7 @@ class PhotoContestManager: ObservableObject {
                 }
                 
                 guard let documents = snapshot?.documents else {
-                    print("📷 No photos found in listener for event: \(eventId)")
+                    
                     DispatchQueue.main.async {
                         // Clear photos instead of keeping old ones
                         self.photos = []
@@ -204,7 +204,7 @@ class PhotoContestManager: ObservableObject {
                     return
                 }
                 
-                print("📷 Received \(documents.count) photos in listener")
+                
                 self.processPhotoDocuments(documents, for: eventId)
             }
         
@@ -213,7 +213,7 @@ class PhotoContestManager: ObservableObject {
     
     // Public method to remove a specific listener
     func removePhotoListener(for eventId: String) {
-        print("📷 Removing photo listener for event ID: \(eventId)")
+        
         removeListener(for: eventId)
     }
     
@@ -236,7 +236,7 @@ class PhotoContestManager: ObservableObject {
         var processedPhotos: [PhotoContest] = []
         var userPhotoFound: PhotoContest? = nil
         
-        print("📷 Processing \(documents.count) photo documents for event \(eventId)")
+        
         
         if documents.isEmpty {
             DispatchQueue.main.async {
@@ -265,7 +265,7 @@ class PhotoContestManager: ObservableObject {
                       let timestampData = data["timestamp"] as? Timestamp,
                       let expirationData = data["expirationTime"] as? Timestamp,
                       let likeCount = data["likeCount"] as? Int else {
-                    print("❌ Skipping malformed photo document: \(document.documentID)")
+                    
                     continue
                 }
                 
@@ -278,7 +278,7 @@ class PhotoContestManager: ObservableObject {
                 
                 // Skip expired photos
                 if Date() > expirationTime {
-                    print("📷 Skipping expired photo: \(photoId)")
+                    
                     continue
                 }
                 
@@ -300,10 +300,10 @@ class PhotoContestManager: ObservableObject {
                 // Check if this is the current user's photo
                 if userId == currentUserId {
                     userPhotoFound = photo
-                    print("📷 Found current user's photo: \(photoId)")
+                    
                 }
             } catch {
-                print("❌ Error processing photo document \(document.documentID): \(error.localizedDescription)")
+                
             }
         }
         
@@ -315,7 +315,7 @@ class PhotoContestManager: ObservableObject {
             return $0.likeCount > $1.likeCount
         }
         
-        print("📷 Processed \(processedPhotos.count) valid photos")
+        
         
         DispatchQueue.main.async {
             self.photos = processedPhotos
@@ -334,7 +334,7 @@ class PhotoContestManager: ObservableObject {
         
         // Special case for test-event-id - bypass checks for testing
         if eventId == "test-event-id" {
-            print("📷 Special case: test-event-id - bypassing eligibility checks")
+            
             userUploadCount = 0 // Reset for testing
             completion(.success(()))
             return
@@ -342,7 +342,7 @@ class PhotoContestManager: ObservableObject {
         
         // When in DEBUG_MODE, bypass the event existence check
         if DEBUG_MODE {
-            print("📷 DEBUG MODE: Bypassing event existence check for ID: \(eventId)")
+            
             self.uploadWindowRemainingSeconds = 5 * 60 * 60 // 5 hours
             self.userUploadCount = 0 // Reset for testing
             completion(.success(()))
@@ -354,7 +354,7 @@ class PhotoContestManager: ObservableObject {
             guard let self = self else { return }
             
             if let error = error {
-                print("Error fetching event: \(error.localizedDescription)")
+                
                 completion(.failure(.eventNotFound))
                 return
             }
@@ -378,7 +378,7 @@ class PhotoContestManager: ObservableObject {
                 self.uploadWindowRemainingSeconds = self.uploadWindowDuration - (30 * 60)
                 
                 // Skip time check for test events
-                print("📷 Test event ID detected - bypassing upload window check")
+                
             } else if let timestamp = eventData["startTime"] as? Timestamp {
                 eventStartTime = timestamp.dateValue()
             } else if let timestamp = eventData["timestamp"] as? Timestamp {
@@ -398,11 +398,11 @@ class PhotoContestManager: ObservableObject {
             if eventId == "test-event-id" || self.DEBUG_MODE {
                 // In debug mode, always set a long remaining time
                 self.uploadWindowRemainingSeconds = 5 * 60 * 60 // 5 hours
-                print("📷 Debug mode active - bypassing upload window check")
+                
                 // Continue with user photo count check
             } else if timeSinceStart > self.uploadWindowDuration {
                 // Upload window closed - more than 5 hours since event started
-                print("📷 Upload window closed. Event started \(Int(timeSinceStart/3600)) hours ago")
+                
                 completion(.failure(.uploadWindowClosed))
                 return
             }
@@ -416,7 +416,7 @@ class PhotoContestManager: ObservableObject {
                     guard let self = self else { return }
                     
                     if let error = error {
-                        print("Error checking for existing photos: \(error.localizedDescription)")
+                        
                         completion(.failure(.databaseError))
                         return
                     }
@@ -432,7 +432,7 @@ class PhotoContestManager: ObservableObject {
                     
                     // Check if user already has reached the maximum number of photos
                     if uploadCount >= self.maxPhotosPerUser {
-                        print("📷 User has already uploaded \(uploadCount) photos (max: \(self.maxPhotosPerUser))")
+                        
                         completion(.failure(.userAlreadyUploaded))
                         return
                     }
@@ -451,16 +451,16 @@ class PhotoContestManager: ObservableObject {
     }
     
     private func checkTicketOrCheckIn(userId: String, eventId: String, completion: @escaping (Result<Void, PhotoContestError>) -> Void) {
-        print("📷 Checking ticket or check-in for user: \(userId), event: \(eventId)")
+        
         
         // For demo purposes, first check if CheckInManager is available and if the user has checked in
         if CheckInManager.shared.hasCheckedInToEvent(eventId: eventId) {
-            print("📷 User has checked in to the event")
+            
         completion(.success(()))
             return
         }
         
-        print("📷 User not checked in, checking for a ticket")
+        
         
         // Check if they have a ticket
         db.collection("tickets")
@@ -468,13 +468,13 @@ class PhotoContestManager: ObservableObject {
             .whereField("eventId", isEqualTo: eventId)
             .getDocuments { [weak self] snapshot, error in
                 guard let self = self else { 
-                    print("❌ Self is nil in ticket check")
+                    
                     completion(.failure(.serverError))
                     return 
                 }
                 
                 if let error = error {
-                    print("❌ Error checking for tickets: \(error.localizedDescription)")
+                    
                     completion(.failure(.serverError))
                     return
                 }
@@ -482,10 +482,10 @@ class PhotoContestManager: ObservableObject {
                 // For development, if no tickets found, let's allow uploads anyway
                 // In production, you'd want to require a ticket
                 if let documents = snapshot?.documents, !documents.isEmpty {
-                    print("📷 User has a ticket for the event")
+                    
                     completion(.success(()))
                 } else {
-                    print("⚠️ No ticket found, but allowing upload for development")
+                    
                     // In development mode, allow uploads even without a ticket
                     #if DEBUG
                     completion(.success(()))
@@ -499,7 +499,7 @@ class PhotoContestManager: ObservableObject {
     // MARK: - Upload Photo
     
     func uploadPhoto(for eventId: String, image: UIImage, caption: String, completion: @escaping (Result<String, PhotoContestError>) -> Void) {
-        print("📷 Starting photo upload process for event: \(eventId)")
+        
         
         DispatchQueue.main.async {
             self.isLoading = true
@@ -512,7 +512,7 @@ class PhotoContestManager: ObservableObject {
             
             switch result {
             case .success:
-                print("📷 User eligible to upload photo for event: \(eventId)")
+                
                 self.performPhotoUpload(eventId: eventId, image: image, caption: caption) { result in
                     DispatchQueue.main.async {
                         self.isLoading = false
@@ -520,7 +520,7 @@ class PhotoContestManager: ObservableObject {
                     completion(result)
                 }
             case .failure(let error):
-                print("❌ Upload eligibility check failed: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.error = error
@@ -532,39 +532,39 @@ class PhotoContestManager: ObservableObject {
     
     private func performPhotoUpload(eventId: String, image: UIImage, caption: String, completion: @escaping (Result<String, PhotoContestError>) -> Void) {
         guard let userId = Auth.auth().currentUser?.uid else {
-            print("❌ Upload failed: User not logged in")
+            
             completion(.failure(.notLoggedIn))
             return
         }
         
         // Compress and prepare the image
         guard let imageData = prepareImageForUpload(image: image) else {
-            print("❌ Upload failed: Could not prepare image data")
+            
             completion(.failure(.invalidImage))
             return
         }
         
         // Check image size
         if imageData.count > maxImageSizeBytes {
-            print("❌ Upload failed: Image size too large (\(imageData.count) bytes)")
+            
             completion(.failure(.maxSizeExceeded))
             return
         }
         
-        print("📷 Image prepared successfully: \(imageData.count) bytes")
+        
         
         // Get user name
         db.collection("users").document(userId).getDocument { [weak self] snapshot, error in
             guard let self = self else { return }
             
             if let error = error {
-                print("❌ Upload failed: Error fetching user data: \(error.localizedDescription)")
+                
                 completion(.failure(.databaseError))
                 return
             }
             
             let userName = snapshot?.data()?["name"] as? String ?? "Anonymous"
-            print("📷 Retrieved user name: \(userName)")
+            
             
             // Generate unique photo ID
             let photoId = UUID().uuidString
@@ -574,33 +574,33 @@ class PhotoContestManager: ObservableObject {
             let metadata = StorageMetadata()
             metadata.contentType = "image/jpeg"
             
-            print("📷 Starting Firebase Storage upload for photo ID: \(photoId)")
+            
             
             // Upload photo to Firebase Storage
             let uploadTask = photoRef.putData(imageData, metadata: metadata) { metadata, error in
                 if let error = error {
-                    print("❌ Storage upload failed: \(error.localizedDescription)")
+                    
                     completion(.failure(.uploadFailed))
                     return
                 }
                 
-                print("📷 Firebase Storage upload successful, getting download URL")
+                
                 
                 // Get download URL
                 photoRef.downloadURL { url, error in
                     if let error = error {
-                        print("❌ Failed to get download URL: \(error.localizedDescription)")
+                        
                         completion(.failure(.uploadFailed))
                         return
                     }
                     
                     guard let downloadURL = url else {
-                        print("❌ Download URL is nil")
+                        
                         completion(.failure(.uploadFailed))
                         return
                     }
                     
-                    print("📷 Got download URL: \(downloadURL.absoluteString)")
+                    
                     
                     // Cache the download URL
                     self.downloadURLCache[photoId] = downloadURL
@@ -609,7 +609,7 @@ class PhotoContestManager: ObservableObject {
                     let now = Date()
                     let expirationTime = now.addingTimeInterval(self.photoLifetimeInSeconds)
                     
-                    print("📷 Creating Firestore document for photo")
+                    
                     
                     // Create photo entry in Firestore
                     let photoData: [String: Any] = [
@@ -629,12 +629,12 @@ class PhotoContestManager: ObservableObject {
                     // Save to Firestore
                     self.db.collection("photo_contests").document(photoId).setData(photoData) { error in
                         if let error = error {
-                            print("❌ Failed to save photo data to Firestore: \(error.localizedDescription)")
+                            
                             completion(.failure(.databaseError))
                             return
                         }
                         
-                        print("📷 Photo data saved to Firestore successfully")
+                        
                         
                         // Schedule deletion of the photo after 16 hours
                         self.schedulePhotoDeletion(photoId: photoId, storageRef: photoRef, expirationTime: expirationTime)
@@ -668,7 +668,7 @@ class PhotoContestManager: ObservableObject {
                             }
                         }
                         
-                        print("📷 Photo upload process completed successfully")
+                        
                         completion(.success(photoId))
                     }
                 }
@@ -678,7 +678,7 @@ class PhotoContestManager: ObservableObject {
             uploadTask.observe(.progress) { snapshot in
                 guard let progress = snapshot.progress else { return }
                 let percentComplete = 100.0 * Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
-                print("📷 Upload progress: \(percentComplete)%")
+                
             }
         }
     }
@@ -719,7 +719,7 @@ class PhotoContestManager: ObservableObject {
     
     // Fetch real photos for test-event-id from Firestore
     private func fetchRealPhotosForTestEvent() {
-        print("📷 Fetching real photos for test-event-id from Firestore")
+        
         
         db.collection("photo_contests")
             .whereField("eventId", isEqualTo: "test-event-id")
@@ -731,18 +731,18 @@ class PhotoContestManager: ObservableObject {
                 guard let self = self else { return }
                 
                 if let error = error {
-                    print("❌ Error fetching real test photos: \(error.localizedDescription)")
+                    
                     return
                 }
                 
                 if let documents = snapshot?.documents, !documents.isEmpty {
-                    print("📷 Found \(documents.count) real photos for test-event-id")
+                    
                     self.processPhotoDocuments(documents, for: "test-event-id")
                 } else {
-                    print("📷 No real photos found for test-event-id, will keep any existing photos")
+                    
                     // Only use mock photos if we don't have any real ones
                     if self.photos.isEmpty {
-                        print("📷 Creating mock photos since no real ones exist")
+                        
                         self.createMockPhotosForTestEvent()
                     }
                 }
@@ -752,7 +752,7 @@ class PhotoContestManager: ObservableObject {
     func fetchPhotos(for eventId: String, completion: @escaping (Result<[PhotoContest], PhotoContestError>) -> Void) {
         // Special handling for test-event-id
         if eventId == "test-event-id" {
-            print("📷 Fetching real photos for test-event-id")
+            
             isLoading = true
             
             // Check for real photos first
@@ -770,7 +770,7 @@ class PhotoContestManager: ObservableObject {
                     }
                     
                     if let error = error {
-                        print("❌ Error fetching real test photos: \(error.localizedDescription)")
+                        
                         // Create mock photos anyway if we hit an error
                         self.createMockPhotosForTestEvent()
                         completion(.success(self.photos))
@@ -778,11 +778,11 @@ class PhotoContestManager: ObservableObject {
                     }
                     
                     if let documents = snapshot?.documents, !documents.isEmpty {
-                        print("📷 Found \(documents.count) real photos for test-event-id")
+                        
                         self.processPhotoDocuments(documents, for: "test-event-id")
                         completion(.success(self.photos))
                     } else {
-                        print("📷 No real photos found for test-event-id, creating mock photos")
+                        
                         // Always create mock photos for test-event-id when no real ones exist
                         self.createMockPhotosForTestEvent()
                         completion(.success(self.photos))
@@ -792,10 +792,10 @@ class PhotoContestManager: ObservableObject {
         }
         
         isLoading = true
-        print("📷 Fetching photos for eventId: \(eventId)")
+        
         
         let queryEventId = eventId
-        print("📷 Using queryEventId: \(queryEventId) for Firestore query")
+        
         
         db.collection("photo_contests")
             .whereField("eventId", isEqualTo: queryEventId)
@@ -811,22 +811,22 @@ class PhotoContestManager: ObservableObject {
                 }
                 
                 if let error = error {
-                    print("❌ Error fetching photos: \(error.localizedDescription)")
+                    
                     completion(.failure(.fetchFailed))
                     return
                 }
                 
                 guard let documents = snapshot?.documents else {
-                    print("📷 No documents found")
+                    
                     self.photos = []
                     completion(.success([]))
                     return
                 }
                 
-                print("📷 Found \(documents.count) photo documents for eventId: \(queryEventId)")
+                
                 
                 if documents.isEmpty {
-                    print("📷 No photos found for regular event ID, clearing photos array")
+                    
                     DispatchQueue.main.async {
                         self.photos = []
                         self.userPhoto = nil
@@ -841,7 +841,7 @@ class PhotoContestManager: ObservableObject {
     
     // Create mock photo data for test-event-id
     private func createMockPhotosForTestEvent() {
-        print("📷 Creating mock photos for test-event-id")
+        
         
         // Generate current user information
         let currentUserId = Auth.auth().currentUser?.uid ?? "anonymous"
@@ -899,7 +899,7 @@ class PhotoContestManager: ObservableObject {
             let userPhotos = mockPhotos.filter { $0.userId == currentUserId }
             self.userPhoto = userPhotos.first
             
-            print("📷 Created \(mockPhotos.count) mock photos for test-event-id")
+            
         }
     }
     
@@ -962,7 +962,7 @@ class PhotoContestManager: ObservableObject {
             }
             
             if let error = error {
-                print("Error liking photo: \(error.localizedDescription)")
+                
                 self.error = .likeFailed
                 completion(.failure(.likeFailed))
                     } else {
@@ -1054,7 +1054,7 @@ class PhotoContestManager: ObservableObject {
             }
             
             if let error = error {
-                print("Error unliking photo: \(error.localizedDescription)")
+                
                 self.error = .unlikeFailed
                 completion(.failure(.unlikeFailed))
             } else {
@@ -1107,7 +1107,7 @@ class PhotoContestManager: ObservableObject {
             guard let self = self else { return }
             
             if let error = error {
-                print("Error getting photo: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.error = .databaseError
@@ -1141,7 +1141,7 @@ class PhotoContestManager: ObservableObject {
                 "scheduledForDeletion": true
             ]) { error in
                 if let error = error {
-                    print("Error marking photo for deletion: \(error.localizedDescription)")
+                    
                     DispatchQueue.main.async {
                         self.isLoading = false
                         self.error = .deletionFailed
@@ -1158,7 +1158,7 @@ class PhotoContestManager: ObservableObject {
                     }
                     
                         if let error = error {
-                        print("Error deleting photo from storage: \(error.localizedDescription)")
+                        
                         // Storage deletion failed, but Firestore updated successfully
                         // Consider this partial success
                         
@@ -1172,7 +1172,7 @@ class PhotoContestManager: ObservableObject {
                         
                         completion(.success(()))
                     } else {
-                        print("Photo deleted successfully")
+                        
                         
                         // Update local state
                         DispatchQueue.main.async {
@@ -1198,6 +1198,6 @@ class PhotoContestManager: ObservableObject {
         
         // In a real implementation, you would use Cloud Functions to automatically
         // delete expired photos after the expiration time
-        print("Scheduled photo \(photoId) for deletion at \(expirationTime)")
+        
     }
 }

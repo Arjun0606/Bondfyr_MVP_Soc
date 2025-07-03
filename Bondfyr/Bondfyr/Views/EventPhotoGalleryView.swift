@@ -68,7 +68,7 @@ struct EventPhotoGalleryView: View {
         self.stringEventId = finalStringEventId
         
         if finalStringEventId == "test-event-id" {
-            print("📸 EventPhotoGalleryView init: Using test-event-id from UserDefaults")
+            
         }
     }
     
@@ -78,7 +78,7 @@ struct EventPhotoGalleryView: View {
         if stringEventId == "test-event-id" || 
            UserDefaults.standard.string(forKey: "lastPhotoGalleryEventId") == "test-event-id" ||
            UserDefaults.standard.string(forKey: "pendingGalleryEventId") == "test-event-id" {
-            print("📸 EventPhotoGalleryView init: Using test-event-id directly")
+            
         }
         
         // Create a properly initialized placeholder event with all required parameters
@@ -96,7 +96,7 @@ struct EventPhotoGalleryView: View {
             venueLogoImage: "placeholder"
         )
         self.stringEventId = stringEventId
-        print("📸 EventPhotoGalleryView initialized with string ID: \(stringEventId)")
+        
     }
     
     var body: some View {
@@ -155,16 +155,16 @@ struct EventPhotoGalleryView: View {
             }
         }
         .onAppear {
-            print("📷 EventPhotoGalleryView appeared")
+            
             
             // Check if we have a pending gallery event ID
             if let pendingId = UserDefaults.standard.string(forKey: "pendingGalleryEventId") {
-                print("📷 Found pending gallery event ID: \(pendingId)")
+                
                 self.selectedEventId = pendingId
                 
                 // If we have a flag indicating a photo was just uploaded, force refresh
                 if UserDefaults.standard.bool(forKey: "photoJustUploaded") {
-                    print("📷 Photo was just uploaded - force refreshing!")
+                    
                     
                     // Multiple refresh attempts with delays
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -202,7 +202,7 @@ struct EventPhotoGalleryView: View {
             }
         }
         .onDisappear {
-            print("📸 EventPhotoGalleryView disappeared, removing listeners")
+            
             // Clean up listeners when view disappears
             if let stringId = stringEventId {
                 photoManager.removePhotoListener(for: stringId)
@@ -222,10 +222,10 @@ struct EventPhotoGalleryView: View {
                 .ignoresSafeArea()
                 .onDisappear {
                     if inputImage != nil {
-                        print("📸 Camera closed with image, showing caption sheet")
+                        
                         showingCaptionSheet = true
                     } else {
-                        print("📸 Camera closed without image")
+                        
                     }
                 }
         }
@@ -234,7 +234,7 @@ struct EventPhotoGalleryView: View {
         }
         .onChange(of: photoManager.error) { error in
             if let error = error {
-                print("📸 PhotoManager error: \(error.localizedDescription)")
+                
                 errorMessage = error.localizedDescription
                 showingErrorAlert = true
             }
@@ -565,7 +565,7 @@ struct EventPhotoGalleryView: View {
     // MARK: - Photo Management
     
     private func setupPhotos() {
-        print("📸 Setting up photos for event: \(event.id.uuidString)")
+        
         
         // Start real-time listener
         let eventIdString = event.id.uuidString
@@ -576,7 +576,7 @@ struct EventPhotoGalleryView: View {
     }
     
     private func setupPhotosWithStringId(eventId: String) {
-        print("📸 Setting up photos for string event ID: \(eventId)")
+        
         
         // First, clear any existing listener
         if let stringId = stringEventId {
@@ -593,21 +593,21 @@ struct EventPhotoGalleryView: View {
         
         // If the eventId is "test-event-id", set up multiple retries
         if eventId == "test-event-id" {
-            print("📸 Setting up multiple fetch retries for test-event-id")
+            
             
             // Try another immediate fetch
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                print("📸 First retry for test-event-id photos")
+                
                 self.refreshPhotosWithStringId(eventId: "test-event-id")
                 
                 // Try again after 1 second
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    print("📸 Second retry for test-event-id photos")
+                    
                     self.refreshPhotosWithStringId(eventId: "test-event-id")
                     
                     // Final retry after 2 seconds
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        print("📸 Final retry for test-event-id photos")
+                        
                         self.refreshPhotosWithStringId(eventId: "test-event-id")
                     }
                 }
@@ -623,15 +623,15 @@ struct EventPhotoGalleryView: View {
     
     private func refreshPhotosWithStringId(eventId: String, forceRefresh: Bool = false) {
         guard !isLoading || forceRefresh else {
-            print("⏳ Already loading photos, skipping refresh")
+            
             return
         }
         
         let displayEventId = eventId.count > 8 ? "..." + eventId.suffix(8) : eventId
-        print("🔄 Starting photo refresh for event: \(displayEventId)")
+        
         
         isLoading = true
-        print("📞 Calling photoManager.fetchPhotos for event ID: \(eventId)")
+        
         
         // Reset error state
         errorMessage = ""
@@ -643,14 +643,14 @@ struct EventPhotoGalleryView: View {
                 
                 switch result {
                 case .success(let photos):
-                    print("✅ Successfully fetched \(photos.count) photos for event: \(displayEventId)")
+                    
                     
                     // Store the event ID in UserDefaults for later use
                     UserDefaults.standard.set(eventId, forKey: "lastViewedEventId")
                     
                     // If we have no photos, display appropriate message
                     if photos.isEmpty {
-                        print("⚠️ No photos found for this event")
+                        
                         self.noPhotosMessage = "No photos yet! Be the first to upload one."
                     } else {
                         // Use empty string instead of nil for non-optional String
@@ -664,13 +664,13 @@ struct EventPhotoGalleryView: View {
                     self.photoRefreshRetryCount = 0
                     
                 case .failure(let error):
-                    print("❌ Failed to fetch photos for event \(displayEventId): \(error.localizedDescription)")
+                    
                     
                     if self.photoRefreshRetryCount < 3 {
                         // Retry up to 3 times with exponential backoff
                         self.photoRefreshRetryCount += 1
                         let delay = pow(2.0, Double(self.photoRefreshRetryCount)) * 0.5
-                        print("🔄 Retrying photo fetch (attempt \(self.photoRefreshRetryCount)) in \(delay) seconds")
+                        
                         
                         // Capture eventId for the retry
                         let capturedEventId = eventId
@@ -679,7 +679,7 @@ struct EventPhotoGalleryView: View {
                             self.refreshPhotosWithStringId(eventId: capturedEventId, forceRefresh: true)
                         }
                     } else {
-                        print("❌ Giving up after \(self.photoRefreshRetryCount) retry attempts")
+                        
                         self.errorMessage = "Error loading photos: \(error.localizedDescription)"
                         self.showingErrorAlert = true
                         self.setupPhotosComplete = true
@@ -691,28 +691,28 @@ struct EventPhotoGalleryView: View {
     }
     
     private func checkAndOpenCamera() {
-        print("📸 Check and open camera for event: \(stringEventId ?? event.id.uuidString)")
+        
         
         guard let userId = Auth.auth().currentUser?.uid else {
             errorMessage = "You need to be logged in to upload photos"
             showingErrorAlert = true
-            print("❌ Camera check failed: User not logged in")
+            
             return
         }
         
         // Check eligibility
         let eventIdString = stringEventId ?? event.id.uuidString
-        print("📸 Checking upload eligibility for event ID: \(eventIdString)")
+        
         
         photoManager.checkUploadEligibility(for: eventIdString) { result in
             switch result {
             case .success:
-                print("📸 User is eligible to upload, opening camera")
+                
                 DispatchQueue.main.async {
                     self.showingCamera = true
                 }
             case .failure(let error):
-                print("❌ Camera check failed: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     self.errorMessage = error.localizedDescription
                     self.showingErrorAlert = true
@@ -723,16 +723,16 @@ struct EventPhotoGalleryView: View {
     
     private func uploadPhoto() {
         guard let image = inputImage else { 
-            print("❌ Upload photo failed: No input image")
+            
             return 
         }
         
-        print("📸 Starting photo upload process")
+        
         
         let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         let eventIdString = stringEventId ?? event.id.uuidString
         
-        print("📸 Uploading photo for event ID: \(eventIdString)")
+        
         
         photoManager.uploadPhoto(for: eventIdString, image: image, caption: trimmedCaption) { result in
             DispatchQueue.main.async {
@@ -741,7 +741,7 @@ struct EventPhotoGalleryView: View {
                 
                 switch result {
                 case .success:
-                    print("📸 Photo upload successful")
+                    
                     // Photo uploaded successfully, the listener will update the UI
                     if self.stringEventId != nil {
                         self.refreshPhotosWithStringId(eventId: eventIdString)
@@ -749,7 +749,7 @@ struct EventPhotoGalleryView: View {
                         self.refreshPhotos()
                     }
                 case .failure(let error):
-                    print("❌ Photo upload failed: \(error.localizedDescription)")
+                    
                     self.errorMessage = error.localizedDescription
                     self.showingErrorAlert = true
                 }
@@ -760,13 +760,13 @@ struct EventPhotoGalleryView: View {
     private func likePhoto(_ photo: PhotoContest) {
         photoManager.likePhoto(photo.id) { result in
             if case .failure(let error) = result {
-                print("❌ Like photo failed: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     self.errorMessage = error.localizedDescription
                     self.showingErrorAlert = true
                 }
             } else {
-                print("📸 Photo liked successfully")
+                
             }
         }
     }
@@ -774,13 +774,13 @@ struct EventPhotoGalleryView: View {
     private func unlikePhoto(_ photo: PhotoContest) {
         photoManager.unlikePhoto(photo.id) { result in
             if case .failure(let error) = result {
-                print("❌ Unlike photo failed: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     self.errorMessage = error.localizedDescription
                     self.showingErrorAlert = true
                 }
             } else {
-                print("📸 Photo unliked successfully")
+                
             }
         }
     }
@@ -790,7 +790,7 @@ struct EventPhotoGalleryView: View {
             DispatchQueue.main.async {
                 switch result {
                 case .failure(let error):
-                    print("❌ Delete photo failed: \(error.localizedDescription)")
+                    
                     // Don't show an error message for expected errors like "userAlreadyUploaded"
                     // as these might appear after deleting a photo
                     if let photoError = error as? PhotoContestError {
@@ -806,7 +806,7 @@ struct EventPhotoGalleryView: View {
                     self.showingErrorAlert = true
                     
                 case .success:
-                    print("📸 Photo deleted successfully")
+                    
                     // Clear any error messages
                     self.errorMessage = ""
                     self.showingErrorAlert = false
@@ -831,18 +831,18 @@ struct EventPhotoGalleryView: View {
             object: nil,
             queue: .main
         ) { notification in
-            print("📷 Received ForceShowEventGallery notification!")
+            
             
             if let userInfo = notification.userInfo,
                let eventId = userInfo["eventId"] as? String {
-                print("📷 Event ID from notification: \(eventId)")
+                
                 
                 // Check additional flags that might be passed
                 let fromCamera = userInfo["fromCamera"] as? Bool ?? false
                 
                 // If this notification comes from camera, make sure we reload photos
                 if fromCamera {
-                    print("📷 This notification came directly from the camera - force refreshing!")
+                    
                     // Force a short delay to ensure Firebase has registered the new photo
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         self.refreshPhotosWithStringId(eventId: eventId)
@@ -864,11 +864,11 @@ struct EventPhotoGalleryView: View {
             object: nil,
             queue: .main
         ) { notification in
-            print("📷 Received ShowDirectPhotoGallery notification!")
+            
             
             if let userInfo = notification.userInfo,
                let eventId = userInfo["eventId"] as? String {
-                print("📷 Direct event ID from notification: \(eventId)")
+                
                 
                 // Check for flags
                 let fromCamera = userInfo["fromCamera"] as? Bool ?? false
@@ -879,7 +879,7 @@ struct EventPhotoGalleryView: View {
                 
                 // If this notification comes with strong flags, prioritize the refresh
                 if fromCamera && forceShow {
-                    print("📷 High-priority photo gallery request - force refreshing!")
+                    
                     
                     // Force multiple refreshes with increasing delays to ensure we catch the new photo
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

@@ -17,7 +17,7 @@ class LikeManager: ObservableObject {
         do {
             _ = try db.collection("partyLikes").addDocument(from: like)
         } catch {
-            print("Error adding like: \(error)")
+            
             return
         }
         
@@ -39,9 +39,9 @@ class LikeManager: ObservableObject {
             return nil
         }) { _, error in
             if let error = error {
-                print("Like count transaction failed: \(error)")
+                
             } else {
-                print("User liked and count updated successfully.")
+                
             }
         }
     }
@@ -55,7 +55,7 @@ class LikeManager: ObservableObject {
         
         query.getDocuments { (snapshot, error) in
             guard let documents = snapshot?.documents, !documents.isEmpty else {
-                print("No like document found to delete.")
+                
                 return
             }
             
@@ -81,9 +81,9 @@ class LikeManager: ObservableObject {
                 return nil
             }) { _, error in
                 if let error = error {
-                    print("Unlike count transaction failed: \(error)")
+                    
                 } else {
-                    print("User unliked and count updated successfully.")
+                    
                 }
             }
         }

@@ -22,7 +22,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         case .authorizedWhenInUse, .authorizedAlways:
             locationManager.startUpdatingLocation()
         case .denied, .restricted:
-            print("Location access denied")
+            
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
         @unknown default:
@@ -36,7 +36,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // Only update if accuracy is good enough
         if location.horizontalAccuracy <= 100 {
             self.location = location
-            print("📍 Location updated with accuracy: \(location.horizontalAccuracy)m")
+            
             
             // Get city name
             let geocoder = CLGeocoder()
@@ -45,13 +45,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                       let placemark = placemarks?.first,
                       let city = placemark.locality else {
                     if let error = error {
-                        print("Geocoding error: \(error)")
+                        
                     }
                     return
                 }
                 
                 DispatchQueue.main.async {
-                    print("📍 City updated: \(city)")
+                    
                     self.currentCity = city
                     UserDefaults.standard.set(city, forKey: "selectedCity")
                 }
@@ -60,6 +60,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location manager error: \(error.localizedDescription)")
+        
     }
 } 

@@ -26,7 +26,7 @@ class OfflineDataManager {
     
     // Cache events from EventService
     func cacheEvents(_ events: [Event]) {
-        print("DEBUG: Offline caching temporarily disabled due to Event model mismatch")
+        
         // TODO: Update this when Event model is standardized
         /*
         let cachedEvents = events.map { CachedEvent(from: $0) }
@@ -34,14 +34,14 @@ class OfflineDataManager {
         if let encoded = try? JSONEncoder().encode(cachedEvents) {
             UserDefaults.standard.set(encoded, forKey: eventsCacheKey)
             updateLastCacheTime()
-            print("Cached \(events.count) events offline")
+            
         }
         */
     }
     
     // Get cached events if they're still valid
     func getCachedEvents() -> [Event]? {
-        print("DEBUG: Offline cache disabled - returning nil")
+        
         return nil
         /*
         // Check if cache is still valid
@@ -76,7 +76,7 @@ class OfflineDataManager {
     
     // Cache venue details with their event IDs
     func cacheVenueInfo(for event: Event) {
-        print("DEBUG: Venue caching temporarily disabled due to Event model mismatch")
+        
         // TODO: Update this when Event model includes venue details
         /*
         var venuesDict = getVenuesDict()
@@ -147,12 +147,12 @@ class OfflineDataManager {
         let renderer = ImageRenderer(content: TicketOfflineView(ticket: ticket))
         
         guard let uiImage = renderer.uiImage else {
-            print("Failed to render ticket image")
+            
             return nil
         }
         
         guard let data = uiImage.jpegData(compressionQuality: 0.8) else {
-            print("Failed to convert ticket to JPEG")
+            
             return nil
         }
         
@@ -161,10 +161,10 @@ class OfflineDataManager {
         
         do {
             try data.write(to: fileURL)
-            print("Saved offline ticket to: \(fileURL.path)")
+            
             return fileURL
         } catch {
-            print("Error saving offline ticket: \(error)")
+            
             return nil
         }
     }

@@ -113,9 +113,9 @@ PayPal Business fees for US transactions:
 Ticket Price: $25
 PayPal Fee: $25 × 0.029 + $0.30 = $1.03
 Net Amount: $25 - $1.03 = $23.97
-Your Commission (12%): $25 × 0.12 = $3.00
-Host Earnings: $25 - $3.00 = $22.00
-Your Profit: $3.00 - $1.03 = $1.97 per ticket
+Your Commission (20%): $25 × 0.20 = $5.00
+Host Earnings: $25 - $5.00 = $20.00
+Your Profit: $5.00 - $1.03 = $3.97 per ticket
 ```
 
 ## 🚀 **Step 9: Go Live**

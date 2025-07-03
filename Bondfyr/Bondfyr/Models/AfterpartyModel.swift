@@ -5,12 +5,10 @@ import CoreLocation
 // MARK: - Enums for the new marketplace features
 enum PartyVisibility: String, CaseIterable, Codable {
     case publicFeed = "public"
-    case privateInvite = "private"
     
     var displayName: String {
         switch self {
         case .publicFeed: return "Public (on feed)"
-        case .privateInvite: return "Private (invite-only)"
         }
     }
 }
@@ -39,31 +37,46 @@ struct GuestRequest: Identifiable, Codable {
     let userId: String
     let userName: String
     let userHandle: String
+    let introMessage: String
     let requestedAt: Date
     let paymentStatus: PaymentStatus
+    let approvalStatus: ApprovalStatus
     let paypalOrderId: String?
     let paidAt: Date?
     let refundedAt: Date?
+    let approvedAt: Date?
     
     init(id: String = UUID().uuidString,
          userId: String,
          userName: String,
          userHandle: String,
+         introMessage: String,
          requestedAt: Date = Date(),
          paymentStatus: PaymentStatus = .pending,
+         approvalStatus: ApprovalStatus = .pending,
          paypalOrderId: String? = nil,
          paidAt: Date? = nil,
-         refundedAt: Date? = nil) {
+         refundedAt: Date? = nil,
+         approvedAt: Date? = nil) {
         self.id = id
         self.userId = userId
         self.userName = userName
         self.userHandle = userHandle
+        self.introMessage = introMessage
         self.requestedAt = requestedAt
         self.paymentStatus = paymentStatus
+        self.approvalStatus = approvalStatus
         self.paypalOrderId = paypalOrderId
         self.paidAt = paidAt
         self.refundedAt = refundedAt
+        self.approvedAt = approvedAt
     }
+}
+
+enum ApprovalStatus: String, Codable {
+    case pending = "pending"
+    case approved = "approved"
+    case denied = "denied"
 }
 
 // MARK: - Updated Afterparty model for marketplace
@@ -96,8 +109,8 @@ struct Afterparty: Identifiable, Codable {
     let maxMaleRatio: Double // 0.0 to 1.0, e.g. 0.7 = max 70% male
     let legalDisclaimerAccepted: Bool
     let guestRequests: [GuestRequest] // New detailed guest request system
-    let earnings: Double // Host earnings (price * confirmed guests * 0.88)
-    let bondfyrFee: Double // 12% fee
+    let earnings: Double // Host earnings (price * confirmed guests * 0.80)
+    let bondfyrFee: Double // 20% fee
     
     // MARK: - TESTFLIGHT: Payment details
     let venmoHandle: String? // Host's Venmo handle for direct payments
@@ -126,12 +139,15 @@ struct Afterparty: Identifiable, Codable {
     
     var hostEarnings: Double {
         let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
-        return Double(confirmedPaidGuests) * ticketPrice * 0.88 // 88% to host, 12% to Bondfyr
+        // TESTFLIGHT: Host keeps 100% during testing phase
+        return Double(confirmedPaidGuests) * ticketPrice * 1.0 // 100% to host during TestFlight
     }
     
     var bondfyrRevenue: Double {
-        let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
-        return Double(confirmedPaidGuests) * ticketPrice * 0.12
+        // TESTFLIGHT: No commission during testing phase
+        return 0.0 // Full version will be 20% of revenue
+        // let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
+        // return Double(confirmedPaidGuests) * ticketPrice * 0.20
     }
     
     var spotsRemaining: Int {
@@ -234,7 +250,7 @@ struct Afterparty: Identifiable, Codable {
          legalDisclaimerAccepted: Bool = false,
          guestRequests: [GuestRequest] = [],
          earnings: Double = 0.0,
-         bondfyrFee: Double = 0.12,
+         bondfyrFee: Double = 0.20,
          
          // TESTFLIGHT: Payment details
          venmoHandle: String? = nil) {
@@ -323,7 +339,7 @@ struct Afterparty: Identifiable, Codable {
         legalDisclaimerAccepted = (try? container.decode(Bool.self, forKey: .legalDisclaimerAccepted)) ?? false
         guestRequests = (try? container.decode([GuestRequest].self, forKey: .guestRequests)) ?? []
         earnings = (try? container.decode(Double.self, forKey: .earnings)) ?? 0.0
-        bondfyrFee = (try? container.decode(Double.self, forKey: .bondfyrFee)) ?? 0.12
+        bondfyrFee = (try? container.decode(Double.self, forKey: .bondfyrFee)) ?? 0.20
         
         // TESTFLIGHT: Payment details
         venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)

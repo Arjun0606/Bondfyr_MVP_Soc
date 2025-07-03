@@ -40,7 +40,7 @@ struct CreateAfterpartyDirectView: View {
                     BenefitRow(icon: "checkmark.shield.fill", text: "Secure Payments Handled")
                     BenefitRow(icon: "person.2.fill", text: "Automated Guest List")
                     BenefitRow(icon: "ticket.fill", text: "Hassle-Free Ticketing")
-                    BenefitRow(icon: "chart.pie.fill", text: "You Keep 88% of Earnings", isPrimary: true)
+                    BenefitRow(icon: "chart.pie.fill", text: "You Keep 100% During TestFlight!", isPrimary: true)
                 }
                 .padding()
                 .background(Color(.systemGray6).opacity(0.1))

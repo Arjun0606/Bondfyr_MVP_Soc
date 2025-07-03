@@ -85,8 +85,8 @@ Add to `Info.plist`:
 7. **Confirmation**: User receives confirmation and can access party
 
 ### Revenue Model
-- **Host Earnings**: 88% of ticket price
-- **Platform Fee**: 12% of ticket price
+- **Host Earnings**: 80% of ticket price
+- **Platform Fee**: 20% of ticket price
 - **Automatic Payouts**: Processed weekly for completed events
 
 ## Tech Stack

@@ -409,7 +409,7 @@ struct CityChatView: View {
     
     private func addReaction(emoji: String, to messageId: String) {
         // In production, this would update the database
-        print("Added reaction \(emoji) to message \(messageId)")
+        
     }
 }
 

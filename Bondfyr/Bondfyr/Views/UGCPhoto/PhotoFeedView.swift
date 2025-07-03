@@ -258,7 +258,7 @@ struct PhotoDetailView: View {
                 isLiking = false
             } catch {
                 isLiking = false
-                print("Error liking photo: \(error)")
+                
             }
         }
     }

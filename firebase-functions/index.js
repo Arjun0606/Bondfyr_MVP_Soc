@@ -345,8 +345,8 @@ exports.processHostPayouts = functions.pubsub.schedule('0 9 * * 1').onRun(async 
       
       if (confirmedGuests.length > 0) {
         const totalRevenue = confirmedGuests.length * afterparty.ticketPrice;
-        const hostEarnings = totalRevenue * 0.88; // 88% to host
-        const platformFee = totalRevenue * 0.12; // 12% platform fee
+            const hostEarnings = totalRevenue * 0.80; // 80% to host
+    const platformFee = totalRevenue * 0.20; // 20% platform fee
 
         // Create payout record
         const payoutRef = db.collection('payouts').doc();
@@ -419,4 +419,117 @@ function getWeekNumber(date) {
   const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
   const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
   return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+}
+
+// MARK: - Test Push Notification Function
+exports.sendTestPushNotification = functions.https.onCall(async (data, context) => {
+  // Verify user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const userId = context.auth.uid;
+  
+  try {
+    console.log(`Sending test push notification to user: ${userId}`);
+    
+    console.log(`Looking for FCM tokens for user: ${userId}`);
+    
+    // Check multiple locations for FCM tokens
+    let tokens = [];
+    
+    // 1. Check new structure: users/{userId}/fcmTokens collection
+    const tokensSnapshot = await admin.firestore()
+      .collection('users')
+      .doc(userId)
+      .collection('fcmTokens')
+      .get();
+    
+    if (!tokensSnapshot.empty) {
+      console.log(`Found ${tokensSnapshot.size} FCM tokens in fcmTokens collection`);
+      tokensSnapshot.forEach(doc => {
+        const tokenData = doc.data();
+        if (tokenData.token) {
+          tokens.push(tokenData.token);
+        }
+      });
+    }
+    
+    // 2. Check old structure: users/{userId} document with fcmToken field
+    if (tokens.length === 0) {
+      console.log('No FCM tokens found in collection, checking user document...');
+      const userDoc = await admin.firestore().collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        if (userData.fcmToken) {
+          console.log('Found FCM token in user document');
+          tokens.push(userData.fcmToken);
+        }
+      }
+    }
+    
+    // 3. Check users/{userId}/deviceTokens collection (another possible location)
+    if (tokens.length === 0) {
+      console.log('Checking deviceTokens collection...');
+      const deviceTokensSnapshot = await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('deviceTokens')
+        .get();
+      
+      if (!deviceTokensSnapshot.empty) {
+        console.log(`Found ${deviceTokensSnapshot.size} device tokens`);
+        deviceTokensSnapshot.forEach(doc => {
+          const tokenData = doc.data();
+          if (tokenData.token) {
+            tokens.push(tokenData.token);
+          }
+        });
+      }
+    }
+    
+    if (tokens.length === 0) {
+      console.log('No FCM tokens found in any location');
+      throw new functions.https.HttpsError('failed-precondition', 'No FCM token found for user');
+    }
+    
+    console.log(`Found ${tokens.length} FCM token(s), sending test notifications...`);
+    
+    // Send to all tokens
+    const promises = tokens.map(token => sendTestNotificationToToken(token));
+    await Promise.all(promises);
+    
+    return { 
+      success: true, 
+      message: 'Test notification sent!', 
+      tokensCount: tokens.length 
+    };
+    
+  } catch (error) {
+    console.error('Error sending test push notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+async function sendTestNotificationToToken(fcmToken) {
+  const message = {
+    notification: {
+      title: '🎉 Push Notifications Working!',
+      body: 'Great! Your Bondfyr app can receive push notifications.'
+    },
+    data: {
+      type: 'test_notification',
+      timestamp: Date.now().toString()
+    },
+    token: fcmToken
+  };
+
+  try {
+    const response = await admin.messaging().send(message);
+    console.log('Successfully sent test message:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending test message to token:', fcmToken, error);
+    throw error;
+  }
 }

@@ -182,7 +182,7 @@ struct HelpSupportView: View {
                 
                 FAQItem(
                     question: "What fees does Bondfyr charge?",
-                    answer: "Bondfyr takes a 12% fee from each ticket sale. Hosts keep 88% of their ticket revenue."
+                    answer: "Bondfyr takes a 20% fee from each ticket sale. Hosts keep 80% of their ticket revenue."
                 )
                 
                 FAQItem(
@@ -524,7 +524,7 @@ struct FeedbackFormView: View {
     
     private func submitFeedback() {
         // Here you would typically send the feedback to your backend
-        print("Feedback submitted: \(feedbackText)")
+        
         presentationMode.wrappedValue.dismiss()
     }
 }
@@ -620,7 +620,7 @@ struct BugReportView: View {
     
     private func submitBugReport() {
         // Here you would typically send the bug report to your backend
-        print("Bug report submitted: \(bugDescription)")
+        
         presentationMode.wrappedValue.dismiss()
     }
 } 

@@ -1,16 +1,15 @@
 import SwiftUI
-import FirebaseAuth
-import FirebaseFirestore
 
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
     
     @AppStorage("eventReminders") private var eventReminders = true
+    @AppStorage("partyUpdates") private var partyUpdates = true
     
     @State private var showDeleteAccountAlert = false
     @State private var showPrivacyPolicy = false
-    @State private var showTermsOfService = false
+        @State private var showTermsOfService = false
     @State private var showHelpFAQ = false
     
     var body: some View {
@@ -20,13 +19,6 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Account section
-                        SettingsSection(title: "Account") {
-                            SettingsLinkRow(title: "Payment Methods", icon: "creditcard.fill") {
-                                // Navigate to payment methods
-                            }
-                        }
-                        
                         // Location & Permissions section  
                         SettingsSection(title: "Required Permissions") {
                             SettingsLinkRow(title: "Location Access", icon: "location.fill") {
@@ -64,17 +56,31 @@ struct SettingsView: View {
                                 icon: "calendar.badge.clock",
                                 isOn: $eventReminders
                             )
+                            .overlay(
+                                VStack {
+                                    Spacer()
+                                    Text("Get notified before events you're attending")
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                        .padding(.horizontal)
+                                        .padding(.bottom, 4)
+                                }
+                            )
                             
                             SettingsToggleRow(
                                 title: "Party Updates",
                                 icon: "bell.fill",
-                                isOn: .constant(true)
+                                isOn: $partyUpdates
                             )
-                            
-                            SettingsToggleRow(
-                                title: "Safety Alerts",
-                                icon: "shield.fill",
-                                isOn: .constant(true)
+                            .overlay(
+                                VStack {
+                                    Spacer()
+                                    Text("Receive updates about parties you've joined")
+                                        .font(.caption2)
+                                        .foregroundColor(.gray)
+                                        .padding(.horizontal)
+                                        .padding(.bottom, 4)
+                                }
                             )
                         }
                         
@@ -194,18 +200,15 @@ struct SettingsView: View {
     }
     
     private func deleteUserAccount() {
-        print("Deleting user account")
-        
         // First, dismiss the current view
         self.presentationMode.wrappedValue.dismiss()
         
         // Use the improved delete account method
         authViewModel.deleteAccount { error in
-            if let error = error {
-                print("❌ Error deleting account: \(error.localizedDescription)")
-            }
+            // Silent error handling for production
         }
     }
+
 }
 
 struct SettingsSection<Content: View>: View {
@@ -330,18 +333,22 @@ struct PrivacyPolicyView: View {
                         .foregroundColor(.secondary)
                         .padding(.bottom, 16)
                     
-                    Text("At Bondfyr, we take your privacy seriously. This Privacy Policy explains how we collect, use, and share your information when you use our mobile application.")
+                    Text("At Bondfyr, we take your privacy seriously. This Privacy Policy explains how we collect, use, and protect your information when you use our mobile application.")
                         .fixedSize(horizontal: false, vertical: true)
                     
-                    // Mock policy sections
+                    // Updated policy sections
                     Group {
-                        PolicySection(title: "Information We Collect", content: "We collect information that you provide directly to us, such as when you create an account, purchase tickets, or use our chat features. This may include your name, email address, phone number, and payment information.")
+                        PolicySection(title: "Information We Collect", content: "We collect information that you provide directly to us when you create an account or use our features. This includes your name, email address, location data, and profile information. We also collect usage data to improve our services.")
                         
-                        PolicySection(title: "How We Use Your Information", content: "We use your information to provide, maintain, and improve our services, process transactions, send notifications, and communicate with you.")
+                        PolicySection(title: "How We Use Your Information", content: "We use your information solely to provide and improve our services, connect you with local events, ensure user safety, and communicate important updates. We do not sell, rent, or trade your personal information.")
                         
-                        PolicySection(title: "Information Sharing", content: "We may share your information with event organizers, service providers, and as required by law.")
+                        PolicySection(title: "Information Sharing", content: "We only share your information when necessary to provide our services (such as showing your profile to event hosts) or as required by law. We never sell your data to third parties for marketing purposes.")
                         
-                        PolicySection(title: "Your Rights", content: "You have the right to access, correct, or delete your personal information at any time through the app settings.")
+                        PolicySection(title: "Data Security", content: "We implement industry-standard security measures to protect your personal information. Your data is stored securely and access is limited to authorized personnel only.")
+                        
+                        PolicySection(title: "Your Rights", content: "You have the right to access, correct, or delete your personal information at any time through the app settings. You can also contact us directly for data-related requests.")
+                        
+                        PolicySection(title: "Location Data", content: "Location access is essential for finding nearby events and connecting with your local party community. You can disable location services in your device settings, though this may limit app functionality.")
                     }
                     
                     Spacer()
@@ -394,15 +401,21 @@ struct TermsOfServiceView: View {
                     Text("By using the Bondfyr app, you agree to these terms, which govern your use of our services.")
                         .fixedSize(horizontal: false, vertical: true)
                     
-                    // Mock terms sections
+                    // Updated terms sections
                     Group {
                         PolicySection(title: "Acceptance of Terms", content: "By accessing or using our services, you agree to be bound by these Terms and our Privacy Policy.")
                         
-                        PolicySection(title: "User Accounts", content: "You are responsible for safeguarding your account and for all activities that occur under your account.")
+                        PolicySection(title: "User Accounts", content: "You are responsible for safeguarding your account and for all activities that occur under your account. You must provide accurate information when creating your account.")
                         
-                        PolicySection(title: "Ticket Purchases", content: "All ticket sales are final. No refunds or exchanges except as required by law.")
+                        PolicySection(title: "Event Discovery", content: "Bondfyr helps you discover and connect with local events. All event information is provided by hosts and we strive to ensure accuracy, but cannot guarantee all details.")
                         
-                        PolicySection(title: "Code of Conduct", content: "Users must behave respectfully when using our platform and attending events.")
+                        PolicySection(title: "Code of Conduct", content: "Users must behave respectfully when using our platform and attending events. Harassment, discrimination, or illegal activities are strictly prohibited.")
+                        
+                        PolicySection(title: "Safety", content: "While we implement safety features, users are responsible for their own safety when attending events. Always meet in public places and trust your instincts.")
+                        
+                        PolicySection(title: "Content", content: "Users are responsible for all content they post. We reserve the right to remove content that violates our community standards.")
+                        
+                        PolicySection(title: "Service Availability", content: "We strive to maintain service availability but cannot guarantee uninterrupted access. We may modify or discontinue features with notice.")
                     }
                     
                     Spacer()
@@ -561,9 +574,9 @@ struct HelpFAQView: View {
                 )
                 
                 FAQRow(
-                    id: "pricing",
-                    question: "How does pricing work?",
-                    answer: "You set your ticket price (minimum $5). Bondfyr takes a 12% platform fee, so you keep 88% of each ticket sale. There's no maximum price limit - charge what your party is worth!",
+                    id: "join-party",
+                    question: "How do I join a party?",
+                    answer: "1. Browse parties on the main feed\n2. Tap 'Request to Join' on a party you like\n3. Write a brief intro message\n4. Wait for host approval\n5. Once approved, you'll get the party details!",
                     expandedFAQ: $expandedFAQ
                 )
                 
@@ -589,16 +602,16 @@ struct HelpFAQView: View {
                  )
                 
                 FAQRow(
-                    id: "refunds",
-                    question: "What's the refund policy?",
-                    answer: "• Host cancellations: Full automatic refund within 3-5 days\n• Guest cancellations: No refunds (tickets are final sale)\n• Safety issues: Case-by-case review",
+                    id: "host-approval",
+                    question: "How does the approval process work?",
+                    answer: "• Hosts can set manual or automatic approval\n• Manual: Host reviews each request individually\n• Automatic: First-come-first-serve with optional gender ratios\n• You'll get notified when your request is approved or denied",
                     expandedFAQ: $expandedFAQ
                 )
                 
                 FAQRow(
-                    id: "payment",
-                    question: "How do payments work?",
-                    answer: "• Guests pay when requesting to join\n• Hosts receive payouts after successful parties\n• All payments processed securely through Stripe\n• Hosts get paid within 2-3 business days",
+                    id: "community",
+                    question: "How do I build my reputation?",
+                    answer: "• Attend parties and get positive ratings\n• Host successful events with good reviews\n• Be respectful and follow community guidelines\n• Verified users get special badges and benefits",
                     expandedFAQ: $expandedFAQ
                 )
             }
@@ -647,6 +660,10 @@ struct HelpFAQView: View {
             UIApplication.shared.open(webURL)
         }
     }
+    
+    // MARK: - Debug Notification Section
+    
+
 }
 
 // MARK: - Supporting Views for Help & FAQ
@@ -760,4 +777,8 @@ struct FAQRow: View {
         .background(Color.white.opacity(0.03))
         .cornerRadius(8)
     }
-} 
+}
+
+// MARK: - Debug Notification Section
+
+ 

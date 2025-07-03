@@ -64,7 +64,7 @@ class EventService {
                     completion(events, nil)
                 }
             } catch {
-                print("Error fetching events: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     completion(nil, error)
                 }
@@ -134,7 +134,7 @@ class EventService {
                     completion(event, nil)
                 }
             } catch {
-                print("Error fetching event: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     completion(nil, error)
                 }
@@ -156,7 +156,7 @@ class EventService {
                     completion(true, nil)
                 }
             } catch {
-                print("Error toggling photo contest: \(error.localizedDescription)")
+                
                 DispatchQueue.main.async {
                     completion(false, error)
                 }

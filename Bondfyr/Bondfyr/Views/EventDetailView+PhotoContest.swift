@@ -223,7 +223,7 @@ struct PhotoContestButton_Previews: PreviewProvider {
                 ),
                 style: .default
             ) {
-                print("Default button tapped")
+                
             }
             
             PhotoContestButton(
@@ -242,7 +242,7 @@ struct PhotoContestButton_Previews: PreviewProvider {
                 ),
                 style: .compact
             ) {
-                print("Compact button tapped")
+                
             }
             
             PhotoContestButton(
@@ -261,7 +261,7 @@ struct PhotoContestButton_Previews: PreviewProvider {
                 ),
                 style: .featured
             ) {
-                print("Featured button tapped")
+                
             }
         }
         .padding()

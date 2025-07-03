@@ -37,6 +37,7 @@
 	<array>
 		<string>snapchat</string>
 		<string>instagram</string>
+		<string>venmo</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
@@ -61,6 +62,20 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>We use your location to show venues near you and sort by distance.</string>
+	<string>We use your location to show parties and events near you, and to help hosts see nearby guests.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select photos to upload as party cover images and share memories from events.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to upload as party cover images and capture event memories.</string>
+	<key>CFBundleDisplayName</key>
+	<string>Bondfyr</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
 </dict>
 </plist>

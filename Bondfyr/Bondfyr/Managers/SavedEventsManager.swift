@@ -18,7 +18,7 @@ class SavedEventsManager: ObservableObject {
     private func requestNotificationPermissions() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
-                print("Error requesting notification permissions: \(error.localizedDescription)")
+                
             }
         }
     }
@@ -189,7 +189,7 @@ class SavedEventsManager: ObservableObject {
                     "calendarEventId": calendarEvent.eventIdentifier ?? ""
                 ]) { error in
                     if let error = error {
-                        print("Error updating reminder status: \(error.localizedDescription)")
+                        
                     }
                 }
             }

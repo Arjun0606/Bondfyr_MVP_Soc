@@ -194,7 +194,7 @@ class CameraManager: NSObject, ObservableObject {
                 self?.session.startRunning()
             }
         } catch {
-            print("Camera setup error: \(error)")
+            
         }
     }
     
@@ -206,7 +206,7 @@ class CameraManager: NSObject, ObservableObject {
                 device.torchMode = isOn ? .on : .off
                 device.unlockForConfiguration()
             } catch {
-                print("Flash error: \(error)")
+                
             }
         }
     }
@@ -226,7 +226,7 @@ class CameraManager: NSObject, ObservableObject {
                 session.addInput(input!)
             }
         } catch {
-            print("Camera switch error: \(error)")
+            
         }
         
         session.commitConfiguration()

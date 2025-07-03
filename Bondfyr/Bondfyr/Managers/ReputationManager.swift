@@ -46,9 +46,9 @@ class ReputationManager {
             return nil
         }) { (object, error) in
             if let error = error {
-                print("Host stats update transaction failed: \(error)")
+                
             } else {
-                print("Host stats updated successfully for host \(hostId)")
+                
             }
         }
     }
@@ -77,9 +77,9 @@ class ReputationManager {
             return nil
         }) { (object, error) in
             if let error = error {
-                print("Guest stats update transaction failed: \(error)")
+                
             } else {
-                print("Guest stats updated successfully for guest \(guestId)")
+                
             }
         }
     }
@@ -99,7 +99,7 @@ class ReputationManager {
         do {
             try db.collection("ratings").addDocument(from: newRating)
         } catch let error {
-            print("Error writing rating to Firestore: \(error)")
+            
             return
         }
         
@@ -139,9 +139,9 @@ class ReputationManager {
             return nil
         }) { (object, error) in
             if let error = error {
-                print("Rating transaction failed: \(error)")
+                
             } else {
-                print("Rating and user stats updated successfully for user \(ratedId).")
+                
             }
         }
     }

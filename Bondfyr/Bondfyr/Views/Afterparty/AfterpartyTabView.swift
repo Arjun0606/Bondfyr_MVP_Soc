@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreLocation
 import FirebaseFirestore
+import FirebaseStorage
 import CoreLocationUI
 
 // MARK: - Header Components
@@ -286,39 +287,76 @@ struct AfterpartyTabView: View {
                         .progressViewStyle(CircularProgressViewStyle())
                         .padding()
                 } else if marketplaceAfterparties.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "dollarsign.circle")
-                            .font(.system(size: 60))
-                                .foregroundColor(.gray)
-                        
-                        VStack(spacing: 8) {
-                            Text("No paid parties yet")
-                                .font(.title2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
+                    VStack(spacing: 24) {
+                        // TestFlight Info
+                        VStack(spacing: 16) {
+                            Image(systemName: "testtube.2")
+                                .font(.system(size: 50))
+                                .foregroundColor(.blue)
                             
-                            Text("Be the first to host a party in \(locationManager.currentCity ?? "your area") and start earning!")
-                                .font(.subheadline)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                        }
-                        
-                        Button("Host a Paid Party") {
-                            if hasActiveParty {
-                                showingActivePartyAlert = true
-                            } else if locationManager.authorizationStatus == .denied {
-                                showLocationDeniedAlert = true
-                            } else {
-                                showingCreateSheet = true
+                            VStack(spacing: 8) {
+                                Text("🧪 TestFlight Version")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                
+                                Text("Help us test Bondfyr before the official launch!")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    .multilineTextAlignment(.center)
                             }
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                        .foregroundColor(.white)
-                        .cornerRadius(25)
+                        .padding()
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(16)
+                        
+                        // Call to Action
+                        VStack(spacing: 16) {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.yellow)
+                            
+                            VStack(spacing: 12) {
+                                Text("Be the First Host in \(locationManager.currentCity ?? "Your City")")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                
+                                VStack(spacing: 4) {
+                                    Text("• Early hosts get featured first")
+                                    Text("• Build your reputation early")
+                                    Text("• Direct payments via Venmo/CashApp")
+                                    Text("• Keep 100% during TestFlight")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                
+                                Text("Full version: Automated payments, 80% to hosts")
+                                    .font(.caption)
+                                    .foregroundColor(.yellow)
+                                    .padding(.top, 4)
+                            }
+                            
+                            Button("Create First Party") {
+                                if hasActiveParty {
+                                    showingActivePartyAlert = true
+                                } else if locationManager.authorizationStatus == .denied {
+                                    showLocationDeniedAlert = true
+                                } else {
+                                    showingCreateSheet = true
+                                }
+                            }
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, 16)
+                            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                            .foregroundColor(.white)
+                            .cornerRadius(25)
+                            .fontWeight(.semibold)
+                        }
+                        .padding()
                     }
-                                .padding()
+                    .padding()
                     Spacer()
                 } else {
                     ScrollView {
@@ -399,12 +437,9 @@ struct AfterpartyTabView: View {
         // Use provided filters or current filters
         let activeFilters = filters ?? currentFilters
         
-        // Always show sample parties for demo, regardless of Firebase errors
-        let sampleParties = createSampleParties()
-        
         var afterparties: [Afterparty] = []
         
-        // Try to get real parties, but don't fail if Firebase has issues
+        // Load real parties from Firebase
         do {
             afterparties = try await afterpartyManager.getMarketplaceAfterparties(
                 priceRange: activeFilters.priceRange,
@@ -412,237 +447,54 @@ struct AfterpartyTabView: View {
                 timeFilter: activeFilters.timeFilter
             )
         } catch {
-            print("Firebase error (showing sample data anyway): \(error)")
-            // Continue with just sample parties
+            
+            // Continue with empty array to show proper empty state
         }
         
-        // Combine real parties with sample data for demo
-        let allParties = afterparties + sampleParties
-            
-            // Apply additional client-side filters
-            var filteredResults = allParties
-            
-            // Apply price range filter
+        // Apply additional client-side filters
+        var filteredResults = afterparties
+        
+        // Apply price range filter
+        filteredResults = filteredResults.filter { afterparty in
+            afterparty.ticketPrice >= activeFilters.priceRange.lowerBound &&
+            afterparty.ticketPrice <= activeFilters.priceRange.upperBound
+        }
+        
+        // Apply vibe filters
+        if !activeFilters.vibes.isEmpty {
             filteredResults = filteredResults.filter { afterparty in
-                afterparty.ticketPrice >= activeFilters.priceRange.lowerBound &&
-                afterparty.ticketPrice <= activeFilters.priceRange.upperBound
-            }
-            
-            // Apply vibe filters
-            if !activeFilters.vibes.isEmpty {
-                filteredResults = filteredResults.filter { afterparty in
-                    let partyVibes = afterparty.vibeTag.components(separatedBy: ", ")
-                    return activeFilters.vibes.contains { selectedVibe in
-                        partyVibes.contains { partyVibe in
-                            partyVibe.localizedCaseInsensitiveContains(selectedVibe) ||
-                            selectedVibe.localizedCaseInsensitiveContains(partyVibe)
-                        }
+                let partyVibes = afterparty.vibeTag.components(separatedBy: ", ")
+                return activeFilters.vibes.contains { selectedVibe in
+                    partyVibes.contains { partyVibe in
+                        partyVibe.localizedCaseInsensitiveContains(selectedVibe) ||
+                        selectedVibe.localizedCaseInsensitiveContains(partyVibe)
                     }
                 }
             }
-            
-            if activeFilters.showOnlyAvailable {
-                filteredResults = filteredResults.filter { !$0.isSoldOut }
+        }
+        
+        if activeFilters.showOnlyAvailable {
+            filteredResults = filteredResults.filter { !$0.isSoldOut }
+        }
+        
+        filteredResults = filteredResults.filter { $0.maxGuestCount <= activeFilters.maxGuestCount }
+        
+        // Apply search filter
+        if !searchText.isEmpty {
+            filteredResults = filteredResults.filter { afterparty in
+                afterparty.title.localizedCaseInsensitiveContains(searchText) ||
+                afterparty.locationName.localizedCaseInsensitiveContains(searchText) ||
+                afterparty.vibeTag.localizedCaseInsensitiveContains(searchText) ||
+                afterparty.hostHandle.localizedCaseInsensitiveContains(searchText)
             }
-            
-            filteredResults = filteredResults.filter { $0.maxGuestCount <= activeFilters.maxGuestCount }
-            
-            // Apply search filter
-            if !searchText.isEmpty {
-                filteredResults = filteredResults.filter { afterparty in
-                    afterparty.title.localizedCaseInsensitiveContains(searchText) ||
-                    afterparty.locationName.localizedCaseInsensitiveContains(searchText) ||
-                    afterparty.vibeTag.localizedCaseInsensitiveContains(searchText) ||
-                    afterparty.hostHandle.localizedCaseInsensitiveContains(searchText)
-                }
-            }
-            
-            await MainActor.run {
-                marketplaceAfterparties = filteredResults
-            }
+        }
         
         await MainActor.run {
             marketplaceAfterparties = filteredResults
-            print("🎉 Loaded \(filteredResults.count) parties (including \(sampleParties.count) sample parties)")
+            
         }
     }
-    
-    // MARK: - Sample Data for Testing
-    private func createSampleParties() -> [Afterparty] {
-        let now = Date()
-        let calendar = Calendar.current
-        
-        // Use current city and nearby coordinates
-        let currentCity = locationManager.currentCity ?? "Pune"
-        let baseCoordinate = locationManager.location?.coordinate ?? CLLocationCoordinate2D(latitude: 18.4955, longitude: 73.9040)
-        
-        return [
-            // 1. Rooftop Party - Premium pricing
-            Afterparty(
-                id: "sample-1",
-                userId: "host-1",
-                hostHandle: "mike_parties",
-                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude + 0.001, longitude: baseCoordinate.longitude + 0.001),
-                radius: 1000,
-                startTime: calendar.date(byAdding: .hour, value: 2, to: now) ?? now,
-                endTime: calendar.date(byAdding: .hour, value: 6, to: now) ?? now,
-                city: currentCity,
-                locationName: "Luxury Rooftop Loft",
-                description: "Epic rooftop party with DJ, open bar, and amazing city views! Dress code enforced.",
-                address: "123 MG Road, \(currentCity)",
-                googleMapsLink: "https://maps.google.com/?q=123+MG+Road+\(currentCity)",
-                vibeTag: "Rooftop, Dress Code, Dancing",
-                activeUsers: ["user-1", "user-2", "user-3", "user-4", "user-5", "user-6", "user-7", "user-8", "user-9", "user-10", "user-11", "user-12", "user-13", "user-14", "user-15"],
-                pendingRequests: ["guest-1"],
-                createdAt: calendar.date(byAdding: .hour, value: -1, to: now) ?? now,
-                title: "🌆 Skyline Rooftop Bash",
-                ticketPrice: 45.0,
-                coverPhotoURL: nil,
-                maxGuestCount: 80,
-                visibility: .publicFeed,
-                approvalType: .manual,
-                ageRestriction: 21,
-                maxMaleRatio: 0.6,
-                legalDisclaimerAccepted: true,
-                venmoHandle: "@mike-rooftop",
-                guestRequests: [
-                    GuestRequest(userId: "guest-1", userName: "Sarah K", userHandle: "sarah_k", requestedAt: now, paymentStatus: .pending),
-                    GuestRequest(userId: "guest-2", userName: "Alex M", userHandle: "alex_m", requestedAt: calendar.date(byAdding: .minute, value: -15, to: now) ?? now, paymentStatus: .paid)
-                ]
-            ),
-            
-            // 2. House Party - Mid-range pricing
-            Afterparty(
-                id: "sample-2", 
-                userId: "host-2",
-                hostHandle: "party_queen",
-                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude + 0.002, longitude: baseCoordinate.longitude - 0.001),
-                radius: 1000,
-                startTime: calendar.date(byAdding: .hour, value: 4, to: now) ?? now,
-                endTime: calendar.date(byAdding: .hour, value: 8, to: now) ?? now,
-                city: currentCity,
-                locationName: "Cozy Mission House",
-                description: "Chill house party with beer pong, good vibes, and friendly crowd. BYOB welcome!",
-                address: "456 FC Road, \(currentCity)",
-                googleMapsLink: "https://maps.google.com/?q=456+FC+Road+\(currentCity)",
-                vibeTag: "House Party, BYOB, Games",
-                activeUsers: ["user-a", "user-b", "user-c", "user-d", "user-e", "user-f", "user-g", "user-h"],
-                pendingRequests: [],
-                createdAt: calendar.date(byAdding: .minute, value: -30, to: now) ?? now,
-                title: "🏠 Mission House Vibes",
-                ticketPrice: 15.0,
-                coverPhotoURL: nil,
-                maxGuestCount: 35,
-                visibility: .publicFeed,
-                approvalType: .automatic,
-                ageRestriction: 18,
-                maxMaleRatio: 0.7,
-                legalDisclaimerAccepted: true,
-                venmoHandle: "@party-queen",
-                guestRequests: [
-                    GuestRequest(userId: "guest-3", userName: "Jordan P", userHandle: "jordan_p", requestedAt: calendar.date(byAdding: .minute, value: -10, to: now) ?? now, paymentStatus: .paid)
-                ]
-            ),
-            
-            // 3. Pool Party - Higher capacity
-            Afterparty(
-                id: "sample-3",
-                userId: "host-3", 
-                hostHandle: "poolside_steve",
-                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude - 0.001, longitude: baseCoordinate.longitude + 0.002),
-                radius: 1000,
-                startTime: calendar.date(byAdding: .day, value: 1, to: now) ?? now,
-                endTime: calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .hour, value: 6, to: now) ?? now) ?? now,
-                city: currentCity,
-                locationName: "Private Pool Villa",
-                description: "Day party by the pool! Bring swimwear, sunscreen, and good energy. Pool floaties provided!",
-                address: "789 Koregaon Park, \(currentCity)", 
-                googleMapsLink: "https://maps.google.com/?q=789+Koregaon+Park+\(currentCity)",
-                vibeTag: "Pool, Backyard, Chill",
-                activeUsers: ["user-x", "user-y", "user-z", "user-1a", "user-2a", "user-3a"],
-                pendingRequests: ["guest-5"],
-                createdAt: calendar.date(byAdding: .minute, value: -45, to: now) ?? now,
-                title: "🏊‍♀️ Poolside Paradise",
-                ticketPrice: 25.0,
-                coverPhotoURL: nil,
-                maxGuestCount: 60,
-                visibility: .publicFeed,
-                approvalType: .manual,
-                ageRestriction: nil,
-                maxMaleRatio: 0.5,
-                legalDisclaimerAccepted: true,
-                venmoHandle: "@poolside-steve",
-                guestRequests: [
-                    GuestRequest(userId: "guest-4", userName: "Emma R", userHandle: "emma_r", requestedAt: calendar.date(byAdding: .minute, value: -20, to: now) ?? now, paymentStatus: .paid),
-                    GuestRequest(userId: "guest-5", userName: "Tyler B", userHandle: "tyler_b", requestedAt: calendar.date(byAdding: .minute, value: -5, to: now) ?? now, paymentStatus: .pending)
-                ]
-            ),
-            
-            // 4. Exclusive Party - Premium pricing
-            Afterparty(
-                id: "sample-4",
-                userId: "host-4",
-                hostHandle: "vip_nights", 
-                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude + 0.003, longitude: baseCoordinate.longitude + 0.003),
-                radius: 1000,
-                startTime: calendar.date(byAdding: .hour, value: 8, to: now) ?? now,
-                endTime: calendar.date(byAdding: .hour, value: 12, to: now) ?? now,
-                city: currentCity,
-                locationName: "Penthouse Suite",
-                description: "Ultra-exclusive penthouse party. Bottle service, professional DJ, strict guest list. Limited spots!",
-                address: "101 Bund Garden, \(currentCity)",
-                googleMapsLink: "https://maps.google.com/?q=101+Bund+Garden+\(currentCity)",
-                vibeTag: "Exclusive, Lounge, Dress Code",
-                activeUsers: ["vip-1", "vip-2", "vip-3", "vip-4", "vip-5", "vip-6", "vip-7", "vip-8", "vip-9", "vip-10"],
-                pendingRequests: [],
-                createdAt: calendar.date(byAdding: .hour, value: -2, to: now) ?? now,
-                title: "💎 VIP Penthouse Experience",
-                ticketPrice: 85.0,
-                coverPhotoURL: nil,
-                maxGuestCount: 25,
-                visibility: .publicFeed,
-                approvalType: .manual,
-                ageRestriction: 21,
-                maxMaleRatio: 0.4,
-                legalDisclaimerAccepted: true,
-                venmoHandle: "@vip-nights",
-                guestRequests: [
-                    GuestRequest(userId: "guest-6", userName: "Sophia L", userHandle: "sophia_l", requestedAt: calendar.date(byAdding: .minute, value: -25, to: now) ?? now, paymentStatus: .paid)
-                ]
-            ),
-            
-            // 5. Frat Party - Budget-friendly
-            Afterparty(
-                id: "sample-5",
-                userId: "host-5",
-                hostHandle: "kappa_kyle",
-                coordinate: CLLocationCoordinate2D(latitude: baseCoordinate.latitude - 0.002, longitude: baseCoordinate.longitude - 0.002),
-                radius: 1000,
-                startTime: calendar.date(byAdding: .hour, value: 6, to: now) ?? now,
-                endTime: calendar.date(byAdding: .hour, value: 10, to: now) ?? now,
-                city: currentCity, 
-                locationName: "College Hostel",
-                description: "Classic college party! Beer pong tournaments, loud music, and good times. Come ready to party!",
-                address: "202 University Road, \(currentCity)",
-                googleMapsLink: "https://maps.google.com/?q=202+University+Road+\(currentCity)",
-                vibeTag: "Frat, Games, Dancing",
-                activeUsers: Array(1...25).map { "frat-\($0)" },
-                pendingRequests: [],
-                createdAt: calendar.date(byAdding: .minute, value: -60, to: now) ?? now,
-                title: "🍺 Sigma Chi Bash",
-                ticketPrice: 8.0,
-                coverPhotoURL: nil,
-                maxGuestCount: 120,
-                visibility: .publicFeed,
-                approvalType: .automatic,
-                ageRestriction: 18,
-                maxMaleRatio: 0.8,
-                legalDisclaimerAccepted: true,
-                venmoHandle: "@kappa-kyle",
-                guestRequests: []
-            )
-        ]
-    }
+
 }
 
 // MARK: - Action Buttons View (Extracted to fix type-checking)
@@ -738,9 +590,9 @@ struct ActionButtonsView: View {
             Image(systemName: "xmark.circle.fill")
             Text("Sold Out")
         } else {
-            // TESTFLIGHT VERSION: Contact host for payment
-            Image(systemName: "message.circle.fill")
-            Text("Contact Host ($\(Int(afterparty.ticketPrice)))")
+            // NEW FLOW: Request to join with intro message
+            Image(systemName: "person.badge.plus")
+            Text("Request to Join ($\(Int(afterparty.ticketPrice)))")
         }
     }
     
@@ -776,9 +628,16 @@ struct AfterpartyCard: View {
     @State private var showingShareSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var showingContactHost = false // TESTFLIGHT: Contact host sheet
+    @State private var isJoining = false // Missing state variable for ContactHostSheet
+    @State private var showingHostInfo = false // Host profile sheet
     
     private var isHost: Bool {
         afterparty.userId == authViewModel.currentUser?.uid
+    }
+    
+    private var isUserApproved: Bool {
+        guard let currentUserId = authViewModel.currentUser?.uid else { return false }
+        return afterparty.activeUsers.contains(currentUserId)
     }
     
     private var timeRemaining: String {
@@ -807,20 +666,69 @@ struct AfterpartyCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // MARK: - Cover Photo & Price Header
             ZStack(alignment: .topTrailing) {
-                // Cover photo or placeholder
-                if let coverURL = afterparty.coverPhotoURL {
-                    AsyncImage(url: URL(string: coverURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color(.systemGray4)
+                // Cover photo or placeholder - MUCH BIGGER and better image handling
+                if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty {
+                    AsyncImage(url: URL(string: coverURL)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(4/3, contentMode: .fill) // 4:3 landscape ratio
+                                .frame(maxWidth: .infinity)
+                                .clipped()
+                                .cornerRadius(16)
+                        case .failure(_), .empty:
+                            // Fallback to gradient on failure or loading
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.purple.opacity(0.8),
+                                            Color.pink.opacity(0.6),
+                                            Color.orange.opacity(0.5)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
+                                .frame(maxWidth: .infinity)
+                                .overlay(
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "party.popper.fill")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.white)
+                                        Text("Party Image")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.8))
+                                    }
+                                )
+                        @unknown default:
+                            // Default fallback
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.purple.opacity(0.8),
+                                            Color.pink.opacity(0.6),
+                                            Color.orange.opacity(0.5)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
+                                .frame(maxWidth: .infinity)
+                                .overlay(
+                                    Image(systemName: "party.popper.fill")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(.white)
+                                )
+                        }
                     }
-                    .frame(height: 120)
-                    .clipped()
-                    .cornerRadius(12)
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    // Default gradient placeholder when no image URL
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
@@ -832,61 +740,81 @@ struct AfterpartyCard: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(height: 150) // Increased height for more impact
+                        .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
+                        .frame(maxWidth: .infinity)
                         .overlay(
-                            VStack {
+                            VStack(spacing: 8) {
                                 Image(systemName: "party.popper.fill")
-                                    .font(.title)
+                                    .font(.system(size: 40))
                                     .foregroundColor(.white)
-                                Text(afterparty.title)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                                    .multilineTextAlignment(.center)
+                                Text("No Image")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.8))
                             }
                         )
                 }
                 
-                // Price tag
+                // Price tag with demo indicator
                 VStack(spacing: 4) {
+                    // Demo indicator for sample parties
+                    if afterparty.id.hasPrefix("demo-") {
+                        Text("DEMO")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(4)
+                    }
+                    
                     Text("$\(Int(afterparty.ticketPrice))")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                 
                     if isHost {
-                        Text("$\(Int(afterparty.ticketPrice * 0.88))")
-                    .font(.caption)
-                            .foregroundColor(.green)
-                            .overlay(
-                                Text("your cut")
-                                    .font(.caption2)
-                                    .foregroundColor(.green.opacity(0.8))
-                                    .offset(y: 12)
-                            )
+                        VStack(spacing: 2) {
+                            Text("you keep")
+                                .font(.caption2)
+                                .foregroundColor(.green.opacity(0.8))
+                            Text("100%")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        }
                     }
                 }
                 .padding(8)
                 .background(Color.black.opacity(0.7))
                 .cornerRadius(8)
-                .padding(.trailing, 8)
-                .padding(.top, 8)
+                .padding(.trailing, 12)
+                .padding(.top, 12)
             }
             
-            // Party title and location
-            VStack(alignment: .leading, spacing: 4) {
-                Text(afterparty.title)
-                    .font(.title3) // Larger font for more emphasis
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                
+            // Party title and location - below the image
             HStack {
-                    Image(systemName: "mappin.and.ellipse")
-                    .font(.caption)
-                                    .foregroundColor(.gray)
-                    Text(afterparty.locationName)
-                        .font(.subheadline)
-                                    .foregroundColor(.gray)
-                        .lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(afterparty.title)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                // Simple redirect arrow - no text, just navigation
+                Button(action: {
+                    if let url = URL(string: afterparty.googleMapsLink), !afterparty.googleMapsLink.isEmpty {
+                        UIApplication.shared.open(url)
+                    }
+                }) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.white.opacity(0.15))
+                        .cornerRadius(10)
                 }
             }
             
@@ -929,10 +857,12 @@ struct AfterpartyCard: View {
                 
                 // Host info
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("@\(afterparty.hostHandle)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.pink)
+                    Button(action: { showingHostInfo = true }) {
+                        Text("@\(afterparty.hostHandle)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.pink)
+                    }
                     Text("Host")
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -970,7 +900,10 @@ struct AfterpartyCard: View {
             ShareSheet(activityItems: [message])
         }
         .sheet(isPresented: $showingContactHost) {
-            ContactHostSheet(afterparty: afterparty, isJoining: $isJoining)
+            RequestToJoinSheet(afterparty: afterparty)
+        }
+        .sheet(isPresented: $showingHostInfo) {
+            UserInfoView(userId: afterparty.userId)
         }
         .alert("Stop Invitation?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -979,7 +912,7 @@ struct AfterpartyCard: View {
                     do {
                         try await afterpartyManager.deleteAfterparty(afterparty)
                     } catch {
-                        print("Error stopping invitation: \(error)")
+                        
                     }
                 }
             }
@@ -995,79 +928,355 @@ struct AfterpartyCard: View {
     }
 }
 
-// Guest Row Views
-struct AcceptedGuestRow: View {
-    let userId: String
-    let afterpartyId: String
-    let onRemove: () -> Void
+// MARK: - Enhanced Guest Row Components
+
+struct PendingRequestRow: View {
+    let request: GuestRequest
+    let onApprove: () -> Void
+    let onDeny: () -> Void
+    @State private var showingUserInfo = false
+    @State private var showingFullMessage = false
     
     var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // User info header
             HStack {
-            Image(systemName: "person.circle.fill")
-                .foregroundColor(.gray)
-            Text(userId)
-                    .foregroundColor(.white)
-            
+                Image(systemName: "person.circle.fill")
+                    .foregroundColor(.orange)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Button(action: { showingUserInfo = true }) {
+                        Text(request.userName)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    
+                    Text("@\(request.userHandle)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    Text(formatTimeAgo(request.requestedAt))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
                 Spacer()
+            }
             
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.red)
+            // Intro message
+            if !request.introMessage.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Message:")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.gray)
+                    
+                    Button(action: { showingFullMessage = true }) {
+                        Text(request.introMessage)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(showingFullMessage ? nil : 3)
+                    }
+                    
+                    if request.introMessage.count > 100 && !showingFullMessage {
+                        Button("Read more...") {
+                            showingFullMessage = true
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    }
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(8)
+            }
+            
+            // Action buttons
+            HStack(spacing: 12) {
+                Button(action: onApprove) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Approve")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                
+                Button(action: onDeny) {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                        Text("Deny")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
             }
         }
+        .padding(.vertical, 4)
+        .sheet(isPresented: $showingUserInfo) {
+            UserInfoView(userId: request.userId)
+        }
+    }
+    
+    private func formatTimeAgo(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.dateTimeStyle = .named
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
-struct PendingGuestRow: View {
-    let userId: String
-    let onAccept: () -> Void
-    let onDeny: () -> Void
+struct ApprovedGuestSimpleRow: View {
+    let request: GuestRequest
+    let afterparty: Afterparty
+    @State private var showingUserInfo = false
+    @State private var showingVenmoInfo = false
     
     var body: some View {
-            HStack {
-            Image(systemName: "person.circle.fill")
-            .foregroundColor(.gray)
-            Text(userId)
-                .foregroundColor(.white)
+        HStack {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+                .font(.title2)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Button(action: { showingUserInfo = true }) {
+                    Text(request.userName)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Text("@\(request.userHandle)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                if let approvedAt = request.approvedAt {
+                    Text("Approved \(formatTimeAgo(approvedAt))")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
             
             Spacer()
             
-            Button("Accept", action: onAccept)
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-            
-            Button("Deny", action: onDeny)
-                .buttonStyle(.bordered)
-                .tint(.red)
+            Button(action: { showingVenmoInfo = true }) {
+                Text("Venmo Info")
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+            }
         }
+        .sheet(isPresented: $showingUserInfo) {
+            UserInfoView(userId: request.userId)
+        }
+        .sheet(isPresented: $showingVenmoInfo) {
+            VenmoPaymentInfoSheet(afterparty: afterparty, guestName: request.userName)
+        }
+    }
+    
+    private func formatTimeAgo(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.dateTimeStyle = .named
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
-struct AddGuestSheet: View {
-    @Binding var isPresented: Bool
-    @Binding var guestHandle: String
-    let onAdd: () -> Void
+
+
+struct SummaryStatsView: View {
+    let afterparty: Afterparty
+    
+    private var pendingCount: Int {
+        afterparty.guestRequests.filter { $0.approvalStatus == .pending }.count
+    }
+    
+    private var approvedCount: Int {
+        afterparty.guestRequests.filter { $0.approvalStatus == .approved }.count
+    }
+    
+    private var totalRequests: Int {
+        afterparty.guestRequests.count
+    }
+    
+    private var estimatedEarnings: Double {
+                                Double(approvedCount) * afterparty.ticketPrice * 0.80 // 80% after fees (if all approved guests pay)
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Total Requests")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("\(totalRequests)")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .leading) {
+                    Text("Pending")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("\(pendingCount)")
+                        .font(.headline)
+                        .foregroundColor(.orange)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .leading) {
+                    Text("Approved")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("\(approvedCount)")
+                        .font(.headline)
+                        .foregroundColor(.green)
+                }
+            }
+            
+            Divider()
+            
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Party Capacity")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("\(approvedCount)/\(afterparty.maxGuestCount)")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .leading) {
+                    Text("Potential Earnings")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("$\(Int(estimatedEarnings))")
+                        .font(.headline)
+                        .foregroundColor(.pink)
+                }
+            }
+            
+            Text("💰 Payment verified manually at door")
+                .font(.caption)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(12)
+    }
+}
+
+struct VenmoPaymentInfoSheet: View {
+    let afterparty: Afterparty
+    let guestName: String
+    @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
         NavigationView {
-            Form {
-                Section(header: Text("Add Guest")) {
-                    TextField("Guest Handle", text: $guestHandle)
-                        .autocapitalization(.none)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 16) {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.green)
+                        
+                        Text("Payment Details")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Text("Guest: \(guestName)")
+                            .font(.headline)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    // Venmo info
+                    VStack(spacing: 16) {
+                        Text("Venmo Details")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Handle:")
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text("@\(afterparty.venmoHandle ?? "Not set")")
+                                    .foregroundColor(.white)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            HStack {
+                                Text("Amount:")
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text("$\(Int(afterparty.ticketPrice))")
+                                    .foregroundColor(.green)
+                                    .fontWeight(.bold)
+                            }
+                            
+                            HStack {
+                                Text("Required Note:")
+                                    .foregroundColor(.gray)
+                                Spacer()
+                                Text("\(afterparty.title)")
+                                    .foregroundColor(.white)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .padding()
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(12)
+                    }
+                    
+                    // Instructions
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Manual Door Verification")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text("1. Guest sends Venmo payment with party title as note")
+                        Text("2. When guest arrives, check your Venmo app")
+                        Text("3. If payment confirmed, let them in!")
+                        Text("4. No app tracking needed - keep it simple")
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
                 }
+                .padding()
             }
-            .navigationTitle("Add Guest")
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("Payment Info")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(
-                leading: Button("Cancel") {
-                    isPresented = false
-                },
-                trailing: Button("Add", action: onAdd)
-                    .disabled(guestHandle.isEmpty)
+                trailing: Button("Done") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .foregroundColor(.white)
             )
         }
         .preferredColorScheme(.dark)
     }
 }
+
+
 
 struct GuestListView: View {
     let afterparty: Afterparty
@@ -1075,99 +1284,146 @@ struct GuestListView: View {
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    @State private var showingAddGuestSheet = false
-    @State private var newGuestHandle = ""
+    @State private var refreshing = false
+    
+    // Organize requests by approval status
+    private var pendingRequests: [GuestRequest] {
+        afterparty.guestRequests.filter { $0.approvalStatus == .pending }
+    }
+    
+    private var approvedGuests: [GuestRequest] {
+        afterparty.guestRequests.filter { $0.approvalStatus == .approved }
+    }
     
     var body: some View {
         NavigationView {
             List {
-                Section("Accepted Guests (\(afterparty.activeUsers.count))") {
-                    ForEach(afterparty.activeUsers, id: \.self) { userId in
-                        AcceptedGuestRow(
-                            userId: userId,
-                            afterpartyId: afterparty.id
-                        ) {
-                            Task {
-                                do {
-                                    try await afterpartyManager.removeGuest(afterpartyId: afterparty.id, userId: userId)
-                                    alertMessage = "Guest removed successfully!"
-                                    showingAlert = true
-                                } catch {
-                                    alertMessage = "Failed to remove guest: \(error.localizedDescription)"
-                                    showingAlert = true
+                // Pending Approval Section
+                if !pendingRequests.isEmpty {
+                    Section("⏳ Pending Approval (\(pendingRequests.count))") {
+                        ForEach(pendingRequests) { request in
+                            PendingRequestRow(
+                                request: request,
+                                onApprove: {
+                                    Task {
+                                        await approveRequest(request: request)
+                                    }
+                                },
+                                onDeny: {
+                                    Task {
+                                        await denyRequest(request: request)
+                                    }
                                 }
-                            }
-                        }
-                    }
-                    
-                    Button(action: { showingAddGuestSheet = true }) {
-                        HStack {
-                            Image(systemName: "person.badge.plus")
-                            Text("Add Guest")
+                            )
                         }
                     }
                 }
                 
-                Section("Pending Requests (\(afterparty.pendingRequests.count))") {
-                    ForEach(afterparty.pendingRequests, id: \.self) { userId in
-                        PendingGuestRow(
-                            userId: userId,
-                            onAccept: {
-                                Task {
-                                    do {
-                                        try await afterpartyManager.approveRequest(afterpartyId: afterparty.id, userId: userId)
-                                        alertMessage = "Guest approved successfully!"
-                                        showingAlert = true
-                                    } catch {
-                                        alertMessage = "Failed to approve guest: \(error.localizedDescription)"
-                                        showingAlert = true
-                                    }
-                                }
-                            },
-                            onDeny: {
-                    Task {
-                        do {
-                                        try await afterpartyManager.denyRequest(afterpartyId: afterparty.id, userId: userId)
-                                        alertMessage = "Request denied successfully!"
-                                        showingAlert = true
-                        } catch {
-                                        alertMessage = "Failed to deny request: \(error.localizedDescription)"
-                                        showingAlert = true
-                                    }
-                                }
-                            }
-                        )
+                // Approved Guests Section
+                if !approvedGuests.isEmpty {
+                    Section("✅ Approved - Can Attend (\(approvedGuests.count))") {
+                        ForEach(approvedGuests) { request in
+                            ApprovedGuestSimpleRow(request: request, afterparty: afterparty)
+                        }
                     }
+                }
+                
+                // Empty state
+                if pendingRequests.isEmpty && approvedGuests.isEmpty {
+                    Section("🔍 No Requests Yet") {
+                        VStack(spacing: 8) {
+                            Text("No one has requested to join yet")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            Text("Share your party to start receiving requests!")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+                
+                // Summary Section
+                Section("📊 Summary") {
+                    SummaryStatsView(afterparty: afterparty)
                 }
             }
             .listStyle(InsetGroupedListStyle())
-            .navigationTitle("Guest List")
+            .navigationTitle("Guest Management")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: Button("Done") { presentationMode.wrappedValue.dismiss() })
+            .navigationBarItems(
+                leading: Button("Done") { 
+                    presentationMode.wrappedValue.dismiss() 
+                },
+                trailing: Button(action: {
+                    Task {
+                        await refreshData()
+                    }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .disabled(refreshing)
+            )
+        }
+        .refreshable {
+            await refreshData()
+        }
+        .alert("Guest Management", isPresented: $showingAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
         }
         .preferredColorScheme(.dark)
-        .alert(alertMessage, isPresented: $showingAlert) {
-            Button("OK", role: .cancel) { }
-        }
-        .sheet(isPresented: $showingAddGuestSheet) {
-            AddGuestSheet(
-                isPresented: $showingAddGuestSheet,
-                guestHandle: $newGuestHandle
-            ) {
-                Task {
-                    do {
-                        try await afterpartyManager.addGuest(afterpartyId: afterparty.id, guestHandle: newGuestHandle)
-                        showingAddGuestSheet = false
-                        alertMessage = "Guest added successfully!"
-                        showingAlert = true
-                        newGuestHandle = ""
-                    } catch {
-                        alertMessage = "Failed to add guest: \(error.localizedDescription)"
-                        showingAlert = true
-                    }
-                }
+    }
+    
+    // MARK: - Actions
+    
+    private func approveRequest(request: GuestRequest) async {
+        do {
+            try await afterpartyManager.approveGuestRequest(
+                afterpartyId: afterparty.id,
+                guestRequestId: request.id
+            )
+            
+            await MainActor.run {
+                alertMessage = "@\(request.userHandle) approved! They now have Venmo info + address."
+                showingAlert = true
+            }
+        } catch {
+            await MainActor.run {
+                alertMessage = "Failed to approve: \(error.localizedDescription)"
+                showingAlert = true
             }
         }
+    }
+    
+    private func denyRequest(request: GuestRequest) async {
+        do {
+            try await afterpartyManager.denyGuestRequest(
+                afterpartyId: afterparty.id,
+                guestRequestId: request.id
+            )
+            
+            await MainActor.run {
+                alertMessage = "Request from @\(request.userHandle) was denied"
+                showingAlert = true
+            }
+        } catch {
+            await MainActor.run {
+                alertMessage = "Failed to deny request: \(error.localizedDescription)"
+                showingAlert = true
+            }
+        }
+    }
+    
+
+    
+    private func refreshData() async {
+        refreshing = true
+        // In a real app, this would refresh the afterparty data
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        refreshing = false
     }
 }
 
@@ -1245,6 +1501,7 @@ struct CreateAfterpartyView: View {
     @State private var maxMaleRatio: Double = 1.0
     @State private var legalDisclaimerAccepted = false
     @State private var showImagePicker = false
+    @State private var isUploadingImage = false
     
     // MARK: - Enhanced Date/Time Selection
     @State private var selectedDate = Date()
@@ -1357,7 +1614,8 @@ struct CreateAfterpartyView: View {
                     CoverPhotoSectionWithBinding(
                         coverPhotoURL: $coverPhotoURL,
                         showImagePicker: $showImagePicker,
-                        coverPhotoImage: $coverPhotoImage
+                        coverPhotoImage: $coverPhotoImage,
+                        isUploading: isUploadingImage
                     )
                     
                     // Vibe Tags
@@ -1370,7 +1628,6 @@ struct CreateAfterpartyView: View {
                     EnhancedDateTimeSection(
                         selectedDate: $selectedDate,
                         customStartTime: $customStartTime,
-                        customEndTime: $customEndTime,
                         formatTime: formatTime
                     )
                     
@@ -1399,7 +1656,8 @@ struct CreateAfterpartyView: View {
                     Button(action: createAfterparty) {
                         CreateButtonContent(
                             ticketPrice: ticketPrice,
-                            isCreating: isCreating
+                            isCreating: isCreating,
+                            isUploadingImage: isUploadingImage
                         )
                         }
                                 .frame(maxWidth: .infinity)
@@ -1407,7 +1665,7 @@ struct CreateAfterpartyView: View {
                     .background(createButtonBackground)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
-                    .disabled(isCreating || !isFormValid)
+                    .disabled(isCreating || isUploadingImage || !isFormValid)
                     .padding(.top, 24)
                     }
                     .padding()
@@ -1430,10 +1688,8 @@ struct CreateAfterpartyView: View {
                 ImagePicker(image: $coverPhotoImage, sourceType: .photoLibrary)
                     .onDisappear {
                         if let image = coverPhotoImage {
-                            // Convert UIImage to URL string for cover photo
-                            // In a real app, you'd upload this to Firebase Storage
-                            // For now, we'll just use a placeholder that indicates an image was selected
-                            coverPhotoURL = "local_image_selected"
+                            // Upload the actual image to Firebase Storage
+                            uploadCoverPhoto(image)
                         }
                     }
             }
@@ -1452,13 +1708,58 @@ struct CreateAfterpartyView: View {
         return formatter.string(from: date)
     }
     
+    private func uploadCoverPhoto(_ image: UIImage) {
+        isUploadingImage = true
+        
+        Task {
+            do {
+                // Compress image
+                guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                    await MainActor.run {
+                        errorMessage = "Could not process image"
+                        showingError = true
+                        isUploadingImage = false
+                    }
+                    return
+                }
+                
+                // Create storage reference
+                let fileName = "\(UUID().uuidString).jpg"
+                let storageRef = Storage.storage().reference().child("afterparty_covers/\(fileName)")
+                
+                // Create metadata
+                let metadata = StorageMetadata()
+                metadata.contentType = "image/jpeg"
+                
+                // Upload the image
+                _ = try await storageRef.putDataAsync(imageData, metadata: metadata)
+                
+                // Get download URL
+                let downloadURL = try await storageRef.downloadURL()
+                
+                // Update coverPhotoURL on main thread
+                await MainActor.run {
+                    coverPhotoURL = downloadURL.absoluteString
+                    isUploadingImage = false
+                }
+                
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to upload image: \(error.localizedDescription)"
+                    showingError = true
+                    isUploadingImage = false
+                }
+            }
+        }
+    }
+    
     private func createAfterparty() {
         guard let location = currentLocation else { return }
         
         isCreating = true
         Task {
             do {
-                // Combine selected date with custom times
+                // Combine selected date with start time - end time is auto-calculated
                 let finalStartTime = Calendar.current.date(
                     bySettingHour: Calendar.current.component(.hour, from: customStartTime),
                     minute: Calendar.current.component(.minute, from: customStartTime),
@@ -1466,12 +1767,10 @@ struct CreateAfterpartyView: View {
                     of: selectedDate
                 ) ?? customStartTime
                 
-                let finalEndTime = Calendar.current.date(
-                    bySettingHour: Calendar.current.component(.hour, from: customEndTime),
-                    minute: Calendar.current.component(.minute, from: customEndTime),
-                    second: 0,
-                    of: selectedDate
-                ) ?? customEndTime
+                // End time is automatically set to next morning (6 AM) or 8 hours later, whichever is sooner
+                let nextMorning = Calendar.current.date(bySettingHour: 6, minute: 0, second: 0, of: Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate) ?? finalStartTime
+                let eightHoursLater = Calendar.current.date(byAdding: .hour, value: 8, to: finalStartTime) ?? finalStartTime
+                let finalEndTime = min(nextMorning, eightHoursLater)
                 
                 try await afterpartyManager.createAfterparty(
                     hostHandle: authViewModel.currentUser?.name ?? "",
@@ -1793,6 +2092,68 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Demo Banner Component
+struct DemoPartiesBanner: View {
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Button(action: { isExpanded.toggle() }) {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("🧪 TestFlight Demo Parties")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text("Tap to learn more")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.blue)
+                }
+            }
+            
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("These sample parties show how Bondfyr works:")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("✅ Different price points ($8 - $85)")
+                        Text("✅ Various party types & vibes")
+                        Text("✅ Payment flow simulation")
+                        Text("✅ Host/guest interactions")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    
+                    Text("Real parties from actual hosts will appear here!")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.green)
+                        .padding(.top, 4)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+        )
+        .padding(.horizontal)
+    }
 } 
 
 // MARK: - Extracted Form Sections to Fix Type-Checking
@@ -1859,14 +2220,19 @@ struct PartyDetailsSection: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     if ticketPrice >= 5.0 {
-                        Text("You'll earn $\(String(format: "%.2f", ticketPrice * 0.88)) per ticket (12% Bondfyr fee)")
+                        Text("You keep $\(String(format: "%.2f", ticketPrice)) per ticket (100% during TestFlight!)")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.green)
+                            .fontWeight(.semibold)
                     } else {
                         Text("⚠️ Minimum $5 required to create party")
                             .font(.caption)
                             .foregroundColor(.red)
                     }
+                    
+                    Text("Full version: 20% service fee, you keep 80%")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                     
                     Text("No maximum price limit - charge what your party is worth!")
                         .font(.caption)
@@ -1916,6 +2282,7 @@ struct CoverPhotoSectionWithBinding: View {
     @Binding var coverPhotoURL: String
     @Binding var showImagePicker: Bool
     @Binding var coverPhotoImage: UIImage?
+    let isUploading: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1937,40 +2304,65 @@ struct CoverPhotoSectionWithBinding: View {
                 }
             }
             
-            Button(action: { showImagePicker = true }) {
-                if let image = coverPhotoImage {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 120)
+            Button(action: { 
+                if !isUploading {
+                    showImagePicker = true 
+                }
+            }) {
+                ZStack {
+                    if let image = coverPhotoImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(4/3, contentMode: .fill) // 4:3 landscape ratio
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .cornerRadius(12)
+                    } else if !coverPhotoURL.isEmpty {
+                        AsyncImage(url: URL(string: coverPhotoURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(4/3, contentMode: .fill) // 4:3 landscape ratio
+                        } placeholder: {
+                            Color(.systemGray6)
+                        }
+                        .frame(maxWidth: .infinity)
                         .clipped()
                         .cornerRadius(12)
-                } else if !coverPhotoURL.isEmpty {
-                    AsyncImage(url: URL(string: coverPhotoURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color(.systemGray6)
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemGray6))
+                            .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
+                            .frame(maxWidth: .infinity)
+                            .overlay(
+                                VStack {
+                                    Image(systemName: "camera.fill")
+                                        .font(.title)
+                                        .foregroundColor(.gray)
+                                    Text("Add Cover Photo")
+                                        .foregroundColor(.gray)
+                                }
+                            )
                     }
-                    .frame(height: 120)
-                    .clipped()
-                    .cornerRadius(12)
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
-                        .frame(height: 120)
-                        .overlay(
-                            VStack {
-                                Image(systemName: "camera.fill")
-                                    .font(.title)
-                                    .foregroundColor(.gray)
-                                Text("Add Cover Photo")
-                                    .foregroundColor(.gray)
-                            }
-                        )
+                    
+                    // Upload overlay
+                    if isUploading {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.black.opacity(0.6))
+                            .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
+                            .frame(maxWidth: .infinity)
+                            .overlay(
+                                VStack(spacing: 8) {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    Text("Uploading...")
+                                        .font(.caption)
+                                        .foregroundColor(.white)
+                                }
+                            )
+                    }
                 }
             }
+            .disabled(isUploading)
         }
         .onChange(of: showImagePicker) { _ in
             // This will be handled by the parent view's ImagePicker
@@ -2017,14 +2409,25 @@ struct VibeTagsSection: View {
 struct CreateButtonContent: View {
     let ticketPrice: Double
     let isCreating: Bool
+    let isUploadingImage: Bool
     
     var body: some View {
         HStack {
-            Text("Create Paid Party • $\(Int(ticketPrice))")
-                .fontWeight(.semibold)
-            if isCreating {
+            if isUploadingImage {
+                Text("Uploading Image...")
+                    .fontWeight(.semibold)
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(0.8)
+            } else if isCreating {
+                Text("Creating Party...")
+                    .fontWeight(.semibold)
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(0.8)
+            } else {
+                Text("Create Paid Party • $\(Int(ticketPrice))")
+                    .fontWeight(.semibold)
             }
         }
     }
@@ -2160,51 +2563,23 @@ struct PartySettingsSection: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
-            // Visibility
-            VisibilitySection(visibility: $visibility)
-            
-            // Approval Type
-            ApprovalSection(approvalType: $approvalType)
+            // Guest Approval
+            ApprovalSection(approvalType: $approvalType, maxMaleRatio: $maxMaleRatio)
             
             // Age Restriction
             AgeRestrictionSection(ageRestriction: $ageRestriction)
-            
-            // Gender Ratio Control
-            GenderRatioSection(maxMaleRatio: $maxMaleRatio)
         }
     }
 }
 
-struct VisibilitySection: View {
-    @Binding var visibility: PartyVisibility
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Visibility")
-                .font(.body)
-                .foregroundColor(.white)
-            
-            HStack(spacing: 12) {
-                ForEach(PartyVisibility.allCases, id: \.self) { option in
-                    Button(action: { visibility = option }) {
-                        Text(option.displayName)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(visibility == option ? Color.pink : Color(.systemGray6))
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                    }
-                }
-            }
-        }
-    }
-}
+
 
 struct ApprovalSection: View {
     @Binding var approvalType: ApprovalType
+    @Binding var maxMaleRatio: Double
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Guest Approval")
                 .font(.body)
                 .foregroundColor(.white)
@@ -2221,6 +2596,43 @@ struct ApprovalSection: View {
                     }
                 }
             }
+            
+            // Gender Ratio Control (only shows for auto-approve)
+            if approvalType == .automatic {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Max Male Ratio: \(Int(maxMaleRatio * 100))%")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                    
+                    Slider(value: $maxMaleRatio, in: 0.3...1.0, step: 0.1)
+                        .accentColor(.pink)
+                    
+                    Text("Controls gender balance for auto-approval")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 8)
+            }
+            
+            // Explanation text
+            VStack(alignment: .leading, spacing: 4) {
+                if approvalType == .manual {
+                    Text("• You manually approve each guest request")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("• Full control over who attends your party")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                } else {
+                    Text("• First-come, first-serve with gender ratio limits")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text("• Guests auto-approved until capacity/ratio reached")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+            .padding(.top, 4)
         }
     }
 }
@@ -2270,24 +2682,7 @@ struct AgeRestrictionButton: View {
     }
 }
 
-struct GenderRatioSection: View {
-    @Binding var maxMaleRatio: Double
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Max Male Ratio: \(Int(maxMaleRatio * 100))%")
-                .font(.body)
-                .foregroundColor(.white)
-            
-            Slider(value: $maxMaleRatio, in: 0.3...1.0, step: 0.1)
-                .accentColor(.pink)
-            
-            Text("Controls gender balance at your party")
-                .font(.caption)
-                .foregroundColor(.gray)
-        }
-    }
-}
+
 
 struct LocationDescriptionSection: View {
     @Binding var address: String
@@ -2342,7 +2737,6 @@ struct LocationDescriptionSection: View {
 struct EnhancedDateTimeSection: View {
     @Binding var selectedDate: Date
     @Binding var customStartTime: Date
-    @Binding var customEndTime: Date
     let formatTime: (Date) -> String
     
     var body: some View {
@@ -2373,57 +2767,23 @@ struct EnhancedDateTimeSection: View {
                     .font(.body)
                     .foregroundColor(.white)
                 
-                DatePicker("Start Time", selection: $customStartTime, displayedComponents: .hourAndMinute)
+                DatePicker("", selection: $customStartTime, displayedComponents: .hourAndMinute)
                     .datePickerStyle(WheelDatePickerStyle())
                     .accentColor(.pink)
                     .colorScheme(.dark)
                     .padding()
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
+                    .labelsHidden()
             }
             
-            // End Time
-            VStack(alignment: .leading, spacing: 8) {
-                Text("End Time")
-                    .font(.body)
-                    .foregroundColor(.white)
-                
-                DatePicker("End Time", selection: $customEndTime, displayedComponents: .hourAndMinute)
-                    .datePickerStyle(WheelDatePickerStyle())
-                    .accentColor(.pink)
-                    .colorScheme(.dark)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .onChange(of: customEndTime) { newEndTime in
-                        // Ensure end time is after start time
-                        if newEndTime <= customStartTime {
-                            customEndTime = Calendar.current.date(byAdding: .hour, value: 1, to: customStartTime) ?? customStartTime
-                        }
-                    }
-            }
-            
-            // Duration Display
+            // Party info note
             HStack {
-                Text("Duration: \(formatDuration())")
-                    .font(.subheadline)
+                Text("Parties are automatically visible until the next morning")
+                    .font(.caption)
                     .foregroundColor(.gray)
                 Spacer()
             }
-        }
-    }
-    
-    private func formatDuration() -> String {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: customStartTime, to: customEndTime)
-        let hours = components.hour ?? 0
-        let minutes = components.minute ?? 0
-        
-        if hours > 0 && minutes > 0 {
-            return "\(hours)h \(minutes)m"
-        } else if hours > 0 {
-            return "\(hours)h"
-        } else {
-            return "\(minutes)m"
         }
     }
 }
@@ -2524,19 +2884,20 @@ struct TestFlightDisclaimerSection: View {
             }
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("🧪 This is a test version to validate the concept")
+                Text("🧪 This is a test version - help us validate the concept!")
                     .font(.body)
                     .foregroundColor(.gray)
                 
-                Text("💰 Guests contact hosts directly for payment (Venmo/CashApp)")
+                Text("💰 You keep 100% of payments during TestFlight")
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                
+                Text("📱 Guests send payments directly via Venmo/CashApp")
                     .font(.body)
                     .foregroundColor(.gray)
                 
-                Text("📊 We're tracking estimated transaction volumes for analytics")
-                    .font(.body)
-                    .foregroundColor(.gray)
-                
-                Text("🚀 After validation, we'll launch with:")
+                Text("🚀 Full version will include:")
                     .font(.body)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
@@ -2546,13 +2907,22 @@ struct TestFlightDisclaimerSection: View {
                     Text("   • Automatic payment processing")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-                    Text("   • 12% Bondfyr commission (88% to host)")
+                    Text("   • 20% Bondfyr service fee (you keep 80%)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-                    Text("   • Secure dispute resolution")
+                    Text("   • Secure payments & dispute resolution")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    Text("   • Advanced analytics & promotion tools")
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
+                
+                Text("Early hosts get priority features and promotion!")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.yellow)
+                    .padding(.top, 4)
             }
             .padding()
             .background(Color.blue.opacity(0.1))
@@ -2901,7 +3271,7 @@ struct ContactHostSheet: View {
                 // Simple join request (no payment)
                 try await afterpartyManager.requestFreeAccess(
                     to: afterparty,
-                    userHandle: authViewModel.currentUser?.instagramHandle ?? authViewModel.currentUser?.snapchatHandle ?? authViewModel.currentUser?.name ?? "",
+                    userHandle: authViewModel.currentUser?.username ?? authViewModel.currentUser?.name ?? "",
                     userName: authViewModel.currentUser?.name ?? ""
                 )
                 
@@ -2910,7 +3280,7 @@ struct ContactHostSheet: View {
                     showingSuccess = true
                 }
             } catch {
-                print("Error requesting access: \(error)")
+                
             }
             isJoining = false
         }

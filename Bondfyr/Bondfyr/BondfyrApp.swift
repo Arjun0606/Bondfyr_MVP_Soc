@@ -37,12 +37,9 @@ struct BondfyrApp: App {
         settings.isPersistenceEnabled = true
         Firestore.firestore().settings = settings
         
-        // Temporarily disable AppCheck for development
-        // Comment this back in when you've registered your app in Firebase console
-        /*
+        // Enable AppCheck for production
         let providerFactory = DeviceCheckProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
-        */
         
         // Request notifications at startup
         NotificationManager.shared.requestAuthorization()
@@ -80,14 +77,12 @@ struct BondfyrApp: App {
             object: nil,
             queue: .main
         ) { notification in
-            print("Received NavigateToContestPhotoCapture notification")
             if let userInfo = notification.userInfo,
                let eventId = userInfo["eventId"] as? String,
                let eventName = userInfo["eventName"] as? String {
                 self.contestEventId = eventId
                 self.contestEventName = eventName
                 self.showContestPhotoCapture = true
-                print("Setting showContestPhotoCapture to true for event: \(eventName)")
             }
         }
     }
@@ -98,11 +93,8 @@ struct BondfyrApp: App {
             object: nil,
             queue: .main
         ) { notification in
-            print("Received NavigateToEvent notification in observer")
             if let userInfo = notification.userInfo,
                let eventId = userInfo["eventId"] as? String {
-                print("Should navigate to event details for event ID: \(eventId)")
-                
                 // Save the eventId to navigate to once the tab switches
                 self.pendingNavigationEventId = eventId
                 self.pendingNavigationAction = userInfo["action"] as? String
@@ -155,46 +147,29 @@ struct BondfyrApp: App {
                         .transition(.opacity)
                         .zIndex(100) // Ensure it's on top
                         .onDisappear {
-                            print("ContestPhotoCaptureView disappeared")
                             self.showContestPhotoCapture = false
                         }
                 }
             }
             .onAppear {
-                print("App body appeared")
                 // Trigger events to load when app appears
                 eventViewModel.fetchEvents()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToContestPhotoCapture"))) { notification in
-                print("Received NavigateToContestPhotoCapture notification in body")
                 if let userInfo = notification.userInfo,
                    let eventId = userInfo["eventId"] as? String {
-                    print("Setting contestEventId to: \(eventId)")
                     self.contestEventId = eventId
                     if let eventName = userInfo["eventName"] as? String {
                         self.contestEventName = eventName
                     }
                     DispatchQueue.main.async {
                         self.showContestPhotoCapture = true
-                        print("Set showContestPhotoCapture to true")
-                    }
-                } else {
-                    // If no event ID is provided, use a default one for testing
-                    print("No event ID found in notification, using a default")
-                    self.contestEventId = "default-event-id"
-                    self.contestEventName = "Default Event"
-                    DispatchQueue.main.async {
-                        self.showContestPhotoCapture = true
-                        print("Set showContestPhotoCapture to true with default values")
                     }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToEvent"))) { notification in
-                print("Received NavigateToEvent notification in body")
                 if let userInfo = notification.userInfo,
                    let eventId = userInfo["eventId"] as? String {
-                    print("Navigating to event details for event ID: \(eventId)")
-                    
                     // If we were showing the photo capture view, hide it
                     if self.showContestPhotoCapture {
                         self.showContestPhotoCapture = false
@@ -243,14 +218,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Configure Firebase Messaging
         Messaging.messaging().delegate = self
         
+        // Enable automatic Firebase Messaging init now that we have proper setup
+        Messaging.messaging().isAutoInitEnabled = true
+        
+        // Don't force FCM token generation yet - wait for APNS token first
+        
+        
         // Check notification authorization status
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            print("📱 Current notification settings: \(settings.authorizationStatus.rawValue)")
+            
             if settings.authorizationStatus == .notDetermined {
-                print("📱 Notification permission not determined, requesting...")
+                
                 NotificationManager.shared.requestAuthorization()
             } else if settings.authorizationStatus != .authorized {
-                print("📱 Notification permission not authorized, alerting user...")
+                
                 DispatchQueue.main.async {
                     // Show alert to instruct user to enable notifications in settings
                     let alertController = UIAlertController(
@@ -286,35 +267,43 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     // Handle device token registration
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        print("📱 Successfully registered for remote notifications with token")
-        // Pass the token to NotificationManager
+        // Set the APNS token in Firebase Messaging FIRST
+        Messaging.messaging().apnsToken = deviceToken
+        
+        // Now we can safely request the FCM token
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            Messaging.messaging().token { token, error in
+                if let token = token {
+                    UserDefaults.standard.set(token, forKey: "fcmToken")
+                    
+                    // Save to Firestore if user is signed in
+                    if let userId = Auth.auth().currentUser?.uid {
+                        self.saveFCMTokenToFirestore(token: token, userId: userId)
+                    }
+                }
+            }
+        }
+        
+        // Also pass to NotificationManager
         NotificationManager.shared.registerDeviceToken(deviceToken)
     }
     
     // Handle registration errors
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("📱 Failed to register for remote notifications: \(error.localizedDescription)")
+        // Silent handling for production
     }
     
     // MARK: - MessagingDelegate
     
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        print("📱 Firebase registration token: \(fcmToken ?? "nil")")
-        
-        // Store this token for sending FCM messages to this specific device
-        if let token = fcmToken, let userId = Auth.auth().currentUser?.uid {
-            let dataDict: [String: String] = ["token": token]
-            
-            // Save to Firestore
-            Firestore.firestore().collection("users").document(userId)
-                .collection("fcmTokens").document(token).setData([
-                    "token": token,
-                    "createdAt": Timestamp(),
-                    "deviceType": "iOS"
-                ])
-            
-            // You can also save to local storage if needed
+        // Always save the token locally when received
+        if let token = fcmToken {
             UserDefaults.standard.set(token, forKey: "fcmToken")
+            
+            // Try to save to Firestore if user is signed in
+            if let userId = Auth.auth().currentUser?.uid {
+                saveFCMTokenToFirestore(token: token, userId: userId)
+            }
             
             // Notify the app about this new token
             NotificationCenter.default.post(
@@ -325,24 +314,28 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         }
     }
     
+    private func saveFCMTokenToFirestore(token: String, userId: String) {
+        Firestore.firestore().collection("users").document(userId)
+            .collection("fcmTokens").document(token).setData([
+                "token": token,
+                "createdAt": Timestamp(),
+                "deviceType": "iOS"
+            ])
+    }
+    
     // Handle notification when app is in foreground
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        print("📱 Received notification in foreground")
         completionHandler([.banner, .sound, .badge])
     }
     
     // Handle notification taps
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        print("📱 User tapped notification: \(response.notification.request.identifier)")
-        
         // Process notification tap
         let userInfo = response.notification.request.content.userInfo
-        print("📱 Notification userInfo: \(userInfo)")
         
         // If it's a test notification or contest notification, handle it
         if response.notification.request.identifier.contains("testNotification") || 
            (userInfo["type"] as? String) == "contest_active" {
-            print("📱 Contest notification tapped, will open camera")
             
             // Extract event info from userInfo
             let eventId = userInfo["eventId"] as? String ?? "default-event-id"
@@ -372,8 +365,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     // Helper method to post the notification for contest photo capture
     private func postContestCaptureNotification(eventId: String, eventName: String) {
         DispatchQueue.main.async {
-            print("📱 Posting NavigateToContestPhotoCapture with eventId: \(eventId)")
-            
             // First, clear any existing state that might interfere
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                let rootVC = windowScene.windows.first?.rootViewController {
@@ -392,9 +383,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                     "timestamp": Date().timeIntervalSince1970  // Add timestamp to ensure uniqueness
                 ]
             )
-            
-            // Log to verify the notification was posted
-            print("📱 Posted NavigateToContestPhotoCapture notification with eventId: \(eventId)")
         }
     }
 }

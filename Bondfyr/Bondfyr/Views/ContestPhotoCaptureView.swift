@@ -134,7 +134,7 @@ struct ContestPhotoCaptureView: View {
                                 .padding()
                                 .onAppear {
                                     // Navigate back to event details instead of just dismissing
-                                    print("Photo upload complete, navigating to event details...")
+                                    // Photo upload complete, navigating to event details
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                                         self.navigateToEventDetail()
                                     }
@@ -158,7 +158,7 @@ struct ContestPhotoCaptureView: View {
             Text("Your retro photo has been submitted to the contest!")
             }
             .onAppear {
-                print("ContestPhotoCaptureView appeared, will open camera")
+                
                 
                 // Set up screenshot detection
                 setupScreenshotDetection()
@@ -224,7 +224,7 @@ struct ContestPhotoCaptureView: View {
         }
         
         // Log screenshot attempt for analytics
-        print("Screenshot taken during photo contest view")
+        
     }
     
     // Apply a heavy blur to make screenshot unusable
@@ -299,7 +299,7 @@ struct ContestPhotoCaptureView: View {
     }
     
     private func openCamera() {
-        print("Opening camera for contest photo capture")
+        
         
         // Use standard UIImagePickerController with built-in controls
         let picker = UIImagePickerController()
@@ -319,7 +319,7 @@ struct ContestPhotoCaptureView: View {
            let rootViewController = windowScene.windows.first?.rootViewController {
             rootViewController.present(picker, animated: true)
         } else {
-            print("ERROR: Could not find root view controller to present camera")
+            
         }
     }
     
@@ -474,7 +474,7 @@ struct ContestPhotoCaptureView: View {
         // Save to event_photos collection first
         db.collection("event_photos").document().setData(photoData) { error in
             if let error = error {
-                print("Error saving to event_photos: \(error.localizedDescription)")
+                
                 self.errorMessage = "Failed to save photo: \(error.localizedDescription)"
                 self.showErrorAlert = true
                 self.isUploading = false
@@ -486,7 +486,7 @@ struct ContestPhotoCaptureView: View {
                 "galleryImages": FieldValue.arrayUnion([imageUrl])
             ]) { error in
                 if let error = error {
-                    print("Error updating event gallery: \(error.localizedDescription)")
+                    
                 }
                 
                 // Finally save to photo_contests collection
@@ -494,7 +494,7 @@ struct ContestPhotoCaptureView: View {
                     self.isUploading = false
                     
                     if let error = error {
-                        print("Error saving to photo_contests: \(error.localizedDescription)")
+                        
                         return
                     }
                     
@@ -526,7 +526,7 @@ struct ContestPhotoCaptureView: View {
     }
     
     private func navigateToEventDetail() {
-        print("Navigating back to event detail for event ID: \(eventId)")
+        
         
         // First dismiss this view
         dismissView()

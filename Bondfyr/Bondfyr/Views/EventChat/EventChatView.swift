@@ -298,7 +298,7 @@ struct EventChatView: View {
     // Add reaction to message
     private func addReaction(emoji: String, to messageId: String) {
         // This would store the reaction in Firestore in production
-        print("Adding reaction \(emoji) to message \(messageId)")
+        
     }
     
     // Handle appear

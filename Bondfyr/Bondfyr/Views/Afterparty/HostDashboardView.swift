@@ -1,3 +1,10 @@
+//
+//  HostDashboardView.swift
+//  Bondfyr
+//
+//  Created by Arjun Varma on 24/03/25.
+//
+
 import SwiftUI
 import CoreLocation
 import FirebaseFirestore
@@ -5,30 +12,61 @@ import FirebaseFirestore
 struct HostDashboardView: View {
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @Environment(\.presentationMode) var presentationMode
     @State private var hostParties: [Afterparty] = []
     @State private var showingCreateSheet = false
     @State private var selectedParty: Afterparty? = nil
     @State private var showingPartyManagement = false
+    @State private var isLoading = false
+    @State private var error: String? = nil
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    HostStatsSection(parties: hostParties)
-                    QuickActionsSection(showingCreateSheet: $showingCreateSheet)
-                    PartiesListSection(
-                        parties: hostParties,
-                        onManageParty: { party in
-                            selectedParty = party
-                            showingPartyManagement = true
+                    if isLoading {
+                        ProgressView("Loading your parties...")
+                            .progressViewStyle(CircularProgressViewStyle(tint: .pink))
+                            .padding(.top, 50)
+                    } else if let error = error {
+                        ErrorView(message: error) {
+                            Task { await loadHostParties() }
                         }
-                    )
+                    } else {
+                        HostStatsSection(parties: hostParties)
+                        QuickActionsSection(showingCreateSheet: $showingCreateSheet, parties: hostParties)
+                        PartiesListSection(
+                            parties: hostParties,
+                            onManageParty: { party in
+                                selectedParty = party
+                                showingPartyManagement = true
+                            }
+                        )
+                    }
                 }
                 .padding()
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Host Dashboard")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.pink)
+                    }
+                }
+            }
+            .refreshable {
+                await loadHostParties()
+            }
         }
         .sheet(isPresented: $showingCreateSheet) {
             CreateAfterpartyView(currentLocation: nil, currentCity: "")
@@ -39,51 +77,64 @@ struct HostDashboardView: View {
             }
         }
         .task {
-            loadSampleData()
+            await loadHostParties()
         }
     }
     
-    private func loadSampleData() {
-        hostParties = createSampleHostParties()
+    private func loadHostParties() async {
+        guard let currentUserId = authViewModel.currentUser?.uid else {
+            error = "User not authenticated"
+            return
+        }
+        
+        isLoading = true
+        error = nil
+        
+        do {
+            // Load real parties for the current user
+            let parties = try await afterpartyManager.getHostParties(hostId: currentUserId)
+            await MainActor.run {
+                hostParties = parties
+                isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = "Failed to load parties: \(error.localizedDescription)"
+                isLoading = false
+            }
+        }
     }
+}
+
+// MARK: - Error View
+struct ErrorView: View {
+    let message: String
+    let onRetry: () -> Void
     
-    private func createSampleHostParties() -> [Afterparty] {
-        let now = Date()
-        let calendar = Calendar.current
-        
-        let party = Afterparty(
-            id: "host-party-1",
-            userId: authViewModel.currentUser?.uid ?? "demo-user",
-            hostHandle: "you",
-            coordinate: CLLocationCoordinate2D(latitude: 18.4955, longitude: 73.9040),
-            radius: 1000,
-            startTime: calendar.date(byAdding: .hour, value: 3, to: now) ?? now,
-            endTime: calendar.date(byAdding: .hour, value: 7, to: now) ?? now,
-            city: "Pune",
-            locationName: "Your Rooftop Party",
-            description: "Your awesome rooftop party with city views!",
-            address: "Your Address, Pune",
-            googleMapsLink: "https://maps.google.com",
-            vibeTag: "Rooftop, Music, Dancing",
-            activeUsers: Array(1...12).map { "guest-\($0)" },
-            pendingRequests: ["pending-1", "pending-2"],
-            createdAt: calendar.date(byAdding: .hour, value: -1, to: now) ?? now,
-            title: "🎉 My Epic Rooftop Bash",
-            ticketPrice: 35.0,
-            coverPhotoURL: nil,
-            maxGuestCount: 50,
-            visibility: .publicFeed,
-            approvalType: .manual,
-            ageRestriction: 21,
-            maxMaleRatio: 0.6,
-            legalDisclaimerAccepted: true,
-            guestRequests: [
-                GuestRequest(userId: "pending-1", userName: "Alex K", userHandle: "alex_k", requestedAt: now, paymentStatus: .pending),
-                GuestRequest(userId: "pending-2", userName: "Sarah M", userHandle: "sarah_m", requestedAt: calendar.date(byAdding: .minute, value: -10, to: now) ?? now, paymentStatus: .paid)
-            ]
-        )
-        
-        return [party]
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 50))
+                .foregroundColor(.orange)
+            
+            Text("Error")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+            
+            Button("Try Again", action: onRetry)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(Color.pink)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+        }
+        .padding()
     }
 }
 
@@ -175,6 +226,15 @@ struct StatItemView: View {
 // MARK: - Quick Actions Section
 struct QuickActionsSection: View {
     @Binding var showingCreateSheet: Bool
+    let parties: [Afterparty]
+    
+    private var hasActiveParty: Bool {
+        let now = Date()
+        return parties.contains { party in
+            let nineHoursFromCreation = Calendar.current.date(byAdding: .hour, value: 9, to: party.createdAt) ?? party.createdAt
+            return now < nineHoursFromCreation || now < party.endTime
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -187,18 +247,22 @@ struct QuickActionsSection: View {
                 HStack(spacing: 16) {
                     ActionCardView(
                         title: "Create Party",
-                        subtitle: "Start earning",
+                        subtitle: hasActiveParty ? "Active party exists" : "Start earning",
                         icon: "plus.circle.fill",
-                        color: .pink
+                        color: hasActiveParty ? .gray : .pink,
+                        isDisabled: hasActiveParty
                     ) {
-                        showingCreateSheet = true
+                        if !hasActiveParty {
+                            showingCreateSheet = true
+                        }
                     }
                     
                     ActionCardView(
                         title: "Earnings",
                         subtitle: "Track income",
                         icon: "chart.line.uptrend.xyaxis",
-                        color: .green
+                        color: .green,
+                        isDisabled: false
                     ) {
                         // TODO: Show earnings
                     }
@@ -207,7 +271,8 @@ struct QuickActionsSection: View {
                         title: "Tips",
                         subtitle: "Host better",
                         icon: "lightbulb.fill",
-                        color: .orange
+                        color: .orange,
+                        isDisabled: false
                     ) {
                         // TODO: Show tips
                     }
@@ -223,6 +288,7 @@ struct ActionCardView: View {
     let subtitle: String
     let icon: String
     let color: Color
+    let isDisabled: Bool
     let action: () -> Void
     
     var body: some View {
@@ -230,12 +296,12 @@ struct ActionCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(color)
+                    .foregroundColor(isDisabled ? .gray : color)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(isDisabled ? .gray : .white)
                     
                     Text(subtitle)
                         .font(.caption)
@@ -246,9 +312,10 @@ struct ActionCardView: View {
             }
             .padding()
             .frame(width: 120, height: 100)
-            .background(Color(.systemGray6).opacity(0.1))
+            .background(Color(.systemGray6).opacity(isDisabled ? 0.05 : 0.1))
             .cornerRadius(12)
         }
+        .disabled(isDisabled)
     }
 }
 
@@ -430,11 +497,24 @@ struct PartyManagementSheet: View {
         .alert("Cancel Party?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
-                // TODO: Delete party
-                presentationMode.wrappedValue.dismiss()
+                Task {
+                    await deleteParty()
+                }
             }
         } message: {
             Text("This will cancel your party and refund all guests.")
+        }
+    }
+    
+    private func deleteParty() async {
+        do {
+            let afterpartyManager = AfterpartyManager.shared
+            try await afterpartyManager.deleteAfterparty(party)
+            await MainActor.run {
+                presentationMode.wrappedValue.dismiss()
+            }
+        } catch {
+            
         }
     }
 }
@@ -495,7 +575,7 @@ struct PartyEarningsBreakdown: View {
             )
             
             EarningsRow(
-                title: "Bondfyr Fee (12%):",
+                title: "Bondfyr Fee (20%):",
                 amount: -Int(party.bondfyrRevenue),
                 color: .red
             )
@@ -541,14 +621,30 @@ struct ManagementActionsSection: View {
     @Binding var showingDeleteAlert: Bool
     
     private var pendingCount: Int {
-        party.guestRequests.filter { $0.paymentStatus == .pending }.count
+        party.guestRequests.filter { $0.approvalStatus == .pending }.count
+    }
+    
+    private var approvedCount: Int {
+        party.guestRequests.filter { $0.approvalStatus == .approved }.count
+    }
+    
+    private var guestListSubtitle: String {
+        if pendingCount > 0 && approvedCount > 0 {
+            return "\(approvedCount) approved, \(pendingCount) pending"
+        } else if pendingCount > 0 {
+            return "\(pendingCount) pending requests"
+        } else if approvedCount > 0 {
+            return "\(approvedCount) approved guests"
+        } else {
+            return "No requests yet"
+        }
     }
     
     var body: some View {
         VStack(spacing: 12) {
             ActionRowView(
-                title: "Guest List",
-                subtitle: "\(party.confirmedGuestsCount) confirmed, \(pendingCount) pending",
+                title: "Guest Management",
+                subtitle: guestListSubtitle,
                 icon: "person.2.fill"
             ) {
                 showingGuestList = true

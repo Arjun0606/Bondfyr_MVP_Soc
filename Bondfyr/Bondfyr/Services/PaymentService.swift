@@ -2,8 +2,6 @@ import Foundation
 import SwiftUI
 
 // MARK: - Payment Service for PayPal Integration
-// TESTFLIGHT VERSION: Payment processing disabled for validation
-// TODO: Restore payment processing after TestFlight validation
 
 @MainActor
 class PaymentService: ObservableObject {
@@ -13,16 +11,16 @@ class PaymentService: ObservableObject {
     @Published var paymentError: String?
     
     private init() {
-        print("🧪 TestFlight: PaymentService initialized but disabled")
+        // PaymentService initialized
     }
     
     // MARK: - Configuration Validation
     var isConfigured: Bool {
-        // Always return false for TestFlight version
+        // Payment processing disabled for validation
         return false
     }
     
-    // TESTFLIGHT: All payment methods disabled
+    // Payment methods disabled for validation
     /*
     
     // MARK: - PayPal Configuration
@@ -254,7 +252,7 @@ class PaymentService: ObservableObject {
             throw PaymentError.refundFailed
         }
         
-        print("✅ PayPal refund processed successfully for order: \(orderID)")
+        
     }
     
     /// Present PayPal checkout to user
@@ -288,7 +286,7 @@ class PaymentService: ObservableObject {
             throw PaymentError.captureFailure
         }
         
-        print("✅ PayPal payment captured successfully for order: \(orderId)")
+        
         return true
     }
     
@@ -298,7 +296,7 @@ class PaymentService: ObservableObject {
             // Capture the payment
             let success = try await capturePayPalPayment(orderId: paymentId)
             if success {
-                print("✅ Payment captured successfully")
+                
                 // Update UI or navigate user
                 await MainActor.run {
                     // Notify that payment was successful
@@ -306,7 +304,7 @@ class PaymentService: ObservableObject {
                 }
             }
         } catch {
-            print("❌ Failed to capture payment: \(error)")
+            
             await MainActor.run {
                 paymentError = error.localizedDescription
                 NotificationCenter.default.post(name: .paymentError, object: error)
@@ -330,7 +328,7 @@ class PaymentService: ObservableObject {
         case "CHECKOUT.ORDER.APPROVED":
             await handleOrderApproved(resource: resource)
         default:
-            print("Unhandled PayPal webhook event: \(eventType)")
+            
         }
     }
     
@@ -348,31 +346,31 @@ class PaymentService: ObservableObject {
         
         // Update payment status in Firestore
         // This would typically be done in a Firebase Cloud Function
-        print("✅ PayPal payment captured for user \(userId) in afterparty \(afterpartyId)")
+        
     }
     
     /// Handle order approved webhook
     private static func handleOrderApproved(resource: [String: Any]) async {
         // Handle order approval
-        print("✅ PayPal order approved: \(resource)")
+        
     }
     
     /// Handle refund webhook
     private static func handlePaymentRefunded(resource: [String: Any]) async {
         // Handle refund processing
-        print("✅ PayPal payment refunded: \(resource)")
+        
     }
     
 
     
-    /// Calculate platform fee (12%)
+    /// Calculate platform fee (20%)
     func calculateBondfyrFee(from totalAmount: Double) -> Double {
-        return totalAmount * 0.12
+        return totalAmount * 0.20
     }
     
-    /// Calculate host earnings (88%)
+    /// Calculate host earnings (80%)
     func calculateHostEarnings(from totalAmount: Double) -> Double {
-        return totalAmount * 0.88
+        return totalAmount * 0.80
     }
     */
 }
