@@ -3,13 +3,16 @@ import Combine
 
 struct PaymentProcessingView: View {
     let ticket: TicketModel
+    let ticketAmount: Int? // Amount in cents for Stripe payments
     let onSuccess: () -> Void
     
+    @StateObject private var paymentManager = PaymentManager.shared
     @State private var timer: Timer?
     @State private var isProcessing = true
     @State private var processingStep = 0
     @State private var isSuccess = false
     @State private var errorMessage: String? = nil
+    @State private var paymentMethod: PaymentMethod = .free
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
@@ -116,45 +119,92 @@ struct PaymentProcessingView: View {
         isProcessing = true
         processingStep = 0
         
-        // Simulate processing steps with a timer
+        // Start real payment processing
+        Task {
+            await processRealPayment()
+        }
+        
+        // Simulate processing steps with a timer for UI feedback
         timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { timer in
             processingStep += 1
             
             if processingStep >= processingSteps.count {
                 timer.invalidate()
-                
-                // Always succeed for now (in a real app you'd handle actual payment)
-                isProcessing = false
-                isSuccess = true
-                
-                if isSuccess {
-                    // Add ticket to storage
-                    TicketStorage.save(ticket)
-                }
+                // Real payment processing will handle the final state
             }
         }
     }
     
-    private let processingSteps = [
-        "Connecting to payment gateway...",
-        "Verifying payment details...",
-        "Processing your payment...",
-        "Finalizing transaction...",
-        "Generating your ticket..."
-    ]
+    private func processRealPayment() async {
+        do {
+            // Get current payment configuration
+            let config = try await paymentManager.fetchPaymentConfiguration()
+            
+            await MainActor.run {
+                self.paymentMethod = config.paymentMethod
+            }
+            
+            // Process payment based on current configuration
+            let ticketId = try await paymentManager.processPayment(for: ticket, amount: ticketAmount)
+            
+            // Payment successful
+            await MainActor.run {
+                self.isProcessing = false
+                self.isSuccess = true
+                self.timer?.invalidate()
+                
+                // Add ticket to storage
+                TicketStorage.save(self.ticket)
+            }
+            
+        } catch {
+            // Payment failed
+            await MainActor.run {
+                self.isProcessing = false
+                self.isSuccess = false
+                self.errorMessage = error.localizedDescription
+                self.timer?.invalidate()
+            }
+        }
+    }
+    
+    private var processingSteps: [String] {
+        switch paymentMethod {
+        case .free:
+            return [
+                "Verifying your details...",
+                "Checking event availability...",
+                "Generating your ticket...",
+                "Confirming reservation...",
+                "All set!"
+            ]
+        case .stripe:
+            return [
+                "Connecting to payment gateway...",
+                "Verifying payment details...",
+                "Processing your payment...",
+                "Finalizing transaction...",
+                "Generating your ticket..."
+            ]
+        }
+    }
 }
 
 struct PaymentProcessingView_Previews: PreviewProvider {
     static var previews: some View {
-        PaymentProcessingView(ticket: TicketModel(
-            event: "Sample Event",
-            tier: "VIP",
-            count: 2,
-            genders: ["Male", "Female"],
-            prCode: "",
-            timestamp: ISO8601DateFormatter().string(from: Date()),
-            ticketId: UUID().uuidString,
-            phoneNumber: "1234567890"
-        ), onSuccess: {})
+        PaymentProcessingView(
+            ticket: TicketModel(
+                event: "Sample Event",
+                tier: "VIP",
+                count: 2,
+                genders: ["Male", "Female"],
+                prCode: "",
+                timestamp: ISO8601DateFormatter().string(from: Date()),
+                ticketId: UUID().uuidString,
+                phoneNumber: "1234567890"
+            ),
+            ticketAmount: 2500, // $25.00 in cents
+            onSuccess: {}
+        )
     }
 } 

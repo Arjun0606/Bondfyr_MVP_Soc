@@ -54,6 +54,10 @@ struct EventDetailView: View {
     @State private var reminderAlertMessage = ""
     @State private var showSaveError = false
     @State private var errorMessage = ""
+    
+    // Payment processing state variables
+    @State private var showPaymentProcessing = false
+    @State private var currentTicket: TicketModel?
 
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var tabSelection: TabSelection
@@ -201,6 +205,15 @@ struct EventDetailView: View {
         .sheet(isPresented: $navigateToEventChat) {
             EventChatView(event: event)
         }
+        .sheet(isPresented: $showPaymentProcessing) {
+            if let ticket = currentTicket {
+                PaymentProcessingView(
+                    ticket: ticket,
+                    ticketAmount: calculateTicketAmount(tier: ticket.tier, count: ticket.count),
+                    onSuccess: onPaymentSuccess
+                )
+            }
+        }
         .confirmationDialog("Add to Calendar", isPresented: $showCalendarActionSheet) {
             Button("Add to Default Calendar") {
                 addEventToCalendar()
@@ -310,8 +323,21 @@ struct EventDetailView: View {
             phoneNumber: ""
         )
         
-        // Save ticket directly without payment processing
-        TicketStorage.save(ticket)
+        // Store ticket for payment processing
+        currentTicket = ticket
+        
+        // Show payment processing view
+        showPaymentProcessing = true
+        
+        Analytics.logEvent("ticket_purchase_initiated", parameters: [
+            "event_name": event.name,
+            "ticket_tier": selectedTier,
+            "ticket_count": ticketCount
+        ])
+    }
+    
+    func onPaymentSuccess() {
+        showPaymentProcessing = false
         showConfirmationPopup = true
         
         // Dismiss the current view after a delay
@@ -322,8 +348,6 @@ struct EventDetailView: View {
             // Dismiss current view and go to tickets tab
             self.presentationMode.wrappedValue.dismiss()
             self.tabSelection.selectedTab = .tickets
-            
-            // Removed: Photo contest camera opening after ticket purchase
         }
         
         Analytics.logEvent("ticket_purchased", parameters: [
@@ -341,6 +365,24 @@ struct EventDetailView: View {
         maleCount = 0
         femaleCount = 0
         nonBinaryCount = 0
+    }
+    
+    func calculateTicketAmount(tier: String, count: Int) -> Int {
+        // Calculate ticket price in cents
+        let pricePerTicket: Int
+        
+        switch tier {
+        case "Early Bird":
+            pricePerTicket = 1500 // $15.00
+        case "Standard":
+            pricePerTicket = 2000 // $20.00
+        case "VIP":
+            pricePerTicket = 3000 // $30.00
+        default:
+            pricePerTicket = 2000 // Default to standard price
+        }
+        
+        return pricePerTicket * count
     }
 
     private func openInstagram(for clubName: String) {

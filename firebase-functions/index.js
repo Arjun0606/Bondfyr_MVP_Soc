@@ -1,10 +1,152 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
+const stripe = require('stripe')(functions.config().stripe?.secret_key);
 
 admin.initializeApp();
 
 const GOOGLE_PLACES_API_KEY = functions.config().google.places_key; // Set this in Firebase env
+const USER_THRESHOLD = 5000; // Switch to Stripe after this many users
+
+// Track user count and determine payment method
+exports.getUserCount = functions.https.onCall(async (data, context) => {
+  try {
+    const usersSnapshot = await admin.firestore().collection('users').get();
+    const userCount = usersSnapshot.size;
+    
+    // Store current user count in a system collection for quick access
+    await admin.firestore().collection('system').doc('metrics').set({
+      totalUsers: userCount,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      paymentMethod: userCount >= USER_THRESHOLD ? 'stripe' : 'free'
+    }, { merge: true });
+    
+    return {
+      userCount,
+      paymentMethod: userCount >= USER_THRESHOLD ? 'stripe' : 'free',
+      threshold: USER_THRESHOLD
+    };
+  } catch (error) {
+    console.error('Error getting user count:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get user count');
+  }
+});
+
+// Process payment based on current user count
+exports.processPayment = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { ticketData, paymentMethod } = data;
+  
+  try {
+    // Get current payment method
+    const metricsDoc = await admin.firestore().collection('system').doc('metrics').get();
+    const currentPaymentMethod = metricsDoc.exists ? metricsDoc.data().paymentMethod : 'free';
+    
+    if (currentPaymentMethod === 'free') {
+      // Free payment - just create the ticket
+      const ticketRef = await admin.firestore().collection('tickets').add({
+        ...ticketData,
+        userId: context.auth.uid,
+        paymentMethod: 'free',
+        paymentStatus: 'completed',
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      return {
+        success: true,
+        ticketId: ticketRef.id,
+        paymentMethod: 'free'
+      };
+    } else {
+      // Stripe payment
+      if (!paymentMethod || !paymentMethod.stripePaymentIntentId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Stripe payment intent required');
+      }
+      
+      // Verify payment intent with Stripe
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentMethod.stripePaymentIntentId);
+      
+      if (paymentIntent.status !== 'succeeded') {
+        throw new functions.https.HttpsError('failed-precondition', 'Payment not completed');
+      }
+      
+      // Create ticket with Stripe payment info
+      const ticketRef = await admin.firestore().collection('tickets').add({
+        ...ticketData,
+        userId: context.auth.uid,
+        paymentMethod: 'stripe',
+        paymentStatus: 'completed',
+        stripePaymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      return {
+        success: true,
+        ticketId: ticketRef.id,
+        paymentMethod: 'stripe',
+        stripePaymentIntentId: paymentIntent.id
+      };
+    }
+  } catch (error) {
+    console.error('Payment processing error:', error);
+    throw new functions.https.HttpsError('internal', 'Payment processing failed');
+  }
+});
+
+// Create Stripe Payment Intent
+exports.createPaymentIntent = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { amount, currency = 'usd' } = data;
+  
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount, // Amount in cents
+      currency: currency,
+      metadata: {
+        userId: context.auth.uid
+      }
+    });
+    
+    return {
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    };
+  } catch (error) {
+    console.error('Stripe payment intent creation error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to create payment intent');
+  }
+});
+
+// Update user count when new user signs up
+exports.onUserCreated = functions.auth.user().onCreate(async (user) => {
+  try {
+    // Update user count in system metrics
+    await admin.firestore().collection('system').doc('metrics').update({
+      totalUsers: admin.firestore.FieldValue.increment(1),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Update payment method if we've crossed the threshold
+    const metricsDoc = await admin.firestore().collection('system').doc('metrics').get();
+    if (metricsDoc.exists) {
+      const currentCount = metricsDoc.data().totalUsers;
+      if (currentCount >= USER_THRESHOLD) {
+        await admin.firestore().collection('system').doc('metrics').update({
+          paymentMethod: 'stripe'
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error updating user count:', error);
+  }
+});
 
 exports.scrapeVenuesForCity = functions.https.onCall(async (data, context) => {
   const city = data.city;
