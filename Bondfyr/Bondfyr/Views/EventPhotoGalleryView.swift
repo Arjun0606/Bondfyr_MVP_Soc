@@ -218,7 +218,7 @@ struct EventPhotoGalleryView: View {
             uploadWindowTimer = nil
         }
         .sheet(isPresented: $showingCamera) {
-            ImagePicker(image: $inputImage)
+            LegacyImagePicker(image: $inputImage)
                 .ignoresSafeArea()
                 .onDisappear {
                     if inputImage != nil {

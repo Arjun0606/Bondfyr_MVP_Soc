@@ -10,6 +10,23 @@ struct ChatMessage: Identifiable, Codable {
     let partyId: String
     let isSystemMessage: Bool
     
+    // Enhanced features
+    let messageType: MessageType
+    let imageURL: String?
+    let imageAspectRatio: Double?
+    let replyToMessageId: String?
+    let replyToText: String?
+    let replyToUserHandle: String?
+    var reactions: [String: [String]] // emoji -> [userIds]
+    let isEdited: Bool
+    let editedAt: Date?
+    
+    enum MessageType: String, Codable {
+        case text
+        case image
+        case system
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id
         case text
@@ -18,6 +35,15 @@ struct ChatMessage: Identifiable, Codable {
         case timestamp
         case partyId
         case isSystemMessage
+        case messageType
+        case imageURL
+        case imageAspectRatio
+        case replyToMessageId
+        case replyToText
+        case replyToUserHandle
+        case reactions
+        case isEdited
+        case editedAt
     }
     
     init(id: String = UUID().uuidString,
@@ -26,7 +52,16 @@ struct ChatMessage: Identifiable, Codable {
          userId: String,
          timestamp: Date = Date(),
          partyId: String,
-         isSystemMessage: Bool = false) {
+         isSystemMessage: Bool = false,
+         messageType: MessageType = .text,
+         imageURL: String? = nil,
+         imageAspectRatio: Double? = nil,
+         replyToMessageId: String? = nil,
+         replyToText: String? = nil,
+         replyToUserHandle: String? = nil,
+         reactions: [String: [String]] = [:],
+         isEdited: Bool = false,
+         editedAt: Date? = nil) {
         self.id = id
         self.text = text
         self.userHandle = userHandle
@@ -34,6 +69,15 @@ struct ChatMessage: Identifiable, Codable {
         self.timestamp = timestamp
         self.partyId = partyId
         self.isSystemMessage = isSystemMessage
+        self.messageType = messageType
+        self.imageURL = imageURL
+        self.imageAspectRatio = imageAspectRatio
+        self.replyToMessageId = replyToMessageId
+        self.replyToText = replyToText
+        self.replyToUserHandle = replyToUserHandle
+        self.reactions = reactions
+        self.isEdited = isEdited
+        self.editedAt = editedAt
     }
     
     init?(document: QueryDocumentSnapshot) {
@@ -53,5 +97,17 @@ struct ChatMessage: Identifiable, Codable {
         self.timestamp = (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
         self.partyId = partyId
         self.isSystemMessage = (data["isSystemMessage"] as? Bool) ?? false
+        
+        // Enhanced features
+        let messageTypeString = data["messageType"] as? String ?? "text"
+        self.messageType = MessageType(rawValue: messageTypeString) ?? .text
+        self.imageURL = data["imageURL"] as? String
+        self.imageAspectRatio = data["imageAspectRatio"] as? Double
+        self.replyToMessageId = data["replyToMessageId"] as? String
+        self.replyToText = data["replyToText"] as? String
+        self.replyToUserHandle = data["replyToUserHandle"] as? String
+        self.reactions = data["reactions"] as? [String: [String]] ?? [:]
+        self.isEdited = data["isEdited"] as? Bool ?? false
+        self.editedAt = (data["editedAt"] as? Timestamp)?.dateValue()
     }
 } 

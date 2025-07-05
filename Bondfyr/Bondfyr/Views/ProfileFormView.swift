@@ -56,333 +56,396 @@ struct ProfileFormView: View {
     private var isEditingMode: Bool {
         authViewModel.currentUser != nil && authViewModel.isProfileComplete
     }
+    
+    // Profile image view to avoid complex expression compilation
+    private var profileImageView: some View {
+        ZStack {
+            if let image = profileImage {
+                profileImageContent(image: image)
+            } else if !profileImageURL.isEmpty {
+                asyncImageContent
+            } else {
+                defaultImageContent
+            }
+            
+            // Upload indicator
+            if isUploadingImage {
+                uploadIndicator
+            }
+        }
+    }
+    
+    private func profileImageContent(image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 100, height: 100)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+    }
+    
+    private var asyncImageContent: some View {
+        AsyncImage(url: URL(string: profileImageURL)) { image in
+            image
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } placeholder: {
+            Circle()
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                )
+        }
+        .frame(width: 100, height: 100)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.pink, lineWidth: 2))
+    }
+    
+    private var defaultImageContent: some View {
+        Circle()
+            .fill(Color.white.opacity(0.1))
+            .frame(width: 100, height: 100)
+            .overlay(
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 30))
+                    .foregroundColor(.gray)
+            )
+    }
+    
+    private var uploadIndicator: some View {
+        Circle()
+            .fill(Color.black.opacity(0.6))
+            .frame(width: 100, height: 100)
+            .overlay(
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+            )
+    }
+    
+    // MARK: - View Sections
+    
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(isEditingMode ? "Edit Profile" : "Complete Your Profile")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+            
+            Text(isEditingMode ? "Update your Bondfyr profile" : "Create your unique Bondfyr profile")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .safeTopPadding(16)
+    }
+    
+    @ViewBuilder
+    private var googleInfoSection: some View {
+        if !isEditingMode {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Account Information")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                if let user = Auth.auth().currentUser {
+                    InfoRow(title: "Email", value: user.email ?? "Not provided")
+                    InfoRow(title: "Name", value: user.displayName ?? "Not provided")
+                }
+            }
+        }
+    }
+    
+    private var profilePictureSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Profile Picture")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            Button(action: { showImagePicker = true }) {
+                profileImageView
+            }
+            .disabled(isUploadingImage)
+        }
+    }
+    
+    private var usernameSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Choose Username *")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            TextField("Enter your username", text: $username)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .textInputAutocapitalization(.never)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(username.isEmpty ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+                )
+            
+            if username.isEmpty {
+                Text("Username is required")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+    
+    private var genderSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Gender *")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                if isEditingMode {
+                    Spacer()
+                    Text("Cannot be changed after creation")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            genderButtons
+            customGenderField
+            genderErrors
+        }
+    }
+    
+    private var genderButtons: some View {
+        HStack(spacing: 16) {
+            ForEach(["male", "female", "custom"], id: \.self) { gender in
+                Button(action: { 
+                    if !isEditingMode {
+                        selectedGender = gender
+                        if gender != "custom" {
+                            customGender = ""
+                        }
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: selectedGender == gender ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(selectedGender == gender ? .pink : .gray)
+                        Text(gender.capitalized)
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(selectedGender == gender ? Color.pink.opacity(0.2) : Color.white.opacity(0.1))
+                    .cornerRadius(12)
+                    .opacity(isEditingMode ? 0.6 : 1.0)
+                }
+                .disabled(isEditingMode)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var customGenderField: some View {
+        if selectedGender == "custom" {
+            TextField("Enter your gender", text: $customGender)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+                .autocapitalization(.words)
+                .disabled(isEditingMode)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(selectedGender == "custom" && customGender.isEmpty ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+                )
+        }
+    }
+    
+    @ViewBuilder
+    private var genderErrors: some View {
+        if selectedGender.isEmpty {
+            Text("Gender is required for party gender ratio calculations")
+                .font(.caption)
+                .foregroundColor(.red)
+        } else if selectedGender == "custom" && customGender.isEmpty {
+            Text("Please specify your gender")
+                .font(.caption)
+                .foregroundColor(.red)
+        }
+    }
+    
+    private var bioSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Bio (Optional)")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            TextEditor(text: $bio)
+                .frame(height: 80)
+                .padding(8)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+                .scrollContentBackground(.hidden)
+            
+            Text("Tell people a bit about yourself")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+    }
+    
+    private var dobSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Date of Birth")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                if isEditingMode {
+                    Spacer()
+                    Text("Cannot be changed after creation")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            DatePicker("Date of Birth", selection: $dob, displayedComponents: .date)
+                .datePickerStyle(WheelDatePickerStyle())
+                .colorScheme(.dark)
+                .disabled(isEditingMode)
+                .opacity(isEditingMode ? 0.6 : 1.0)
+        }
+    }
+    
+    private var locationSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Location")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            HStack {
+                Image(systemName: "location.fill")
+                    .foregroundColor(.pink)
+                Text(locationManager.currentCity ?? "Detecting location...")
+                    .foregroundColor(.white)
+                Spacer()
+                if locationManager.currentCity == nil {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .pink))
+                        .scaleEffect(0.8)
+                }
+            }
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(12)
+            
+            Text("Location is auto-detected for party discovery")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+    }
+    
+    private var socialMediaSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Connect Social Media (Optional)")
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            Text("Connect to verify your identity and build trust")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            instagramButton
+            snapchatButton
+        }
+    }
+    
+    private var instagramButton: some View {
+        Button(action: { showInstagramSheet = true }) {
+            HStack {
+                Image(systemName: "camera.fill")
+                    .foregroundColor(.pink)
+                VStack(alignment: .leading) {
+                    Text(instagramConnected ? "Instagram Connected ✓" : "Connect Instagram")
+                        .foregroundColor(.white)
+                    if instagramConnected && !instagramHandle.isEmpty {
+                        Text("@\(instagramHandle)")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+                Spacer()
+                Image(systemName: instagramConnected ? "checkmark.circle.fill" : "chevron.right")
+                    .foregroundColor(instagramConnected ? .green : .gray)
+            }
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var snapchatButton: some View {
+        Button(action: { snapchatConnected.toggle() }) {
+            HStack {
+                Image(systemName: "camera.viewfinder")
+                    .foregroundColor(.yellow)
+                Text(snapchatConnected ? "Snapchat Connected ✓" : "Connect Snapchat")
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: snapchatConnected ? "checkmark.circle.fill" : "chevron.right")
+                    .foregroundColor(snapchatConnected ? .green : .gray)
+            }
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var saveButtonSection: some View {
+        Button(action: saveProfile) {
+            HStack {
+                if isSaving {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Text(isEditingMode ? "Save Changes" : "Complete Profile")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+        }
+        .disabled(!canContinue || isSaving || isUploadingImage)
+        .background(canContinue ? Color.pink : Color.gray.opacity(0.3))
+        .cornerRadius(12)
+        .padding(.bottom, 30)
+    }
+    
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [Color.black, Color(hex: "1A1A1A")]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
-                // Header
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(isEditingMode ? "Edit Profile" : "Complete Your Profile")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
-                    
-                    Text(isEditingMode ? "Update your Bondfyr profile" : "Create your unique Bondfyr profile")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                }
-                .safeTopPadding(16)
-
-                // Google Info (Pre-filled)
-                if !isEditingMode {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Account Information")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        if let user = Auth.auth().currentUser {
-                            InfoRow(title: "Email", value: user.email ?? "Not provided")
-                            InfoRow(title: "Name", value: user.displayName ?? "Not provided")
-                        }
-                    }
-                }
-
-                // Profile Picture
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Profile Picture")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                Button(action: { showImagePicker = true }) {
-                        ZStack {
-                    if let image = profileImage {
-                        Image(uiImage: image)
-                            .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(Color.pink, lineWidth: 2))
-                            } else if !profileImageURL.isEmpty {
-                                AsyncImage(url: URL(string: profileImageURL)) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.1))
-                                        .overlay(
-                                            ProgressView()
-                                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        )
-                                }
-                                .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.pink, lineWidth: 2))
-                    } else {
-                                Circle()
-                                    .fill(Color.white.opacity(0.1))
-                                    .frame(width: 100, height: 100)
-                                    .overlay(
-                            Image(systemName: "camera.fill")
-                                            .font(.system(size: 30))
-                                            .foregroundColor(.gray)
-                                    )
-                            }
-                            
-                            // Upload indicator
-                            if isUploadingImage {
-                                Circle()
-                                    .fill(Color.black.opacity(0.6))
-                                    .frame(width: 100, height: 100)
-                                    .overlay(
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    )
-                            }
-                        }
-                    }
-                    .disabled(isUploadingImage)
-                }
-
-                // Username Input
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Choose Username *")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    TextField("Enter your username", text: $username)
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                        .cornerRadius(12)
-                    .foregroundColor(.white)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                        .textInputAutocapitalization(.never)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(username.isEmpty ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
-                        )
-                    
-                    if username.isEmpty {
-                        Text("Username is required")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
-
-                // Gender Selection
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Gender *")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        if isEditingMode {
-                            Spacer()
-                            Text("Cannot be changed after creation")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    
-                    HStack(spacing: 16) {
-                        ForEach(["male", "female", "custom"], id: \.self) { gender in
-                            Button(action: { 
-                                if !isEditingMode {
-                                    selectedGender = gender
-                                    if gender != "custom" {
-                                        customGender = ""
-                                    }
-                                }
-                            }) {
-                                HStack {
-                                    Image(systemName: selectedGender == gender ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedGender == gender ? .pink : .gray)
-                                    Text(gender.capitalized)
-                                        .foregroundColor(.white)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(selectedGender == gender ? Color.pink.opacity(0.2) : Color.white.opacity(0.1))
-                                .cornerRadius(12)
-                                .opacity(isEditingMode ? 0.6 : 1.0)
-                            }
-                            .disabled(isEditingMode)
-                        }
-                    }
-                    
-                    // Custom gender text field (only shows when custom is selected)
-                    if selectedGender == "custom" {
-                        TextField("Enter your gender", text: $customGender)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(12)
-                            .foregroundColor(.white)
-                            .autocapitalization(.words)
-                            .disabled(isEditingMode)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(selectedGender == "custom" && customGender.isEmpty ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
-                            )
-                    }
-                    
-                    if selectedGender.isEmpty {
-                        Text("Gender is required for party gender ratio calculations")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    } else if selectedGender == "custom" && customGender.isEmpty {
-                        Text("Please specify your gender")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
-
-                // Bio Input
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Bio (Optional)")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    TextEditor(text: $bio)
-                        .frame(height: 80)
-                        .padding(8)
-                    .background(Color.white.opacity(0.1))
-                        .cornerRadius(12)
-                    .foregroundColor(.white)
-                        .scrollContentBackground(.hidden)
-                    
-                    Text("Tell people a bit about yourself")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-
-                // Date of Birth
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Date of Birth")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        if isEditingMode {
-                            Spacer()
-                            Text("Cannot be changed after creation")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    
-                    DatePicker("Date of Birth", selection: $dob, displayedComponents: .date)
-                        .datePickerStyle(WheelDatePickerStyle())
-                        .colorScheme(.dark)
-                        .disabled(isEditingMode)
-                        .opacity(isEditingMode ? 0.6 : 1.0)
-                }
-
-                // Auto-detected City
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Location")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    HStack {
-                        Image(systemName: "location.fill")
-                            .foregroundColor(.pink)
-                        Text(locationManager.currentCity ?? "Detecting location...")
-                            .foregroundColor(.white)
-                        Spacer()
-                        if locationManager.currentCity == nil {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .pink))
-                                .scaleEffect(0.8)
-                        }
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(12)
-                    
-                    Text("Location is auto-detected for party discovery")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-
-                // Social Media (Optional)
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Connect Social Media (Optional)")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    Text("Connect to verify your identity and build trust")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                    
-                    // Instagram Connection
-                    Button(action: { showInstagramSheet = true }) {
-                        HStack {
-                            Image(systemName: "camera.fill")
-                                .foregroundColor(.pink)
-                            VStack(alignment: .leading) {
-                                Text(instagramConnected ? "Instagram Connected ✓" : "Connect Instagram")
-                                    .foregroundColor(.white)
-                                if instagramConnected && !instagramHandle.isEmpty {
-                                    Text("@\(instagramHandle)")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                Spacer()
-                            Image(systemName: instagramConnected ? "checkmark.circle.fill" : "chevron.right")
-                                .foregroundColor(instagramConnected ? .green : .gray)
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(12)
-                    }
-                    
-                    // Snapchat Connection
-                    Button(action: { snapchatConnected.toggle() }) {
-                        HStack {
-                            Image(systemName: "camera.viewfinder")
-                                .foregroundColor(.yellow)
-                            Text(snapchatConnected ? "Snapchat Connected ✓" : "Connect Snapchat")
-                                .foregroundColor(.white)
-                            Spacer()
-                            Image(systemName: snapchatConnected ? "checkmark.circle.fill" : "chevron.right")
-                                .foregroundColor(snapchatConnected ? .green : .gray)
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(12)
-                    }
-                }
-
-                // Save/Continue Button
-                Button(action: saveProfile) {
-                    HStack {
-                    if isSaving {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                            Text(isEditingMode ? "Save Changes" : "Complete Profile")
-                            .font(.system(size: 16, weight: .semibold))
-                        }
-                    }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                    }
-                .disabled(!canContinue || isSaving || isUploadingImage)
-                .background(canContinue ? Color.pink : Color.gray.opacity(0.3))
-                .cornerRadius(12)
-                .padding(.bottom, 30)
+                headerSection
+                googleInfoSection
+                profilePictureSection
+                usernameSection
+                genderSection
+                bioSection
+                dobSection
+                locationSection
+                socialMediaSection
+                saveButtonSection
             }
             .padding(.horizontal)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.black, Color(hex: "1A1A1A")]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
+            .background(backgroundGradient)
         }
             .alert("Error", isPresented: $showError) {
                 Button("OK", role: .cancel) { }
@@ -397,7 +460,7 @@ struct ProfileFormView: View {
             Text("Your profile has been updated successfully.")
             }
         .sheet(isPresented: $showImagePicker) {
-            ImagePicker(image: $profileImage, sourceType: .photoLibrary)
+            LegacyImagePicker(image: $profileImage, sourceType: .photoLibrary)
         }
         .sheet(isPresented: $showInstagramSheet) {
             InstagramOAuthView(

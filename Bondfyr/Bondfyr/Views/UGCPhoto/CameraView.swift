@@ -86,7 +86,7 @@ struct CameraView: View {
             }
         }
         .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(image: $capturedImage, sourceType: .camera)
+            LegacyImagePicker(image: $capturedImage, sourceType: .camera)
         }
     }
     

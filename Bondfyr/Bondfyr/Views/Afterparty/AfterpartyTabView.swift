@@ -525,7 +525,7 @@ struct ActionButtonsView: View {
             }
             
             // PARTY LIVE CHAT BUTTON - Your sister's viral feature! 🔥
-            NavigationLink(destination: PartyChatView(party: afterparty)) {
+            NavigationLink(destination: PartyChatView(afterparty: afterparty)) {
                 VStack(spacing: 2) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .font(.system(size: 14))
@@ -1496,7 +1496,7 @@ struct EditAfterpartyView: View {
             Form {
                 Section(header: Text("Location Details")) {
                     TextField("Address", text: $address)
-                    TextField("Google Maps Link", text: $googleMapsLink)
+                    TextField("Paste (Apple/Google) Maps Link", text: $googleMapsLink)
                         .autocapitalization(.none)
                         .autocorrectionDisabled()
                         .textFieldStyle(PlainTextFieldStyle())
@@ -1744,7 +1744,9 @@ struct CreateAfterpartyView: View {
                 Text(errorMessage)
             }
             .sheet(isPresented: $showImagePicker) {
-                ImagePicker(image: $coverPhotoImage, sourceType: .photoLibrary)
+                ImagePicker(source: .photoLibrary) { image in
+                    coverPhotoImage = image
+                }
                     .onDisappear {
                         if let image = coverPhotoImage {
                             // Upload the actual image to Firebase Storage
@@ -2762,29 +2764,18 @@ struct LocationDescriptionSection: View {
                     .cornerRadius(12)
                     .foregroundColor(.white)
                 
-                Text("Google Maps Link")
+                Text("Paste (Apple/Google) Maps Link")
                     .font(.body)
                     .foregroundColor(.white)
                 
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .frame(height: 50)
-                    
-                    if googleMapsLink.isEmpty {
-                        Text("Paste Google Maps link")
-                            .foregroundColor(.gray)
-                            .padding(.leading, 16)
-                    }
-                    
-                    TextField("", text: $googleMapsLink)
-                        .padding(.horizontal, 16)
-                        .foregroundColor(.white)
-                        .autocapitalization(.none)
-                        .autocorrectionDisabled()
-                        .textFieldStyle(PlainTextFieldStyle())
-                }
+                TextEditor(text: $googleMapsLink)
+                    .frame(height: 50)
+                    .padding(4)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
+                    .scrollContentBackground(.hidden)
+                    .multilineTextAlignment(.leading)
             }
             
             // Description
