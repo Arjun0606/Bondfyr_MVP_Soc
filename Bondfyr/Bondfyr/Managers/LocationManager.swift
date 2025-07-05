@@ -22,7 +22,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         case .authorizedWhenInUse, .authorizedAlways:
             locationManager.startUpdatingLocation()
         case .denied, .restricted:
-            
+            break // Location access denied
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
         @unknown default:
@@ -45,7 +45,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                       let placemark = placemarks?.first,
                       let city = placemark.locality else {
                     if let error = error {
-                        
+                        print("Geocoding error: \(error)")
                     }
                     return
                 }
@@ -60,6 +60,6 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        
+        print("Location manager failed with error: \(error)")
     }
 } 

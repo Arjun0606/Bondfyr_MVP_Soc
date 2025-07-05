@@ -443,7 +443,7 @@ struct EasterEggText: View {
                 }
             }
         }) {
-            Text(showSecretText ? "🐯TG🍻RK☀️" : "Made on Earth c-137 👽")
+            Text(showSecretText ? "AA😋" : "Made on Earth c-137 👽")
                 .font(.caption2)
                 .foregroundColor(.gray)
         }

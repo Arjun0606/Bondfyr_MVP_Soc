@@ -115,6 +115,10 @@ struct Afterparty: Identifiable, Codable {
     // MARK: - TESTFLIGHT: Payment details
     let venmoHandle: String? // Host's Venmo handle for direct payments
     
+    // MARK: - Party Chat fields
+    let chatEnded: Bool?
+    let chatEndedAt: Date?
+    
     // MARK: - Computed properties
     var isExpired: Bool {
         return Date() > endTime
@@ -218,6 +222,9 @@ struct Afterparty: Identifiable, Codable {
         
         // TESTFLIGHT: Payment details
         case venmoHandle
+        
+        // Party Chat fields
+        case chatEnded, chatEndedAt
     }
     
     // MARK: - Initializer
@@ -253,7 +260,11 @@ struct Afterparty: Identifiable, Codable {
          bondfyrFee: Double = 0.20,
          
          // TESTFLIGHT: Payment details
-         venmoHandle: String? = nil) {
+         venmoHandle: String? = nil,
+         
+         // Party Chat fields
+         chatEnded: Bool? = nil,
+         chatEndedAt: Date? = nil) {
         
         self.id = id
         self.userId = userId
@@ -288,6 +299,10 @@ struct Afterparty: Identifiable, Codable {
         
         // TESTFLIGHT: Payment details
         self.venmoHandle = venmoHandle
+        
+        // Party Chat fields
+        self.chatEnded = chatEnded
+        self.chatEndedAt = chatEndedAt
     }
     
     // Helper to convert GeoPoint to CLLocationCoordinate2D
@@ -343,6 +358,14 @@ struct Afterparty: Identifiable, Codable {
         
         // TESTFLIGHT: Payment details
         venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)
+        
+        // Party Chat fields
+        chatEnded = try? container.decode(Bool.self, forKey: .chatEnded)
+        if let chatEndTimestamp = try? container.decode(Timestamp.self, forKey: .chatEndedAt) {
+            chatEndedAt = chatEndTimestamp.dateValue()
+        } else {
+            chatEndedAt = try? container.decode(Date.self, forKey: .chatEndedAt)
+        }
         
         // Handle Timestamps
         if let startTimestamp = try? container.decode(Timestamp.self, forKey: .startTime) {
@@ -412,5 +435,13 @@ struct Afterparty: Identifiable, Codable {
         
         // TESTFLIGHT: Payment details
         try container.encode(venmoHandle, forKey: .venmoHandle)
+        
+        // Party Chat fields
+        try container.encode(chatEnded, forKey: .chatEnded)
+        if let chatEndedAt = chatEndedAt {
+            try container.encode(Timestamp(date: chatEndedAt), forKey: .chatEndedAt)
+        } else {
+            try container.encodeNil(forKey: .chatEndedAt)
+        }
     }
 } 

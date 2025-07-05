@@ -35,7 +35,6 @@ struct EventDetailView: View {
     @State private var navigateToGallery = false
     @State private var navigateToCheckIn = false
     @State private var showAttendeesView = false
-    @State private var navigateToEventChat = false
     
     // New state variables for calendar and offline features
     @State private var showCalendarActionSheet = false
@@ -198,9 +197,7 @@ struct EventDetailView: View {
         .sheet(isPresented: $showAttendeesView) {
             EventAttendeesView(event: event)
         }
-        .sheet(isPresented: $navigateToEventChat) {
-            EventChatView(event: event)
-        }
+
         .confirmationDialog("Add to Calendar", isPresented: $showCalendarActionSheet) {
             Button("Add to Default Calendar") {
                 addEventToCalendar()
@@ -244,17 +241,7 @@ struct EventDetailView: View {
     // MARK: - Debug Section
     private var debugButtonsSection: some View {
         VStack(spacing: 10) {
-            Button(action: {
-                ChatManager.shared.enableTestMode()
-                navigateToEventChat = true
-            }) {
-                Text("Test Event Chat")
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.purple)
-                    .cornerRadius(12)
-            }
+            // Debug buttons removed - party chat only now
         }
         .padding(.top, 10)
     }
@@ -387,48 +374,7 @@ struct EventDetailView: View {
         }
     }
     
-    private var eventChatButton: some View {
-        Button(action: {
-            navigateToEventChat = true
-        }) {
-            HStack {
-                Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .foregroundColor(.white)
-                Text("Event Chat")
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(isEventChatAvailable ? Color.pink : Color.gray.opacity(0.5))
-            .cornerRadius(8)
-        }
-        .disabled(!isEventChatAvailable)
-        .overlay(
-            Group {
-                if !isEventChatAvailable {
-                    HStack {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 10))
-                        Text("Scan QR at venue to unlock")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(4)
-                    .background(Color.black.opacity(0.6))
-                    .cornerRadius(4)
-                    .offset(y: 25)
-                }
-            }
-        )
-    }
-    
-    // Check if event chat is available based on check-in status
-    private var isEventChatAvailable: Bool {
-        let eventId = event.id.uuidString
-        return CheckInManager.shared.hasCheckedInToEvent(eventId: eventId)
 
-    }
 
     // MARK: - Calendar Integration
     
@@ -597,12 +543,6 @@ struct EventDetailView: View {
             photoGalleryButton
             liveAttendanceButton
             instagramButton
-            
-            // Event Chat button placed in a HStack to allow left alignment
-            HStack {
-                eventChatButton
-                Spacer()
-            }
         }
     }
     

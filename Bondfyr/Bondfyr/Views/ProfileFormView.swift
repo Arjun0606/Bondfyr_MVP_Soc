@@ -70,7 +70,7 @@ struct ProfileFormView: View {
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
-                .padding(.top, 40)
+                .safeTopPadding(16)
 
                 // Google Info (Pre-filled)
                 if !isEditingMode {

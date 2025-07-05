@@ -44,8 +44,8 @@ struct BondfyrApp: App {
         // Request notifications at startup
         NotificationManager.shared.requestAuthorization()
         
-        // Initialize the chat manager
-        _ = ChatManager.shared
+        // Initialize the party chat manager
+        _ = PartyChatManager.shared
         
         // Initialize new managers
         _ = OfflineDataManager.shared

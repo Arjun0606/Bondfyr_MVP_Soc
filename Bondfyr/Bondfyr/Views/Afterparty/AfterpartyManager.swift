@@ -145,6 +145,11 @@ class AfterpartyManager: NSObject, ObservableObject {
         let data = try Firestore.Encoder().encode(afterparty)
         try await db.collection("afterparties").document(afterparty.id).setData(data)
         
+        // Start the party chat when party is created
+        await MainActor.run {
+            PartyChatManager.shared.startPartyChat(for: afterparty)
+        }
+        
         // Fetch afterparties again to update the UI
         await fetchNearbyAfterparties()
     }
@@ -573,6 +578,11 @@ class AfterpartyManager: NSObject, ObservableObject {
     func deleteAfterparty(_ afterparty: Afterparty) async throws {
         guard let userId = Auth.auth().currentUser?.uid,
               afterparty.userId == userId else { return }
+        
+        // End the party chat first
+        await MainActor.run {
+            PartyChatManager.shared.endPartyChatForDeletedParty()
+        }
         
         // Delete the afterparty
         try await db.collection("afterparties").document(afterparty.id).delete()

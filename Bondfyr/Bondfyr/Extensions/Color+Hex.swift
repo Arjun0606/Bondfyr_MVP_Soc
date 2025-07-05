@@ -25,4 +25,33 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
+}
+
+// MARK: - Safe Area Extensions for Dynamic Island Support
+extension View {
+    /// Adds top padding that works for all devices including Dynamic Island
+    func safeTopPadding(_ amount: CGFloat = 8) -> some View {
+        self.padding(.top, amount)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: 0)
+            }
+    }
+    
+    /// Background that properly handles safe areas
+    func universalBackground(_ color: Color = .black) -> some View {
+        self.background(
+            ZStack {
+                color.ignoresSafeArea(.all, edges: .bottom)
+                color.ignoresSafeArea(.all, edges: .horizontal)
+                // Don't ignore top safe area to respect Dynamic Island
+            }
+        )
+    }
+    
+    /// Navigation-safe background for top-level views
+    func navigationSafeBackground(_ color: Color = .black) -> some View {
+        self.background(
+            color.ignoresSafeArea(.container, edges: .bottom)
+        )
+    }
 } 

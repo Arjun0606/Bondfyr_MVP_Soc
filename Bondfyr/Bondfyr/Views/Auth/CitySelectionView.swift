@@ -18,13 +18,13 @@ struct CitySelectionView: View {
                 gradient: Gradient(colors: [Color.black, Color(hex: "1A1A1A")]),
                 startPoint: .top,
                 endPoint: .bottom
-            ).ignoresSafeArea()
+            ).ignoresSafeArea(.container, edges: .bottom)
             
             VStack(spacing: 32) {
                 Text("Choose Your City")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.top, 60)
+                    .safeTopPadding(20)
                 
                 // Search bar
                 HStack {
@@ -93,7 +93,7 @@ struct CitySelectionView: View {
         .onAppear {
             isFocused = true
         }
-        .ignoresSafeArea()
+
     }
     
     private func fetchSuggestions(for query: String) {

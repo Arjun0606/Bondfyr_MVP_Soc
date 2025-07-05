@@ -182,12 +182,13 @@ struct AfterpartyTabView: View {
     
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
+            // Background
+            Color.black.ignoresSafeArea(.all)
             
             VStack(spacing: 16) {
-                // MARK: - Marketplace Header
+                // FIXED HEADER - NOT SCROLLABLE
                 VStack(spacing: 12) {
-                    // City and Filter Button
+                    // Title and Filter
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Party Discovery")
@@ -210,7 +211,6 @@ struct AfterpartyTabView: View {
                         
                         Spacer()
                         
-                        // Filter button with active indicator
                         Button(action: { showingFilters = true }) {
                             HStack {
                                 Image(systemName: "slider.horizontal.3")
@@ -229,7 +229,7 @@ struct AfterpartyTabView: View {
                         }
                     }
                     
-                    // Search and stats
+                    // Search and live count
                     HStack {
                         HStack {
                             Image(systemName: "magnifyingglass")
@@ -240,7 +240,6 @@ struct AfterpartyTabView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(10)
                         
-                        // Active parties count
                         VStack {
                             Text("\(marketplaceAfterparties.count)")
                                 .font(.headline)
@@ -253,8 +252,10 @@ struct AfterpartyTabView: View {
                         .padding(.horizontal, 12)
                     }
                 }
-                    .padding(.horizontal)
+                .padding(.horizontal)
+                .padding(.top, 8)
                 
+                // Distance slider - FIXED
                 DistanceSliderView(
                     selectedRadius: $selectedRadius,
                     onRadiusChange: { radius in
@@ -269,6 +270,7 @@ struct AfterpartyTabView: View {
                     }
                 )
                 
+                // Create button - FIXED
                 CreateAfterpartyButton(
                     hasActiveParty: hasActiveParty,
                     onCreateTap: {
@@ -282,96 +284,100 @@ struct AfterpartyTabView: View {
                     }
                 )
                 
+                // SCROLLABLE CONTENT AREA ONLY
                 if isLoadingMarketplace {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
                         .padding()
+                    Spacer()
                 } else if marketplaceAfterparties.isEmpty {
-                    VStack(spacing: 24) {
-                        // TestFlight Info
-                        VStack(spacing: 16) {
-                            Image(systemName: "testtube.2")
-                                .font(.system(size: 50))
-                                .foregroundColor(.blue)
-                            
-                            VStack(spacing: 8) {
-                                Text("🧪 TestFlight Version")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            VStack(spacing: 16) {
+                                Image(systemName: "testtube.2")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.blue)
                                 
-                                Text("Help us test Bondfyr before the official launch!")
+                                VStack(spacing: 8) {
+                                    Text("🧪 TestFlight Version")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                    
+                                    Text("Help us test Bondfyr before the official launch!")
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                        .multilineTextAlignment(.center)
+                                }
+                            }
+                            .padding()
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(16)
+                            
+                            VStack(spacing: 16) {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.yellow)
+                                
+                                VStack(spacing: 12) {
+                                    Text("Be the First Host in \(locationManager.currentCity ?? "Your City")")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.center)
+                                    
+                                    VStack(spacing: 4) {
+                                        Text("• Early hosts get featured first")
+                                        Text("• Build your reputation early")
+                                        Text("• Direct payments via Venmo/CashApp")
+                                        Text("• Keep 100% during TestFlight")
+                                    }
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                            }
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(16)
-                        
-                        // Call to Action
-                        VStack(spacing: 16) {
-                            Image(systemName: "crown.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.yellow)
-                            
-                            VStack(spacing: 12) {
-                                Text("Be the First Host in \(locationManager.currentCity ?? "Your City")")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .multilineTextAlignment(.center)
-                                
-                                VStack(spacing: 4) {
-                                    Text("• Early hosts get featured first")
-                                    Text("• Build your reputation early")
-                                    Text("• Direct payments via Venmo/CashApp")
-                                    Text("• Keep 100% during TestFlight")
+                                    
+                                    Text("Full version: Automated payments, 80% to hosts")
+                                        .font(.caption)
+                                        .foregroundColor(.yellow)
+                                        .padding(.top, 4)
                                 }
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
                                 
-                                Text("Full version: Automated payments, 80% to hosts")
-                                    .font(.caption)
-                                    .foregroundColor(.yellow)
-                                    .padding(.top, 4)
-                            }
-                            
-                            Button("Create First Party") {
-                                if hasActiveParty {
-                                    showingActivePartyAlert = true
-                                } else if locationManager.authorizationStatus == .denied {
-                                    showLocationDeniedAlert = true
-                                } else {
-                                    showingCreateSheet = true
+                                Button("Create First Party") {
+                                    if hasActiveParty {
+                                        showingActivePartyAlert = true
+                                    } else if locationManager.authorizationStatus == .denied {
+                                        showLocationDeniedAlert = true
+                                    } else {
+                                        showingCreateSheet = true
+                                    }
                                 }
+                                .padding(.horizontal, 32)
+                                .padding(.vertical, 16)
+                                .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                                .foregroundColor(.white)
+                                .cornerRadius(25)
+                                .fontWeight(.semibold)
                             }
-                            .padding(.horizontal, 32)
-                            .padding(.vertical, 16)
-                            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                            .foregroundColor(.white)
-                            .cornerRadius(25)
-                            .fontWeight(.semibold)
+                            .padding()
                         }
                         .padding()
                     }
-                    .padding()
-                    Spacer()
                 } else {
+                    // ONLY PARTY CARDS SCROLL
                     ScrollView {
                         LazyVStack(spacing: 16) {
                             ForEach(marketplaceAfterparties) { afterparty in
                                 AfterpartyCard(afterparty: afterparty)
                             }
                         }
-                                .padding()
+                        .padding()
                     }
                 }
             }
-            .background(Color.black)
         }
         .navigationBarHidden(true)
+        .safeAreaInset(edge: .top) {
+            Color.clear.frame(height: 0)
+        }
         .sheet(isPresented: $showingCreateSheet) {
             CreateAfterpartyView(
                 currentLocation: locationManager.location?.coordinate,
@@ -518,7 +524,57 @@ struct ActionButtonsView: View {
                 guestActionButton
             }
             
+            // PARTY LIVE CHAT BUTTON - Your sister's viral feature! 🔥
+            NavigationLink(destination: PartyChatView(party: afterparty)) {
+                VStack(spacing: 2) {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 14))
+                    Text("Live")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.purple, .pink]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .cornerRadius(12)
+                .overlay(
+                    // Show "VIEW" indicator if user can't post
+                    canUserPostToParty() ? nil : 
+                    Text("VIEW")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
+                        .padding(2)
+                        .background(Color.blue.opacity(0.2))
+                        .cornerRadius(4)
+                        .offset(x: 18, y: -12)
+                )
+                .shadow(color: .purple.opacity(0.3), radius: 4, x: 0, y: 2)
+            }
+            
             shareButton
+        }
+    }
+    
+    // Helper function to check if user can post in party chat
+    private func canUserPostToParty() -> Bool {
+        guard let userId = authViewModel.currentUser?.uid else { return false }
+        
+        // Host can always post
+        if afterparty.userId == userId {
+            return true
+        }
+        
+        // Check if user is an approved guest
+        return afterparty.guestRequests.contains { request in
+            request.userId == userId && request.paymentStatus == .paid
         }
     }
     
@@ -1441,6 +1497,9 @@ struct EditAfterpartyView: View {
                 Section(header: Text("Location Details")) {
                     TextField("Address", text: $address)
                     TextField("Google Maps Link", text: $googleMapsLink)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(PlainTextFieldStyle())
                 }
                 
                 Section(header: Text("Description")) {
@@ -2707,14 +2766,25 @@ struct LocationDescriptionSection: View {
                     .font(.body)
                     .foregroundColor(.white)
                 
-                TextField("Paste Google Maps link", text: $googleMapsLink)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .foregroundColor(.white)
-                    .keyboardType(.URL)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(.systemGray6))
+                        .cornerRadius(12)
+                        .frame(height: 50)
+                    
+                    if googleMapsLink.isEmpty {
+                        Text("Paste Google Maps link")
+                            .foregroundColor(.gray)
+                            .padding(.leading, 16)
+                    }
+                    
+                    TextField("", text: $googleMapsLink)
+                        .padding(.horizontal, 16)
+                        .foregroundColor(.white)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(PlainTextFieldStyle())
+                }
             }
             
             // Description

@@ -42,7 +42,7 @@ struct MyTicketsView: View {
                 }
                 .padding()
             }
-            .background(Color.black.ignoresSafeArea())
+            .navigationSafeBackground()
             .navigationTitle("My Tickets")
             .navigationBarTitleDisplayMode(.large)
         }
@@ -86,7 +86,7 @@ struct LoadingSection: View {
             Text("Loading your tickets...")
                 .foregroundColor(.gray)
         }
-        .padding(.top, 100)
+        .safeTopPadding(16)
     }
 }
 
@@ -120,7 +120,7 @@ struct EmptyTicketsSection: View {
             .foregroundColor(.white)
             .cornerRadius(25)
         }
-        .padding(.top, 60)
+        .safeTopPadding(12)
     }
 }
 

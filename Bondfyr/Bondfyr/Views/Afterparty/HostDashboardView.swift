@@ -27,7 +27,7 @@ struct HostDashboardView: View {
                     if isLoading {
                         ProgressView("Loading your parties...")
                             .progressViewStyle(CircularProgressViewStyle(tint: .pink))
-                            .padding(.top, 50)
+                            .safeTopPadding()
                     } else if let error = error {
                         ErrorView(message: error) {
                             Task { await loadHostParties() }
@@ -46,7 +46,7 @@ struct HostDashboardView: View {
                 }
                 .padding()
             }
-            .background(Color.black.ignoresSafeArea())
+            .navigationSafeBackground()
             .navigationTitle("Host Dashboard")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
