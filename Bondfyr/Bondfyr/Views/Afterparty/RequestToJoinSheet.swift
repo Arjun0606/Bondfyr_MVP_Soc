@@ -3,6 +3,7 @@ import FirebaseFirestore
 
 struct RequestToJoinSheet: View {
     let afterparty: Afterparty
+    let onRequestSubmitted: (() -> Void)?
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var afterpartyManager = AfterpartyManager.shared
@@ -290,6 +291,7 @@ struct RequestToJoinSheet: View {
                 await MainActor.run {
                     requestSubmitted = true
                     isSubmitting = false
+                    onRequestSubmitted?() // Notify parent that request was submitted
                 }
                 
             } catch {

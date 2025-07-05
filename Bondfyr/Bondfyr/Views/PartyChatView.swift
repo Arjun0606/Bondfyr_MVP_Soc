@@ -13,6 +13,7 @@ struct PartyChatView: View {
     @State private var showingQuickReactions = false
     @State private var reactionTargetMessage: ChatMessage? = nil
     @State private var reactionPosition: CGPoint = .zero
+    @State private var showingViewOnlyAlert = false
     
     // Quick reaction emojis
     private let quickEmojis = ["🔥", "❤️", "🎉"]
@@ -66,6 +67,13 @@ struct PartyChatView: View {
         .background(Color.black.ignoresSafeArea())
         .onAppear {
             partyChatManager.joinPartyChat(for: afterparty)
+            
+            // Show FOMO alert if user can only view (not post)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if !partyChatManager.canPost {
+                    showingViewOnlyAlert = true
+                }
+            }
         }
         .onDisappear {
             partyChatManager.leavePartyChat()
@@ -76,6 +84,11 @@ struct PartyChatView: View {
                     partyChatManager.sendImage(image)
                 }
             }
+        }
+        .alert("Party Chat - View Only", isPresented: $showingViewOnlyAlert) {
+            Button("Got It") { }
+        } message: {
+            Text("🔒 You can only view this party chat because you're not approved yet. Request to join the party to start chatting with everyone!")
         }
         .overlay(
             // Quick reaction popup

@@ -153,11 +153,24 @@ struct AfterpartyTabView: View {
     @State private var isLoadingMarketplace = false
     
     private var filteredAfterparties: [Afterparty] {
-        guard let userLocation = locationManager.location?.coordinate else {
-            return afterpartyManager.nearbyAfterparties
+        var parties = marketplaceAfterparties
+        
+        // Apply search filter
+        if !searchText.isEmpty {
+            parties = parties.filter { afterparty in
+                afterparty.title.localizedCaseInsensitiveContains(searchText) ||
+                afterparty.description.localizedCaseInsensitiveContains(searchText) ||
+                afterparty.vibeTag.localizedCaseInsensitiveContains(searchText) ||
+                afterparty.address.localizedCaseInsensitiveContains(searchText)
+            }
         }
         
-        return afterpartyManager.nearbyAfterparties.filter { afterparty in
+        // Apply distance filter
+        guard let userLocation = locationManager.location?.coordinate else {
+            return parties
+        }
+        
+        return parties.filter { afterparty in
             let afterpartyLocation = CLLocation(
                 latitude: afterparty.coordinate.latitude,
                 longitude: afterparty.coordinate.longitude
@@ -241,7 +254,7 @@ struct AfterpartyTabView: View {
                         .cornerRadius(10)
                         
                         VStack {
-                            Text("\(marketplaceAfterparties.count)")
+                            Text("\(filteredAfterparties.count)")
                                 .font(.headline)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
@@ -290,7 +303,7 @@ struct AfterpartyTabView: View {
                         .progressViewStyle(CircularProgressViewStyle())
                         .padding()
                     Spacer()
-                } else if marketplaceAfterparties.isEmpty {
+                } else if filteredAfterparties.isEmpty {
                     ScrollView {
                         VStack(spacing: 24) {
                             VStack(spacing: 16) {
@@ -365,7 +378,7 @@ struct AfterpartyTabView: View {
                     // ONLY PARTY CARDS SCROLL
                     ScrollView {
                         LazyVStack(spacing: 16) {
-                            ForEach(marketplaceAfterparties) { afterparty in
+                            ForEach(filteredAfterparties) { afterparty in
                                 AfterpartyCard(afterparty: afterparty)
                             }
                         }
@@ -432,6 +445,11 @@ struct AfterpartyTabView: View {
         }
         .task {
             await loadMarketplaceAfterparties()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshMarketplaceData"))) { _ in
+            Task {
+                await loadMarketplaceAfterparties()
+            }
         }
     }
     
@@ -686,6 +704,16 @@ struct AfterpartyCard: View {
     @State private var showingContactHost = false // TESTFLIGHT: Contact host sheet
     @State private var isJoining = false // Missing state variable for ContactHostSheet
     @State private var showingHostInfo = false // Host profile sheet
+    
+    // Function to refresh marketplace data after request submission
+    private func refreshMarketplaceData() async {
+        // Trigger a reload of the marketplace data in the parent view
+        // This will fetch fresh data from Firebase and update the UI
+        await MainActor.run {
+            // Force the parent view to reload marketplace data
+            NotificationCenter.default.post(name: NSNotification.Name("RefreshMarketplaceData"), object: nil)
+        }
+    }
     
     private var isHost: Bool {
         afterparty.userId == authViewModel.currentUser?.uid
@@ -956,7 +984,12 @@ struct AfterpartyCard: View {
             ShareSheet(activityItems: [message])
         }
         .sheet(isPresented: $showingContactHost) {
-            RequestToJoinSheet(afterparty: afterparty)
+            RequestToJoinSheet(afterparty: afterparty) {
+                // Refresh marketplace data to get updated request status
+                Task {
+                    await refreshMarketplaceData()
+                }
+            }
         }
         .sheet(isPresented: $showingHostInfo) {
             UserInfoView(userId: afterparty.userId)
