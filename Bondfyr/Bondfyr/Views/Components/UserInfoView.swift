@@ -8,6 +8,8 @@ struct UserInfoView: View {
     @State private var isLoading = true
     @State private var error: String? = nil
     @State private var hostedParties: [Afterparty] = []
+    @State private var userListener: ListenerRegistration? = nil
+    @State private var partiesListener: ListenerRegistration? = nil
     
     var body: some View {
         NavigationView {
@@ -34,6 +36,9 @@ struct UserInfoView: View {
         .preferredColorScheme(.dark)
         .task {
             await loadUserData()
+        }
+        .onDisappear {
+            cleanupListeners()
         }
     }
     
@@ -452,12 +457,9 @@ struct UserInfoView: View {
             
             if let data = document.data() {
                 let user = try Firestore.Decoder().decode(AppUser.self, from: data)
-                await loadUserSuccessfully(user: user, db: db)
+                await setupRealTimeListeners(user: user, db: db)
             } else {
                 // If user not found by ID, try to find by username/handle
-                
-                
-                // Try to find user by username/handle in case userId doesn't match
                 let usersSnapshot = try await db.collection("users")
                     .whereField("username", isEqualTo: userId)
                     .limit(to: 1)
@@ -466,7 +468,7 @@ struct UserInfoView: View {
                 if let userDoc = usersSnapshot.documents.first {
                     let userData = userDoc.data()
                     let user = try Firestore.Decoder().decode(AppUser.self, from: userData)
-                    await loadUserSuccessfully(user: user, db: db)
+                    await setupRealTimeListeners(user: user, db: db)
                 } else {
                     await MainActor.run {
                         self.error = "User profile not found"
@@ -475,7 +477,6 @@ struct UserInfoView: View {
                 }
             }
         } catch {
-            
             await MainActor.run {
                 self.error = error.localizedDescription
                 self.isLoading = false
@@ -483,34 +484,68 @@ struct UserInfoView: View {
         }
     }
     
-    private func loadUserSuccessfully(user: AppUser, db: Firestore) async {
-        do {
-            // Load hosted parties
-            let partiesSnapshot = try await db.collection("afterparties")
+    // CRITICAL FIX: Setup real-time listeners for live data updates
+    private func setupRealTimeListeners(user: AppUser, db: Firestore) async {
+        await MainActor.run {
+            // Clean up any existing listeners
+            cleanupListeners()
+            
+            // Set initial user data
+            self.user = user
+            
+            // Set up real-time listener for user profile updates
+            userListener = db.collection("users").document(user.uid)
+                .addSnapshotListener { snapshot, error in
+                    
+                    if let error = error {
+                        print("User listener error: \(error)")
+                        return
+                    }
+                    
+                    if let data = snapshot?.data(),
+                       let updatedUser = try? Firestore.Decoder().decode(AppUser.self, from: data) {
+                        Task { @MainActor in
+                            self.user = updatedUser
+                        }
+                    }
+                }
+            
+            // Set up real-time listener for hosted parties (only if user has hosted parties)
+            if (user.hostedPartiesCount ?? 0) > 0 {
+                partiesListener = db.collection("afterparties")
                 .whereField("userId", isEqualTo: user.uid)
                 .order(by: "createdAt", descending: true)
                 .limit(to: 3)
-                .getDocuments()
-            
-            let parties = try partiesSnapshot.documents.compactMap { doc -> Afterparty? in
+                    .addSnapshotListener { snapshot, error in
+                        
+                        if let error = error {
+                            print("Parties listener error: \(error)")
+                            return
+                        }
+                        
+                        let parties = snapshot?.documents.compactMap { doc -> Afterparty? in
                 var docData = doc.data()
                 docData["id"] = doc.documentID
                 return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
-            }
+                        } ?? []
             
-            await MainActor.run {
-                self.user = user
+                        Task { @MainActor in
                 self.hostedParties = parties
-                self.isLoading = false
+                        }
+                    }
             }
-        } catch {
             
-            await MainActor.run {
-                self.user = user
-                self.hostedParties = []
+            // Mark loading as complete
                 self.isLoading = false
             }
         }
+    
+    // CRITICAL FIX: Cleanup listeners to prevent memory leaks
+    private func cleanupListeners() {
+        userListener?.remove()
+        partiesListener?.remove()
+        userListener = nil
+        partiesListener = nil
     }
     
     private func calculateAge(from dob: Date) -> Int? {

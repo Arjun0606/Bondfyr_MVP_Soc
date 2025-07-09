@@ -41,6 +41,10 @@ class MapFirestoreManager: ObservableObject {
     
     private init() {}
     
+    deinit {
+        stopListening()
+    }
+    
     func startListening() {
         // Listen to venues
         venueListener = db.collection("venues").addSnapshotListener { [weak self] snapshot, error in
@@ -91,6 +95,8 @@ class MapFirestoreManager: ObservableObject {
     func stopListening() {
         venueListener?.remove()
         footTrafficListener?.remove()
+        venueListener = nil
+        footTrafficListener = nil
     }
     
     func refreshVenues() {

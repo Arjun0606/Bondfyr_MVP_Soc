@@ -268,7 +268,14 @@ struct RequestToJoinSheet: View {
     }
     
     private func submitRequest() {
-        guard let currentUser = authViewModel.currentUser else { return }
+        guard let currentUser = authViewModel.currentUser else { 
+            print("🔴 REQUEST: submitRequest() FAILED - no current user")
+            return 
+        }
+        
+        print("🟡 REQUEST: submitRequest() called for party \(afterparty.id)")
+        print("🟡 REQUEST: Current user: \(currentUser.name) (\(currentUser.uid))")
+        print("🟡 REQUEST: Intro message: '\(introMessage.trimmingCharacters(in: .whitespacesAndNewlines))'")
         
         isSubmitting = true
         
@@ -282,19 +289,28 @@ struct RequestToJoinSheet: View {
                     paymentStatus: .pending
                 )
                 
+                print("🟡 REQUEST: Created GuestRequest with ID: \(guestRequest.id)")
+                print("🟡 REQUEST: Calling afterpartyManager.submitGuestRequest()...")
+                
                 // Add request to Firestore
                 try await afterpartyManager.submitGuestRequest(
                     afterpartyId: afterparty.id,
                     guestRequest: guestRequest
                 )
                 
+                print("🟢 REQUEST: submitGuestRequest() SUCCESS - request submitted to Firebase")
+                
                 await MainActor.run {
                     requestSubmitted = true
                     isSubmitting = false
+                    print("🟢 REQUEST: UI updated to show success state")
                     onRequestSubmitted?() // Notify parent that request was submitted
                 }
                 
             } catch {
+                print("🔴 REQUEST: submitRequest() FAILED with error: \(error.localizedDescription)")
+                print("🔴 REQUEST: Full error: \(error)")
+                
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true

@@ -10,11 +10,12 @@ import CoreLocation
 
 struct MyTicketsView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @EnvironmentObject private var tabSelection: TabSelection
     @StateObject private var afterpartyManager = AfterpartyManager.shared
-    @State private var upcomingParties: [Afterparty] = []
+    @State private var acceptedParties: [Afterparty] = []
     @State private var isLoading = false
     @State private var selectedParty: Afterparty? = nil
-    @State private var showingTicketDetail = false
+    @State private var showingInviteDetail = false
 
     var body: some View {
         NavigationView {
@@ -22,56 +23,69 @@ struct MyTicketsView: View {
                 VStack(spacing: 20) {
                     if isLoading {
                         LoadingSection()
-                    } else if upcomingParties.isEmpty {
-                        EmptyTicketsSection()
+                    } else if acceptedParties.isEmpty {
+                        EmptyInvitesSection()
                     } else {
                         VStack(spacing: 24) {
-                            if !upcomingParties.isEmpty {
-                                UpcomingPartiesSection(
-                                    parties: upcomingParties,
+                            if !acceptedParties.isEmpty {
+                                AcceptedPartiesSection(
+                                    parties: acceptedParties,
                                     onPartyTap: { party in
                                         selectedParty = party
-                                        showingTicketDetail = true
+                                        showingInviteDetail = true
                                     }
                                 )
                             }
-                            
-
                         }
                     }
                 }
                 .padding()
             }
             .navigationSafeBackground()
-            .navigationTitle("My Tickets")
+            .navigationTitle("Party Invites")
             .navigationBarTitleDisplayMode(.large)
         }
-        .sheet(isPresented: $showingTicketDetail) {
+        .sheet(isPresented: $showingInviteDetail) {
             if let party = selectedParty {
-                TicketDetailView(party: party)
+                PartyInviteDetailView(party: party)
             }
         }
         .task {
-            await loadUserTickets()
+            await loadAcceptedParties()
+        }
+        .onAppear {
+            Task {
+                await loadAcceptedParties()
+            }
         }
     }
     
-    private func loadUserTickets() async {
+    private func loadAcceptedParties() async {
+        guard let currentUserId = authViewModel.currentUser?.uid else { return }
+        
         isLoading = true
         defer { isLoading = false }
         
-        // Load sample data for demo
-        let sampleTickets = createSampleUserTickets()
+        do {
+            // Get all marketplace afterparties where the current user is in activeUsers (approved)
+            let allParties = try await afterpartyManager.getMarketplaceAfterparties()
         
         await MainActor.run {
             let now = Date()
-            upcomingParties = sampleTickets.filter { $0.startTime > now }
+                acceptedParties = allParties.filter { party in
+                    // User must be approved (in activeUsers)
+                    guard party.activeUsers.contains(currentUserId) else { return false }
+                    
+                    // Show if party hasn't started yet OR if it's within 12 hours after start
+                    let twelveHoursAfterStart = Calendar.current.date(byAdding: .hour, value: 12, to: party.startTime) ?? party.startTime
+                    
+                    return now < twelveHoursAfterStart
+                }
+                .sorted { $0.startTime < $1.startTime }
+            }
+        } catch {
+            print("Error loading accepted parties: \(error)")
         }
-    }
-    
-    private func createSampleUserTickets() -> [Afterparty] {
-        // Return empty array for TestFlight - no demo tickets
-        return []
     }
 }
 
@@ -83,7 +97,7 @@ struct LoadingSection: View {
                 .progressViewStyle(CircularProgressViewStyle(tint: .pink))
                 .scaleEffect(1.5)
             
-            Text("Loading your tickets...")
+            Text("Loading your invites...")
                 .foregroundColor(.gray)
         }
         .safeTopPadding(16)
@@ -91,20 +105,22 @@ struct LoadingSection: View {
 }
 
 // MARK: - Empty State
-struct EmptyTicketsSection: View {
+struct EmptyInvitesSection: View {
+    @EnvironmentObject private var tabSelection: TabSelection
+    
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "ticket.fill")
+            Image(systemName: "envelope.fill")
                 .font(.system(size: 80))
                 .foregroundColor(.pink)
             
             VStack(spacing: 12) {
-                Text("No tickets yet")
+                Text("No party invites yet")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
-                Text("When you buy tickets to parties, they'll show up here with party details, directions, and host info!")
+                Text("When hosts approve your party requests, they'll show up here with all the details you need to join!")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
@@ -112,7 +128,7 @@ struct EmptyTicketsSection: View {
             }
             
             Button("Discover Parties") {
-                // TODO: Navigate to Party Feed
+                tabSelection.selectedTab = .partyFeed
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
@@ -124,15 +140,15 @@ struct EmptyTicketsSection: View {
     }
 }
 
-// MARK: - Upcoming Parties Section
-struct UpcomingPartiesSection: View {
+// MARK: - Accepted Parties Section
+struct AcceptedPartiesSection: View {
     let parties: [Afterparty]
     let onPartyTap: (Afterparty) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Upcoming Parties")
+                Text("Your Party Invites")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
@@ -151,42 +167,78 @@ struct UpcomingPartiesSection: View {
             
             LazyVStack(spacing: 12) {
                 ForEach(parties) { party in
-                    UpcomingPartyCard(party: party, onTap: { onPartyTap(party) })
+                    PartyInviteCard(party: party, onTap: { onPartyTap(party) })
                 }
             }
         }
     }
 }
 
-// MARK: - Upcoming Party Card
-struct UpcomingPartyCard: View {
+// MARK: - Party Invite Card
+struct PartyInviteCard: View {
     let party: Afterparty
     let onTap: () -> Void
+    
+    private var inviteStatus: String {
+        let now = Date()
+        if party.startTime > now {
+            return "Upcoming"
+        } else {
+            let twelveHoursAfterStart = Calendar.current.date(byAdding: .hour, value: 12, to: party.startTime) ?? party.startTime
+            if now < twelveHoursAfterStart {
+                return "Active"
+            } else {
+                return "Ended"
+            }
+        }
+    }
+    
+    private var statusColor: Color {
+        switch inviteStatus {
+        case "Upcoming": return .blue
+        case "Active": return .green
+        default: return .gray
+        }
+    }
     
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                // Ticket Header
-                VStack {
+                // Invite Header
+                HStack {
+                    VStack(alignment: .leading) {
                     Text(party.title)
                         .font(.headline)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                         .lineLimit(1)
                     
-                    Text("Tap to View Details")
+                        Text("Tap to View Invite")
+                            .font(.caption)
+                            .foregroundColor(.pink)
+                    }
+                    
+                    Spacer()
+                    
+                    // Status Badge
+                    Text(inviteStatus)
                         .font(.caption)
-                        .foregroundColor(.pink)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(statusColor)
+                        .cornerRadius(8)
                 }
                 .padding()
-                .frame(maxWidth: .infinity)
                 .background(Color.white.opacity(0.1))
                 
-                // Ticket Body
+                // Invite Body
                 HStack {
                     VStack(alignment: .leading, spacing: 8) {
-                        TicketInfoRow(icon: "calendar", text: formatDate(party.startTime))
-                        TicketInfoRow(icon: "mappin.circle.fill", text: party.locationName)
+                        InviteInfoRow(icon: "calendar", text: formatDate(party.startTime))
+                        InviteInfoRow(icon: "mappin.circle.fill", text: party.locationName)
+                        InviteInfoRow(icon: "person.fill", text: "@\(party.hostHandle)")
                     }
                     
                     Spacer()
@@ -218,7 +270,7 @@ struct UpcomingPartyCard: View {
     }
 }
 
-struct TicketInfoRow: View {
+struct InviteInfoRow: View {
     let icon: String
     let text: String
     
@@ -285,8 +337,8 @@ struct CountdownView: View {
 
 
 
-// MARK: - Ticket Detail View
-struct TicketDetailView: View {
+// MARK: - Party Invite Detail View
+struct PartyInviteDetailView: View {
     let party: Afterparty
     @Environment(\.presentationMode) var presentationMode
     
@@ -294,11 +346,11 @@ struct TicketDetailView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Ticket Confirmation Section
-                    TicketConfirmationSection(party: party)
+                    // Invite Confirmation Section
+                    InviteConfirmationSection(party: party)
                     
                     // Party Details
-                    TicketPartyDetailsSection(party: party)
+                    InvitePartyDetailsSection(party: party)
                     
                     // Action Buttons
                     ActionButtonsSection(party: party)
@@ -306,7 +358,7 @@ struct TicketDetailView: View {
                 .padding()
             }
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Your Ticket")
+            .navigationTitle("Party Invite")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(
                 trailing: Button("Done") {
@@ -315,16 +367,17 @@ struct TicketDetailView: View {
                 .foregroundColor(.white)
             )
         }
+        .preferredColorScheme(.dark)
     }
 }
 
-// MARK: - Ticket Confirmation Section
-struct TicketConfirmationSection: View {
+// MARK: - Invite Confirmation Section
+struct InviteConfirmationSection: View {
     let party: Afterparty
     
     var body: some View {
         VStack(spacing: 16) {
-            Text("You're Going!")
+            Text("You're Invited!")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
@@ -339,14 +392,14 @@ struct TicketConfirmationSection: View {
                             .font(.system(size: 40, weight: .bold))
                             .foregroundColor(.white)
                         
-                        Text("PAID")
+                        Text("APPROVED")
                             .font(.headline)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
                     }
                 )
             
-            Text("Your spot is confirmed! The host will check you in when you arrive.")
+            Text("Your request has been approved! Show this invite to the host when you arrive.")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -357,8 +410,8 @@ struct TicketConfirmationSection: View {
     }
 }
 
-// MARK: - Ticket Party Details Section
-struct TicketPartyDetailsSection: View {
+// MARK: - Invite Party Details Section
+struct InvitePartyDetailsSection: View {
     let party: Afterparty
     
     var body: some View {
@@ -369,32 +422,32 @@ struct TicketPartyDetailsSection: View {
                 .foregroundColor(.white)
             
                          VStack(spacing: 12) {
-                TicketDetailRow(
+                InviteDetailRow(
                     icon: "calendar",
                     title: "Date & Time",
                     value: formatDateTime(party.startTime)
                 )
                 
-                TicketDetailRow(
+                InviteDetailRow(
                     icon: "location.fill",
                     title: "Location",
                     value: "\(party.locationName)\n\(party.address)"
                 )
                 
-                TicketDetailRow(
+                InviteDetailRow(
                     icon: "person.fill",
                     title: "Host",
                     value: "@\(party.hostHandle)"
                 )
                 
-                TicketDetailRow(
+                InviteDetailRow(
                     icon: "dollarsign.circle.fill",
-                    title: "Ticket Price",
+                    title: "Entry Fee",
                     value: "$\(Int(party.ticketPrice))"
                 )
                 
                 if !party.description.isEmpty {
-                    TicketDetailRow(
+                    InviteDetailRow(
                         icon: "text.alignleft",
                         title: "Description",
                         value: party.description
@@ -411,8 +464,8 @@ struct TicketPartyDetailsSection: View {
     }
 }
 
-// MARK: - Ticket Detail Row
-struct TicketDetailRow: View {
+// MARK: - Invite Detail Row
+struct InviteDetailRow: View {
     let icon: String
     let title: String
     let value: String
@@ -449,6 +502,21 @@ struct ActionButtonsSection: View {
     
     var body: some View {
         VStack(spacing: 12) {
+            // PRIORITY: Join Party Chat Button
+            NavigationLink(destination: PartyChatView(afterparty: party)) {
+                HStack {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.title3)
+                    Text("Join Party Chat")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .leading, endPoint: .trailing))
+                .foregroundColor(.white)
+                .cornerRadius(12)
+            }
+            
             if !party.googleMapsLink.isEmpty {
                 Link(destination: URL(string: party.googleMapsLink)!) {
                     HStack {
@@ -463,7 +531,7 @@ struct ActionButtonsSection: View {
                 }
             }
             
-            Button("Share Ticket") {
+            Button("Share Invite") {
                 // TODO: Share functionality
             }
             .frame(maxWidth: .infinity)

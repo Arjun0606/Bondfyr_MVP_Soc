@@ -565,14 +565,22 @@ struct EventPhotoGalleryView: View {
     // MARK: - Photo Management
     
     private func setupPhotos() {
+        // Determine which event ID to use
+        let eventId = stringEventId ?? event.id.uuidString
         
+        // Initial fetch with string ID
+        refreshPhotosWithStringId(eventId: eventId)
         
-        // Start real-time listener
-        let eventIdString = event.id.uuidString
-        photoManager.setupPhotoListener(for: eventIdString)
-        
-        // Initial fetch in case listener is slow
-        refreshPhotos()
+        // CRITICAL FIX: Simplified test-event-id handling - single retry only
+        if eventId == "test-event-id" {
+            // Single retry after 1 second for test events only
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                // Only retry if we haven't already completed setup
+                if !self.setupPhotosComplete {
+                    self.refreshPhotosWithStringId(eventId: "test-event-id", forceRefresh: true)
+                }
+            }
+        }
     }
     
     private func setupPhotosWithStringId(eventId: String) {
@@ -622,16 +630,19 @@ struct EventPhotoGalleryView: View {
     }
     
     private func refreshPhotosWithStringId(eventId: String, forceRefresh: Bool = false) {
+        // CRITICAL FIX: Prevent excessive concurrent calls
         guard !isLoading || forceRefresh else {
+            return
+        }
             
+        // CRITICAL FIX: Limit retry attempts per session to prevent infinite loops
+        if photoRefreshRetryCount >= 3 && !forceRefresh {
             return
         }
         
         let displayEventId = eventId.count > 8 ? "..." + eventId.suffix(8) : eventId
         
-        
         isLoading = true
-        
         
         // Reset error state
         errorMessage = ""
@@ -643,17 +654,13 @@ struct EventPhotoGalleryView: View {
                 
                 switch result {
                 case .success(let photos):
-                    
-                    
                     // Store the event ID in UserDefaults for later use
                     UserDefaults.standard.set(eventId, forKey: "lastViewedEventId")
                     
                     // If we have no photos, display appropriate message
                     if photos.isEmpty {
-                        
                         self.noPhotosMessage = "No photos yet! Be the first to upload one."
                     } else {
-                        // Use empty string instead of nil for non-optional String
                         self.noPhotosMessage = ""
                     }
                     
@@ -664,13 +671,11 @@ struct EventPhotoGalleryView: View {
                     self.photoRefreshRetryCount = 0
                     
                 case .failure(let error):
-                    
-                    
-                    if self.photoRefreshRetryCount < 3 {
-                        // Retry up to 3 times with exponential backoff
+                    // CRITICAL FIX: Only retry with exponential backoff for genuine failures
+                    // Skip retry for test-event-id if we've already tried once
+                    if self.photoRefreshRetryCount < 2 && eventId != "test-event-id" {
                         self.photoRefreshRetryCount += 1
                         let delay = pow(2.0, Double(self.photoRefreshRetryCount)) * 0.5
-                        
                         
                         // Capture eventId for the retry
                         let capturedEventId = eventId
@@ -679,7 +684,6 @@ struct EventPhotoGalleryView: View {
                             self.refreshPhotosWithStringId(eventId: capturedEventId, forceRefresh: true)
                         }
                     } else {
-                        
                         self.errorMessage = "Error loading photos: \(error.localizedDescription)"
                         self.showingErrorAlert = true
                         self.setupPhotosComplete = true

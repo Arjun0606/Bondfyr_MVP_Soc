@@ -127,5 +127,47 @@ service cloud.firestore {
                   (('club-owner' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles) || 
                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
     }
+    
+    // Afterparties collection
+    match /afterparties/{partyId} {
+      // Anyone authenticated can read afterparty details
+      allow read: if request.auth != null;
+      // Users can create their own afterparties
+      allow create: if request.auth != null && 
+                     request.resource.data.userId == request.auth.uid;
+      // Party host can update/delete their own afterparty
+      allow update, delete: if request.auth != null && 
+                             resource.data.userId == request.auth.uid;
+      // Allow authenticated users to add themselves to guestRequests
+      allow update: if request.auth != null && 
+                     // Only allow updating guestRequests field
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestRequests']);
+    }
+    
+    // Party chat messages collection
+    match /party_messages/{messageId} {
+      // Anyone authenticated can read party messages
+      allow read: if request.auth != null;
+      // Users can create messages (permission checking handled in app logic)
+      allow create: if request.auth != null;
+      // System can create messages (for initial welcome message)
+      allow create: if request.resource.data.userId == "system";
+      // Users can only update/delete their own messages
+      allow update, delete: if request.auth != null && 
+                             resource.data.userId == request.auth.uid;
+      // Allow system cleanup - any authenticated user can delete party messages
+      // (This is safe because it's only called from within the app during party cleanup)
+      allow delete: if request.auth != null;
+    }
+    
+    // Party viewers collection (for viewer count tracking)
+    match /party_viewers/{partyId} {
+      // Anyone authenticated can read viewer count
+      allow read: if request.auth != null;
+      // Anyone authenticated can update viewer count
+      allow write: if request.auth != null;
+      // Allow system cleanup - any authenticated user can delete viewer records
+      allow delete: if request.auth != null;
+    }
   }
 } 

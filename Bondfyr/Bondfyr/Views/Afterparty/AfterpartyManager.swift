@@ -150,6 +150,13 @@ class AfterpartyManager: NSObject, ObservableObject {
             PartyChatManager.shared.startPartyChat(for: afterparty)
         }
         
+        // CRITICAL FIX: Schedule party start reminder notification
+        NotificationManager.shared.schedulePartyStartReminder(
+            partyId: afterparty.id,
+            partyTitle: afterparty.title,
+            startTime: afterparty.startTime
+        )
+        
         // Fetch afterparties again to update the UI
         await fetchNearbyAfterparties()
     }
@@ -225,12 +232,14 @@ class AfterpartyManager: NSObject, ObservableObject {
         }
     }
     
+    // DEPRECATED: Legacy method - use submitGuestRequest instead
     func joinAfterparty(_ afterparty: Afterparty) async throws {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
-        try await db.collection("afterparties").document(afterparty.id).updateData([
-            "pendingRequests": FieldValue.arrayUnion([userId])
-        ])
+        // CRITICAL FIX: No longer update legacy pendingRequests array
+        // All new requests should go through submitGuestRequest flow
+        // This method is kept for backward compatibility but does nothing
+        print("⚠️ WARNING: joinAfterparty is deprecated. Use submitGuestRequest instead.")
     }
     
     // MARK: - New Paid Marketplace Methods
@@ -275,55 +284,113 @@ class AfterpartyManager: NSObject, ObservableObject {
     
     /// Submit guest request with intro message (NEW FLOW)
     func submitGuestRequest(afterpartyId: String, guestRequest: GuestRequest) async throws {
+        print("🟡 BACKEND: submitGuestRequest() called for party \(afterpartyId)")
+        print("🟡 BACKEND: Guest request ID: \(guestRequest.id), User: \(guestRequest.userHandle)")
+        
         guard let userId = Auth.auth().currentUser?.uid else {
+            print("🔴 BACKEND: submitGuestRequest() FAILED - user not authenticated")
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
         }
         
-        // Check if user already requested or is already going
-        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
-        guard let data = doc.data(),
+        print("🟡 BACKEND: Starting Firestore transaction...")
+        
+        // CRITICAL FIX: Use Firestore transaction to prevent race conditions
+        let partyTitle = try await db.runTransaction { (transaction, errorPointer) -> String? in
+            print("🟡 BACKEND: Inside transaction - getting party document...")
+            let afterpartyRef = self.db.collection("afterparties").document(afterpartyId)
+            
+            // Get current party state within transaction
+            let afterpartyDocument: DocumentSnapshot
+            do {
+                try afterpartyDocument = transaction.getDocument(afterpartyRef)
+            } catch let fetchError as NSError {
+                print("🔴 BACKEND: Failed to get party document: \(fetchError.localizedDescription)")
+                errorPointer?.pointee = fetchError
+                return nil
+            }
+            
+            guard let data = afterpartyDocument.data(),
               let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
-            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+                print("🔴 BACKEND: Failed to decode party data")
+                let error = NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+                errorPointer?.pointee = error
+                return nil
         }
         
+            print("🟡 BACKEND: Party found - title: \(afterparty.title), current requests: \(afterparty.guestRequests.count)")
+            
+            // CRITICAL FIX: Check for existing requests/membership within transaction
         if afterparty.activeUsers.contains(userId) {
-            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You're already going to this afterparty"])
+                print("🔴 BACKEND: User already in activeUsers array")
+                let error = NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You're already going to this afterparty"])
+                errorPointer?.pointee = error
+                return nil
         }
         
         if afterparty.guestRequests.contains(where: { $0.userId == userId }) {
-            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You've already requested to join this afterparty"])
+                print("🔴 BACKEND: User already has pending request")
+                let error = NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You've already requested to join this afterparty"])
+                errorPointer?.pointee = error
+                return nil
         }
         
-        // Add request to Firestore
-        try await db.collection("afterparties").document(afterpartyId).updateData([
-            "guestRequests": FieldValue.arrayUnion([try Firestore.Encoder().encode(guestRequest)])
-        ])
+            // Add the new request
+            var updatedRequests = afterparty.guestRequests
+            updatedRequests.append(guestRequest)
+            
+            print("🟡 BACKEND: Adding request to party - new total: \(updatedRequests.count)")
         
-        // Get party details and notify host of new request
-        let partyDoc = try await db.collection("afterparties").document(afterpartyId).getDocument()
-        if let data = partyDoc.data(),
-           let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) {
-            NotificationManager.shared.notifyHostOfGuestRequest(
+            // Update within transaction
+            do {
+                let encodedRequests = try updatedRequests.map { try Firestore.Encoder().encode($0) }
+                transaction.updateData(["guestRequests": encodedRequests], forDocument: afterpartyRef)
+                print("🟢 BACKEND: Transaction update successful")
+            } catch {
+                print("🔴 BACKEND: Failed to encode/update requests: \(error.localizedDescription)")
+                errorPointer?.pointee = error as NSError
+                return nil
+            }
+            
+            return afterparty.title
+        }
+        
+        print("🟢 BACKEND: Transaction completed successfully")
+        
+        // Send enhanced notification to host
+        print("🔔 BACKEND: Sending enhanced notification to host...")
+        NotificationManager.shared.sendHostGuestRequestNotification(
                 partyId: afterpartyId,
-                partyTitle: afterparty.title,
+                partyTitle: partyTitle as! String,
                 guestName: guestRequest.userHandle
             )
+        
+        // Send test notification to verify system is working
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            NotificationManager.shared.sendTestGuestRequestNotification()
         }
         
-        
+        print("🟢 BACKEND: submitGuestRequest() completed successfully")
     }
     
     /// Approve guest request (Host action)
     func approveGuestRequest(afterpartyId: String, guestRequestId: String) async throws {
+        print("🟢 BACKEND: approveGuestRequest() called for party \(afterpartyId), request \(guestRequestId)")
+        
         let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
         guard let data = doc.data(),
               let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            print("🔴 BACKEND: approveGuestRequest() FAILED - party not found")
             throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
         }
         
         // Find and update the guest request
         if let index = afterparty.guestRequests.firstIndex(where: { $0.id == guestRequestId }) {
             let originalRequest = afterparty.guestRequests[index]
+            print("🟢 BACKEND: Found request for user \(originalRequest.userHandle), approving...")
+            
+            // CRITICAL FIX: Preserve original paymentStatus for TestFlight compatibility
+            // For TestFlight users who have paymentStatus = .paid, keep it as .paid
+            // For production PayPal users, keep it as .pending until webhook updates it
             let updatedRequest = GuestRequest(
                 id: originalRequest.id,
                 userId: originalRequest.userId,
@@ -331,7 +398,7 @@ class AfterpartyManager: NSObject, ObservableObject {
                 userHandle: originalRequest.userHandle,
                 introMessage: originalRequest.introMessage,
                 requestedAt: originalRequest.requestedAt,
-                paymentStatus: .pending,
+                paymentStatus: originalRequest.paymentStatus, // PRESERVE original status
                 approvalStatus: .approved,
                 paypalOrderId: originalRequest.paypalOrderId,
                 paidAt: originalRequest.paidAt,
@@ -342,10 +409,22 @@ class AfterpartyManager: NSObject, ObservableObject {
             var updatedRequests = afterparty.guestRequests
             updatedRequests[index] = updatedRequest
             
-            // Update Firestore
+            // CRITICAL FIX: Add approved user to activeUsers array
+            var updatedActiveUsers = afterparty.activeUsers
+            if !updatedActiveUsers.contains(originalRequest.userId) {
+                updatedActiveUsers.append(originalRequest.userId)
+                print("🟢 BACKEND: Added user \(originalRequest.userHandle) to activeUsers array")
+            } else {
+                print("🟢 BACKEND: User \(originalRequest.userHandle) already in activeUsers array")
+            }
+            
+            // Update Firestore with both the updated request AND activeUsers
             try await db.collection("afterparties").document(afterpartyId).updateData([
-                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+                "activeUsers": updatedActiveUsers
             ])
+            
+            print("🟢 BACKEND: approveGuestRequest() SUCCESS - Updated Firestore for \(originalRequest.userHandle)")
             
             // Send approval notification to guest
             NotificationManager.shared.notifyGuestOfApproval(
@@ -354,38 +433,73 @@ class AfterpartyManager: NSObject, ObservableObject {
                 hostName: afterparty.hostHandle
             )
             
+            // CRITICAL FIX: Send capacity alert if party is getting full (80%+ capacity)
+            let currentCapacity = Double(updatedActiveUsers.count)
+            let maxCapacity = Double(afterparty.maxGuestCount)
+            let capacityPercentage = currentCapacity / maxCapacity
             
+            if capacityPercentage >= 0.8 {
+                NotificationManager.shared.notifyHostOfCapacityAlert(
+                    partyId: afterpartyId,
+                    partyTitle: afterparty.title,
+                    currentCount: updatedActiveUsers.count,
+                    maxCount: afterparty.maxGuestCount
+                )
+            }
+            
+            print("✅ CRITICAL FIX: Approved guest \(originalRequest.userHandle) with preserved paymentStatus: \(originalRequest.paymentStatus)")
+        } else {
+            print("🔴 BACKEND: approveGuestRequest() FAILED - request not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
         }
     }
     
     /// Deny guest request (Host action)
     func denyGuestRequest(afterpartyId: String, guestRequestId: String) async throws {
+        print("🔴 BACKEND: denyGuestRequest() called for party \(afterpartyId), request \(guestRequestId)")
+        
         let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
         guard let data = doc.data(),
               let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            print("🔴 BACKEND: denyGuestRequest() FAILED - party not found")
             throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
         }
         
-        // Find the guest request before removing it (for notification)
-        if afterparty.guestRequests.contains(where: { $0.id == guestRequestId }) {
+        // Find the guest request before removing it (for notification and cleanup)
+        var userIdToRemove: String?
+        if let requestToRemove = afterparty.guestRequests.first(where: { $0.id == guestRequestId }) {
+            userIdToRemove = requestToRemove.userId
+            print("🔴 BACKEND: Found request for user \(requestToRemove.userHandle), denying...")
+            
             // Send denial notification to guest
             NotificationManager.shared.notifyGuestOfDenial(
                 partyId: afterpartyId,
                 partyTitle: afterparty.title,
                 hostName: afterparty.hostHandle
             )
+        } else {
+            print("🔴 BACKEND: denyGuestRequest() FAILED - request not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
         }
         
         // Remove the guest request
         var updatedRequests = afterparty.guestRequests
         updatedRequests.removeAll { $0.id == guestRequestId }
         
-        // Update Firestore
+        // CRITICAL FIX: Also remove user from activeUsers if they were previously approved
+        var updatedActiveUsers = afterparty.activeUsers
+        if let userId = userIdToRemove {
+            updatedActiveUsers.removeAll { $0 == userId }
+            print("🔴 BACKEND: Removed user from activeUsers array")
+        }
+        
+        // Update Firestore with both updated requests AND activeUsers
         try await db.collection("afterparties").document(afterpartyId).updateData([
-            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
+            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+            "activeUsers": updatedActiveUsers
         ])
         
-        
+        print("🔴 BACKEND: denyGuestRequest() SUCCESS - Updated Firestore")
     }
     
     /// Track estimated transaction value for analytics (TestFlight version)
@@ -423,18 +537,14 @@ class AfterpartyManager: NSObject, ObservableObject {
         return (totalVolume, commission, transactionCount)
     }
     
-    /// Approve a paid guest request (host action)
+    /// DEPRECATED: Use approveGuestRequest instead
     func approvePaidGuest(afterpartyId: String, guestRequestId: String) async throws {
-        // In real implementation, this would:
-        // 1. Verify payment was successful
-        // 2. Move guest from pending to confirmed
-        // 3. Update host earnings
-        // 4. Send confirmation notification
+        // CRITICAL FIX: This method is deprecated - use approveGuestRequest instead
+        // which properly handles the new guestRequests system
+        print("⚠️ WARNING: approvePaidGuest is deprecated. Use approveGuestRequest instead.")
         
-        try await db.collection("afterparties").document(afterpartyId).updateData([
-            "pendingRequests": FieldValue.arrayRemove([guestRequestId]),
-            "activeUsers": FieldValue.arrayUnion([guestRequestId])
-        ])
+        // Redirect to the new method
+        try await approveGuestRequest(afterpartyId: afterpartyId, guestRequestId: guestRequestId)
     }
     
     /// Get host earnings dashboard
@@ -554,17 +664,37 @@ class AfterpartyManager: NSObject, ObservableObject {
         case all, tonight, upcoming, ongoing
     }
     
+    // DEPRECATED: Legacy methods - use approveGuestRequest/denyGuestRequest instead
     func approveRequest(afterpartyId: String, userId: String) async throws {
-        try await db.collection("afterparties").document(afterpartyId).updateData([
-            "pendingRequests": FieldValue.arrayRemove([userId]),
-            "activeUsers": FieldValue.arrayUnion([userId])
-        ])
+        // CRITICAL FIX: No longer update legacy pendingRequests array
+        print("⚠️ WARNING: approveRequest is deprecated. Use approveGuestRequest instead.")
+        
+        // For backward compatibility, find the guest request and approve it properly
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            return
+        }
+        
+        if let guestRequest = afterparty.guestRequests.first(where: { $0.userId == userId }) {
+            try await approveGuestRequest(afterpartyId: afterpartyId, guestRequestId: guestRequest.id)
+        }
     }
     
     func denyRequest(afterpartyId: String, userId: String) async throws {
-        try await db.collection("afterparties").document(afterpartyId).updateData([
-            "pendingRequests": FieldValue.arrayRemove([userId])
-        ])
+        // CRITICAL FIX: No longer update legacy pendingRequests array
+        print("⚠️ WARNING: denyRequest is deprecated. Use denyGuestRequest instead.")
+        
+        // For backward compatibility, find the guest request and deny it properly
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            return
+        }
+        
+        if let guestRequest = afterparty.guestRequests.first(where: { $0.userId == userId }) {
+            try await denyGuestRequest(afterpartyId: afterpartyId, guestRequestId: guestRequest.id)
+        }
     }
     
     func leaveAfterparty(_ afterparty: Afterparty) async throws {
@@ -621,6 +751,28 @@ class AfterpartyManager: NSObject, ObservableObject {
     
     deinit {
         afterpartyListeners.forEach { $0.remove() }
+    }
+    
+    /// Get specific afterparty by ID
+    func getAfterpartyById(_ afterpartyId: String) async throws -> Afterparty {
+        print("🔍 BACKEND: getAfterpartyById() called for party \(afterpartyId)")
+        
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data() else {
+            print("🔴 BACKEND: getAfterpartyById() FAILED - party not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        var docData = data
+        docData["id"] = doc.documentID
+        
+        guard let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: docData) else {
+            print("🔴 BACKEND: getAfterpartyById() FAILED - failed to decode party data")
+            throw NSError(domain: "AfterpartyError", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to decode afterparty data"])
+        }
+        
+        print("🔍 BACKEND: getAfterpartyById() SUCCESS - party found with \(afterparty.activeUsers.count) active users")
+        return afterparty
     }
 }
 

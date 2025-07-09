@@ -41,8 +41,9 @@ struct BondfyrApp: App {
         let providerFactory = DeviceCheckProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
         
-        // Request notifications at startup
+        // Setup enhanced notifications system
         NotificationManager.shared.requestAuthorization()
+        NotificationManager.shared.setupNotificationCategories()
         
         // Initialize the party chat manager
         _ = PartyChatManager.shared

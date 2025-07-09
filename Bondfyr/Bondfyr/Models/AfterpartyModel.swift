@@ -132,6 +132,11 @@ struct Afterparty: Identifiable, Codable {
         return guestRequests.filter { $0.paymentStatus == .pending }.count
     }
     
+    // CRITICAL FIX: Add proper count for requests needing host approval
+    var pendingApprovalCount: Int {
+        return guestRequests.filter { $0.approvalStatus == .pending }.count
+    }
+    
     var isSoldOut: Bool {
         return confirmedGuestsCount >= maxGuestCount
     }

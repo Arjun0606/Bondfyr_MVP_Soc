@@ -136,7 +136,20 @@ struct EventListView: View {
     private func handlePendingNavigation(eventId: String?) {
         guard let eventId = eventId else { return }
         
-        
+        // CRITICAL FIX: Handle race condition where events may not be loaded yet
+        // If events are empty, wait and retry
+        if eventViewModel.events.isEmpty {
+            // Try to load events first
+            if !eventViewModel.isLoading {
+                eventViewModel.fetchEvents()
+            }
+            
+            // Retry after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.handlePendingNavigation(eventId: eventId)
+            }
+            return
+        }
         
         // Find the event in the list
         if let event = eventViewModel.events.first(where: { $0.id.uuidString == eventId }) {
@@ -150,7 +163,9 @@ struct EventListView: View {
                 self.navigateToGallery = false
             }
         } else {
-            
+            // Event not found even after events are loaded
+            // This could happen if the event ID is invalid or from a different environment
+            print("Event with ID \(eventId) not found in events list")
         }
     }
     

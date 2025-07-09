@@ -25,7 +25,7 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
-}
+} 
 
 // MARK: - Safe Area Extensions for Dynamic Island Support
 extension View {

@@ -326,13 +326,23 @@ struct TicketConfirmationView: View {
     private func addEventToCalendar() {
         isAddingToCalendar = true
         
-        // Parse date from ticket timestamp
-        guard let date = ISO8601DateFormatter().date(from: ticket.timestamp) else {
-            calendarAlertTitle = "Error"
-            calendarAlertMessage = "Failed to parse event date."
-            showCalendarAlert = true
-            isAddingToCalendar = false
-            return
+        // CRITICAL FIX: Better date parsing with multiple format fallbacks
+        let date: Date
+        
+        // Try ISO8601 first
+        if let isoDate = ISO8601DateFormatter().date(from: ticket.timestamp) {
+            date = isoDate
+        } else {
+            // Try standard format as fallback
+            let standardFormatter = DateFormatter()
+            standardFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            if let standardDate = standardFormatter.date(from: ticket.timestamp) {
+                date = standardDate
+            } else {
+                // If all parsing fails, use current date as last resort
+                print("Warning: Could not parse ticket timestamp '\(ticket.timestamp)', using current date")
+                date = Date()
+            }
         }
         
         // Create an Event-like structure for the CalendarManager
@@ -347,7 +357,8 @@ struct TicketConfirmationView: View {
         )
         
         CalendarManager.shared.addTicketToCalendar(event: eventForCalendar) { result in
-            isAddingToCalendar = false
+            DispatchQueue.main.async {
+                self.isAddingToCalendar = false
             
             switch result {
             case .success(_):
@@ -358,16 +369,18 @@ struct TicketConfirmationView: View {
             case .failure(let error):
                 self.calendarAlertTitle = "Error"
                 
+                    // CRITICAL FIX: More comprehensive error handling
                 switch error {
                 case .accessDenied:
-                    self.calendarAlertMessage = "Calendar access denied. Please enable calendar access in Settings."
+                        self.calendarAlertMessage = "Calendar access denied. Please enable calendar access in Settings → Bondfyr → Calendar."
                 case .eventCreationFailed:
-                    self.calendarAlertMessage = "Failed to create calendar event."
+                        self.calendarAlertMessage = "Failed to create calendar event. Your calendar might be full or there may be a permission issue."
                 default:
-                    self.calendarAlertMessage = "An unexpected error occurred."
+                        self.calendarAlertMessage = "An unexpected error occurred: \(error.localizedDescription). Please try again."
                 }
                 
                 self.showCalendarAlert = true
+                }
             }
         }
     }
@@ -376,13 +389,28 @@ struct TicketConfirmationView: View {
     private func checkCalendarConflicts() {
         isAddingToCalendar = true
         
-        // Parse date from ticket timestamp
-        guard let date = ISO8601DateFormatter().date(from: ticket.timestamp) else {
-            calendarAlertTitle = "Error"
-            calendarAlertMessage = "Failed to parse event date."
-            showCalendarAlert = true
-            isAddingToCalendar = false
+        // CRITICAL FIX: Better date parsing with multiple format fallbacks
+        let date: Date
+        
+        // Try ISO8601 first
+        if let isoDate = ISO8601DateFormatter().date(from: ticket.timestamp) {
+            date = isoDate
+        } else {
+            // Try standard format as fallback
+            let standardFormatter = DateFormatter()
+            standardFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            if let standardDate = standardFormatter.date(from: ticket.timestamp) {
+                date = standardDate
+            } else {
+                // If all parsing fails, show error
+                DispatchQueue.main.async {
+                    self.calendarAlertTitle = "Error"
+                    self.calendarAlertMessage = "Could not parse event date from ticket. Please add to calendar manually."
+                    self.showCalendarAlert = true
+                    self.isAddingToCalendar = false
+                }
             return
+            }
         }
         
         // Create an Event-like structure for the CalendarManager
@@ -397,7 +425,8 @@ struct TicketConfirmationView: View {
         )
         
         CalendarManager.shared.checkForConflicts(event: eventForCalendar) { result in
-            isAddingToCalendar = false
+            DispatchQueue.main.async {
+                self.isAddingToCalendar = false
             
             switch result {
             case .success(let events):
@@ -413,14 +442,16 @@ struct TicketConfirmationView: View {
             case .failure(let error):
                 self.calendarAlertTitle = "Error"
                 
+                    // CRITICAL FIX: More comprehensive error handling
                 switch error {
                 case .accessDenied:
-                    self.calendarAlertMessage = "Calendar access denied. Please enable calendar access in Settings."
+                        self.calendarAlertMessage = "Calendar access denied. Please enable calendar access in Settings → Bondfyr → Calendar."
                 default:
-                    self.calendarAlertMessage = "An unexpected error occurred while checking for conflicts."
+                        self.calendarAlertMessage = "An unexpected error occurred while checking for conflicts: \(error.localizedDescription). You can still add the event manually."
                 }
                 
                 self.showCalendarAlert = true
+                }
             }
         }
     }

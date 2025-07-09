@@ -265,7 +265,7 @@ struct AfterpartyTabView: View {
                         .padding(.horizontal, 12)
                     }
                 }
-                .padding(.horizontal)
+                    .padding(.horizontal)
                 .padding(.top, 8)
                 
                 // Distance slider - FIXED
@@ -305,74 +305,74 @@ struct AfterpartyTabView: View {
                     Spacer()
                 } else if filteredAfterparties.isEmpty {
                     ScrollView {
-                        VStack(spacing: 24) {
-                            VStack(spacing: 16) {
-                                Image(systemName: "testtube.2")
-                                    .font(.system(size: 50))
-                                    .foregroundColor(.blue)
-                                
-                                VStack(spacing: 8) {
-                                    Text("🧪 TestFlight Version")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                    
-                                    Text("Help us test Bondfyr before the official launch!")
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                        .multilineTextAlignment(.center)
-                                }
-                            }
-                            .padding()
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(16)
+                    VStack(spacing: 24) {
+                        VStack(spacing: 16) {
+                            Image(systemName: "testtube.2")
+                                .font(.system(size: 50))
+                                .foregroundColor(.blue)
                             
-                            VStack(spacing: 16) {
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.yellow)
+                            VStack(spacing: 8) {
+                                Text("🧪 TestFlight Version")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
                                 
-                                VStack(spacing: 12) {
-                                    Text("Be the First Host in \(locationManager.currentCity ?? "Your City")")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                    
-                                    VStack(spacing: 4) {
-                                        Text("• Early hosts get featured first")
-                                        Text("• Build your reputation early")
-                                        Text("• Direct payments via Venmo/CashApp")
-                                        Text("• Keep 100% during TestFlight")
-                                    }
+                                Text("Help us test Bondfyr before the official launch!")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
-                                    
-                                    Text("Full version: Automated payments, 80% to hosts")
-                                        .font(.caption)
-                                        .foregroundColor(.yellow)
-                                        .padding(.top, 4)
-                                }
-                                
-                                Button("Create First Party") {
-                                    if hasActiveParty {
-                                        showingActivePartyAlert = true
-                                    } else if locationManager.authorizationStatus == .denied {
-                                        showLocationDeniedAlert = true
-                                    } else {
-                                        showingCreateSheet = true
-                                    }
-                                }
-                                .padding(.horizontal, 32)
-                                .padding(.vertical, 16)
-                                .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                                .foregroundColor(.white)
-                                .cornerRadius(25)
-                                .fontWeight(.semibold)
+                                    .multilineTextAlignment(.center)
                             }
-                            .padding()
                         }
                         .padding()
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(16)
+                        
+                        VStack(spacing: 16) {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.yellow)
+                            
+                            VStack(spacing: 12) {
+                                Text("Be the First Host in \(locationManager.currentCity ?? "Your City")")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                
+                                VStack(spacing: 4) {
+                                    Text("• Early hosts get featured first")
+                                    Text("• Build your reputation early")
+                                    Text("• Direct payments via Venmo/CashApp")
+                                    Text("• Keep 100% during TestFlight")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                                
+                                Text("Full version: Automated payments, 80% to hosts")
+                                    .font(.caption)
+                                    .foregroundColor(.yellow)
+                                    .padding(.top, 4)
+                            }
+                            
+                            Button("Create First Party") {
+                                if hasActiveParty {
+                                    showingActivePartyAlert = true
+                                } else if locationManager.authorizationStatus == .denied {
+                                    showLocationDeniedAlert = true
+                                } else {
+                                    showingCreateSheet = true
+                                }
+                            }
+                            .padding(.horizontal, 32)
+                            .padding(.vertical, 16)
+                            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                            .foregroundColor(.white)
+                            .cornerRadius(25)
+                            .fontWeight(.semibold)
+                        }
+                        .padding()
+                    }
+                    .padding()
                     }
                 } else {
                     // ONLY PARTY CARDS SCROLL
@@ -382,7 +382,7 @@ struct AfterpartyTabView: View {
                                 AfterpartyCard(afterparty: afterparty)
                             }
                         }
-                        .padding()
+                                .padding()
                     }
                 }
             }
@@ -590,16 +590,15 @@ struct ActionButtonsView: View {
             return true
         }
         
-        // Check if user is an approved guest
-        return afterparty.guestRequests.contains { request in
-            request.userId == userId && request.paymentStatus == .paid
-        }
+        // CRITICAL FIX: Use activeUsers array for consistency with PartyChatManager
+        // This ensures all permission checks use the same logic throughout the app
+        return afterparty.activeUsers.contains(userId)
     }
     
     private var hostControlsMenu: some View {
         Menu {
             Button(action: { showingGuestList = true }) {
-                Label("Manage Guests (\(afterparty.guestRequests.count))", systemImage: "person.2.fill")
+                Label("Manage Guests (\(afterparty.pendingApprovalCount))", systemImage: "person.2.fill")
             }
             
             Button(action: { showingEditSheet = true }) {
@@ -625,14 +624,43 @@ struct ActionButtonsView: View {
     
     private var guestActionButton: some View {
         let userId = authViewModel.currentUser?.uid ?? ""
-        let hasRequested = afterparty.guestRequests.contains { $0.userId == userId }
+        let userRequest = afterparty.guestRequests.first { $0.userId == userId }
         let isConfirmed = afterparty.activeUsers.contains(userId)
         
-        return Button(action: {
-            if !hasRequested && !isConfirmed {
-                // TESTFLIGHT VERSION: Show contact host sheet
-                showingContactHost = true
+        // Enhanced logging for debugging
+        print("🔍 UI: guestActionButton computed for user \(userId)")
+        print("🔍 UI: activeUsers count: \(afterparty.activeUsers.count)")
+        print("🔍 UI: activeUsers contains current user: \(isConfirmed)")
+        print("🔍 UI: guestRequests count: \(afterparty.guestRequests.count)")
+        if let request = userRequest {
+            print("🔍 UI: User has request - approvalStatus: \(request.approvalStatus), paymentStatus: \(request.paymentStatus)")
+        } else {
+            print("🔍 UI: User has no request")
+        }
+        
+        // Determine button state based on user's status
+        let buttonState: GuestButtonState
+        if isConfirmed {
+            buttonState = .going
+        } else if let request = userRequest {
+            switch request.approvalStatus {
+            case .approved:
+                buttonState = .approved
+            case .pending:
+                buttonState = .pending
+            case .denied:
+                buttonState = .denied
             }
+        } else if afterparty.isSoldOut {
+            buttonState = .soldOut
+        } else {
+            buttonState = .requestToJoin
+        }
+        
+        print("🔍 UI: Button state determined: \(buttonState)")
+        
+        return Button(action: {
+            handleGuestAction(currentState: buttonState)
         }) {
             HStack {
                 if isJoining {
@@ -640,45 +668,78 @@ struct ActionButtonsView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.8)
                 } else {
-                    guestButtonContent(hasRequested: hasRequested, isConfirmed: isConfirmed)
+                    guestButtonContent(state: buttonState)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(guestButtonBackground(hasRequested: hasRequested, isConfirmed: isConfirmed))
+            .background(guestButtonBackground(state: buttonState))
             .foregroundColor(.white)
             .cornerRadius(20)
         }
-        .disabled(isJoining || hasRequested || isConfirmed || afterparty.isSoldOut)
+        .disabled(isJoining || buttonState == .pending || buttonState == .soldOut || buttonState == .approved)
+    }
+    
+    // Enhanced button state enum
+    private enum GuestButtonState {
+        case going
+        case approved
+        case pending
+        case denied
+        case soldOut
+        case requestToJoin
     }
     
     @ViewBuilder
-    private func guestButtonContent(hasRequested: Bool, isConfirmed: Bool) -> some View {
-        if isConfirmed {
+    private func guestButtonContent(state: GuestButtonState) -> some View {
+        switch state {
+        case .going:
             Image(systemName: "checkmark.circle.fill")
             Text("Going")
-        } else if hasRequested {
+        case .approved:
+            Image(systemName: "checkmark.circle")
+            Text("Approved - Join Chat!")
+        case .pending:
             Image(systemName: "clock.fill")
             Text("Pending")
-        } else if afterparty.isSoldOut {
+        case .denied:
+            Image(systemName: "xmark.circle.fill")
+            Text("Request Denied")
+        case .soldOut:
             Image(systemName: "xmark.circle.fill")
             Text("Sold Out")
-        } else {
-            // NEW FLOW: Request to join with intro message
+        case .requestToJoin:
             Image(systemName: "person.badge.plus")
             Text("Request to Join ($\(Int(afterparty.ticketPrice)))")
         }
     }
     
-    private func guestButtonBackground(hasRequested: Bool, isConfirmed: Bool) -> AnyView {
-        if isConfirmed {
+    private func guestButtonBackground(state: GuestButtonState) -> AnyView {
+        switch state {
+        case .going:
             return AnyView(Color.green)
-        } else if hasRequested {
+        case .approved:
+            return AnyView(Color.blue)
+        case .pending:
             return AnyView(Color.orange)
-        } else if afterparty.isSoldOut {
+        case .denied, .soldOut:
             return AnyView(Color.gray)
-        } else {
+        case .requestToJoin:
             return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+        }
+    }
+    
+    private func handleGuestAction(currentState: GuestButtonState) {
+        switch currentState {
+        case .requestToJoin:
+            // TESTFLIGHT VERSION: Show contact host sheet
+            showingContactHost = true
+        case .approved:
+            // Navigate to party chat
+            // TODO: Add navigation to party chat
+            print("🔍 UI: Approved user wants to join chat")
+        default:
+            break
         }
     }
     
@@ -694,7 +755,7 @@ struct ActionButtonsView: View {
 }
 
 struct AfterpartyCard: View {
-    let afterparty: Afterparty
+    @State private var afterparty: Afterparty
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     @State private var showingGuestList = false
@@ -705,13 +766,41 @@ struct AfterpartyCard: View {
     @State private var isJoining = false // Missing state variable for ContactHostSheet
     @State private var showingHostInfo = false // Host profile sheet
     
+    // CRITICAL FIX: Add initializer to set the @State property
+    init(afterparty: Afterparty) {
+        self._afterparty = State(initialValue: afterparty)
+    }
+    
     // Function to refresh marketplace data after request submission
-    private func refreshMarketplaceData() async {
-        // Trigger a reload of the marketplace data in the parent view
-        // This will fetch fresh data from Firebase and update the UI
-        await MainActor.run {
-            // Force the parent view to reload marketplace data
-            NotificationCenter.default.post(name: NSNotification.Name("RefreshMarketplaceData"), object: nil)
+    private func refreshAfterpartyData() {
+        print("🔄 UI: refreshAfterpartyData() called for party \(afterparty.id)")
+        Task {
+            do {
+                // Fetch updated party data from Firebase
+                let updatedParty = try await afterpartyManager.getAfterpartyById(afterparty.id)
+                
+                await MainActor.run {
+                    // Update the party data
+                    self.afterparty = updatedParty
+                    print("🔄 UI: Party data refreshed - activeUsers: \(updatedParty.activeUsers.count), guestRequests: \(updatedParty.guestRequests.count)")
+                    
+                    // Log current user status for debugging
+                    let currentUserId = authViewModel.currentUser?.uid ?? ""
+                    let isInActiveUsers = updatedParty.activeUsers.contains(currentUserId)
+                    let userRequest = updatedParty.guestRequests.first { $0.userId == currentUserId }
+                    
+                    print("🔄 UI: Current user status after refresh:")
+                    print("🔄 UI: - User ID: \(currentUserId)")
+                    print("🔄 UI: - In activeUsers: \(isInActiveUsers)")
+                    if let request = userRequest {
+                        print("🔄 UI: - Request status: approval=\(request.approvalStatus), payment=\(request.paymentStatus)")
+                    } else {
+                        print("🔄 UI: - No request found")
+                    }
+                }
+            } catch {
+                print("🔴 UI: Error refreshing party data: \(error)")
+            }
         }
     }
     
@@ -972,7 +1061,7 @@ struct AfterpartyCard: View {
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
         .sheet(isPresented: $showingGuestList) {
-            GuestListView(afterparty: afterparty)
+            GuestListView(afterparty: $afterparty)
         }
         .sheet(isPresented: $showingEditSheet) {
             EditAfterpartyView(afterparty: afterparty)
@@ -986,10 +1075,16 @@ struct AfterpartyCard: View {
         .sheet(isPresented: $showingContactHost) {
             RequestToJoinSheet(afterparty: afterparty) {
                 // Refresh marketplace data to get updated request status
-                Task {
-                    await refreshMarketplaceData()
-                }
+                refreshAfterpartyData()
             }
+        }
+        .onAppear {
+            // Refresh party data when card appears to ensure UI is up to date
+            refreshAfterpartyData()
+        }
+        .refreshable {
+            // Add pull-to-refresh functionality
+            refreshAfterpartyData()
         }
         .sheet(isPresented: $showingHostInfo) {
             UserInfoView(userId: afterparty.userId)
@@ -1028,17 +1123,28 @@ struct PendingRequestRow: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // User info header
+            // User info header - CRITICAL FIX: Make tap area more specific
             HStack {
                 Image(systemName: "person.circle.fill")
                     .foregroundColor(.orange)
                     .font(.title2)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Button(action: { showingUserInfo = true }) {
+                    // CRITICAL FIX: Use tap gesture instead of Button to avoid conflicts
+                    HStack {
                         Text(request.userName)
                             .font(.headline)
                             .foregroundColor(.white)
+                        
+                        Button(action: { 
+                            print("🔍 DEBUG: Showing user profile for \(request.userName)")
+                            showingUserInfo = true 
+                        }) {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.blue)
+                                .font(.caption)
+                        }
+                        .buttonStyle(PlainButtonStyle()) // Prevent button area expansion
                     }
                     
                     Text("@\(request.userHandle)")
@@ -1069,6 +1175,7 @@ struct PendingRequestRow: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .lineLimit(showingFullMessage ? nil : 3)
                     }
+                    .buttonStyle(PlainButtonStyle())
                     
                     if request.introMessage.count > 100 && !showingFullMessage {
                         Button("Read more...") {
@@ -1076,6 +1183,7 @@ struct PendingRequestRow: View {
                         }
                         .font(.caption)
                         .foregroundColor(.blue)
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
                 .padding(12)
@@ -1083,34 +1191,47 @@ struct PendingRequestRow: View {
                 .cornerRadius(8)
             }
             
-            // Action buttons
-            HStack(spacing: 12) {
-                Button(action: onApprove) {
+            // CRITICAL FIX: Add divider and spacing to separate action buttons
+            Divider()
+                .background(Color.gray.opacity(0.3))
+            
+            // Action buttons with improved spacing and logging
+            HStack(spacing: 16) {
+                Button(action: {
+                    print("✅ DEBUG: APPROVE button tapped for \(request.userHandle)")
+                    onApprove()
+                }) {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                         Text("Approve")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 12) // Increased padding for better touch area
                     .background(Color.green)
                     .foregroundColor(.white)
                     .cornerRadius(8)
                 }
+                .buttonStyle(PlainButtonStyle()) // Prevent button area expansion
                 
-                Button(action: onDeny) {
+                Button(action: {
+                    print("❌ DEBUG: DENY button tapped for \(request.userHandle)")
+                    onDeny()
+                }) {
                     HStack {
                         Image(systemName: "xmark.circle.fill")
                         Text("Deny")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 12) // Increased padding for better touch area
                     .background(Color.red)
                     .foregroundColor(.white)
                     .cornerRadius(8)
                 }
+                .buttonStyle(PlainButtonStyle()) // Prevent button area expansion
             }
+            .padding(.top, 8) // Extra spacing from divider
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8) // Increased overall padding
         .sheet(isPresented: $showingUserInfo) {
             UserInfoView(userId: request.userId)
         }
@@ -1243,7 +1364,7 @@ struct SummaryStatsView: View {
                     Text("Party Capacity")
                         .font(.caption)
                         .foregroundColor(.gray)
-                    Text("\(approvedCount)/\(afterparty.maxGuestCount)")
+                    Text("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount)")
                         .font(.headline)
                         .foregroundColor(.white)
                 }
@@ -1368,20 +1489,30 @@ struct VenmoPaymentInfoSheet: View {
 
 
 struct GuestListView: View {
-    let afterparty: Afterparty
+    @Binding var afterparty: Afterparty  // CRITICAL FIX: Use binding instead of let
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @State private var refreshing = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
-    @State private var refreshing = false
     
     // Organize requests by approval status
     private var pendingRequests: [GuestRequest] {
-        afterparty.guestRequests.filter { $0.approvalStatus == .pending }
+        let pending = afterparty.guestRequests.filter { $0.approvalStatus == .pending }
+        print("🔍 UI: pendingRequests computed - found \(pending.count) pending requests")
+        for (index, request) in pending.enumerated() {
+            print("🔍 UI: Pending \(index + 1): \(request.userHandle) (status: \(request.approvalStatus), payment: \(request.paymentStatus))")
+        }
+        return pending
     }
     
     private var approvedGuests: [GuestRequest] {
-        afterparty.guestRequests.filter { $0.approvalStatus == .approved }
+        let approved = afterparty.guestRequests.filter { $0.approvalStatus == .approved }
+        print("🔍 UI: approvedGuests computed - found \(approved.count) approved guests")
+        for (index, request) in approved.enumerated() {
+            print("🔍 UI: Approved \(index + 1): \(request.userHandle) (status: \(request.approvalStatus), payment: \(request.paymentStatus))")
+        }
+        return approved
     }
     
     var body: some View {
@@ -1437,6 +1568,36 @@ struct GuestListView: View {
                 Section("📊 Summary") {
                     SummaryStatsView(afterparty: afterparty)
                 }
+                
+                // Debug Section (for testing notifications)
+                Section("🔧 Debug Tools") {
+                    VStack(spacing: 8) {
+                        Button("Test Notifications") {
+                            print("🧪 DEBUG: Testing notification system...")
+                            NotificationManager.shared.checkNotificationStatus()
+                            NotificationManager.shared.sendTestGuestRequestNotification()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        
+                        Button("Check Notification Permissions") {
+                            NotificationManager.shared.checkNotificationStatus()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.orange)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        
+                        Text("Use these tools to test if notifications are working")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             }
             .listStyle(InsetGroupedListStyle())
             .navigationTitle("Guest Management")
@@ -1456,7 +1617,15 @@ struct GuestListView: View {
             )
         }
         .refreshable {
+            print("🔄 UI: refreshable action triggered")
             await refreshData()
+        }
+        .onAppear {
+            print("🔄 UI: GuestListView onAppear - loading initial data")
+            print("🔄 UI: Initial party state - requests: \(afterparty.guestRequests.count), active users: \(afterparty.activeUsers.count)")
+            Task {
+                await refreshData()
+            }
         }
         .alert("Guest Management", isPresented: $showingAlert) {
             Button("OK", role: .cancel) { }
@@ -1469,50 +1638,223 @@ struct GuestListView: View {
     // MARK: - Actions
     
     private func approveRequest(request: GuestRequest) async {
+        print("🟢 DEBUG: approveRequest() called for user \(request.userHandle) with ID \(request.id)")
+        
+        // CRITICAL FIX: Update UI immediately to prevent multiple taps
+        await MainActor.run {
+            // Optimistically update the UI by moving request to approved
+            var updatedRequests = afterparty.guestRequests
+            if let index = updatedRequests.firstIndex(where: { $0.id == request.id }) {
+                let originalRequest = updatedRequests[index]
+                let updatedRequest = GuestRequest(
+                    id: originalRequest.id,
+                    userId: originalRequest.userId,
+                    userName: originalRequest.userName,
+                    userHandle: originalRequest.userHandle,
+                    introMessage: originalRequest.introMessage,
+                    requestedAt: originalRequest.requestedAt,
+                    paymentStatus: originalRequest.paymentStatus,
+                    approvalStatus: .approved,
+                    paypalOrderId: originalRequest.paypalOrderId,
+                    paidAt: originalRequest.paidAt,
+                    refundedAt: originalRequest.refundedAt,
+                    approvedAt: Date()
+                )
+                updatedRequests[index] = updatedRequest
+                
+                // Also add to activeUsers for immediate UI update
+                var updatedActiveUsers = afterparty.activeUsers
+                if !updatedActiveUsers.contains(request.userId) {
+                    updatedActiveUsers.append(request.userId)
+                }
+                
+                // Update the binding immediately
+                afterparty = Afterparty(
+                    id: afterparty.id,
+                    userId: afterparty.userId,
+                    hostHandle: afterparty.hostHandle,
+                    coordinate: CLLocationCoordinate2D(latitude: afterparty.coordinate.latitude, longitude: afterparty.coordinate.longitude),
+                    radius: afterparty.radius,
+                    startTime: afterparty.startTime,
+                    endTime: afterparty.endTime,
+                    city: afterparty.city,
+                    locationName: afterparty.locationName,
+                    description: afterparty.description,
+                    address: afterparty.address,
+                    googleMapsLink: afterparty.googleMapsLink,
+                    vibeTag: afterparty.vibeTag,
+                    activeUsers: updatedActiveUsers,
+                    pendingRequests: afterparty.pendingRequests,
+                    createdAt: afterparty.createdAt,
+                    title: afterparty.title,
+                    ticketPrice: afterparty.ticketPrice,
+                    coverPhotoURL: afterparty.coverPhotoURL,
+                    maxGuestCount: afterparty.maxGuestCount,
+                    visibility: afterparty.visibility,
+                    approvalType: afterparty.approvalType,
+                    ageRestriction: afterparty.ageRestriction,
+                    maxMaleRatio: afterparty.maxMaleRatio,
+                    legalDisclaimerAccepted: afterparty.legalDisclaimerAccepted,
+                    guestRequests: updatedRequests,
+                    earnings: afterparty.earnings,
+                    bondfyrFee: afterparty.bondfyrFee,
+                    venmoHandle: afterparty.venmoHandle,
+                    chatEnded: afterparty.chatEnded,
+                    chatEndedAt: afterparty.chatEndedAt
+                )
+                
+                print("🟢 DEBUG: UI updated immediately - user moved to approved section")
+            }
+        }
+        
         do {
+            print("🟢 DEBUG: Calling afterpartyManager.approveGuestRequest()...")
             try await afterpartyManager.approveGuestRequest(
                 afterpartyId: afterparty.id,
                 guestRequestId: request.id
             )
             
+            print("🟢 DEBUG: approveGuestRequest() succeeded, syncing with Firebase...")
+            // Refresh data to ensure consistency with Firebase
+            await refreshData()
+            
             await MainActor.run {
-                alertMessage = "@\(request.userHandle) approved! They now have Venmo info + address."
+                let successMessage = "@\(request.userHandle) approved! They now have Venmo info + address."
+                print("🟢 DEBUG: Showing SUCCESS alert: \(successMessage)")
+                alertMessage = successMessage
                 showingAlert = true
             }
         } catch {
             await MainActor.run {
-                alertMessage = "Failed to approve: \(error.localizedDescription)"
+                let errorMessage = "Failed to approve: \(error.localizedDescription)"
+                print("🔴 DEBUG: approveRequest() FAILED with error: \(errorMessage)")
+                alertMessage = errorMessage
                 showingAlert = true
             }
+            
+            // Rollback optimistic update if backend failed
+            await refreshData()
         }
     }
     
     private func denyRequest(request: GuestRequest) async {
+        print("🔴 DEBUG: denyRequest() called for user \(request.userHandle) with ID \(request.id)")
+        
+        // CRITICAL FIX: Update UI immediately to prevent multiple taps
+        await MainActor.run {
+            // Optimistically remove request from UI
+            var updatedRequests = afterparty.guestRequests
+            updatedRequests.removeAll { $0.id == request.id }
+            
+            // Also remove from activeUsers if they were there
+            var updatedActiveUsers = afterparty.activeUsers
+            updatedActiveUsers.removeAll { $0 == request.userId }
+            
+            // Update the binding immediately
+            afterparty = Afterparty(
+                id: afterparty.id,
+                userId: afterparty.userId,
+                hostHandle: afterparty.hostHandle,
+                coordinate: CLLocationCoordinate2D(latitude: afterparty.coordinate.latitude, longitude: afterparty.coordinate.longitude),
+                radius: afterparty.radius,
+                startTime: afterparty.startTime,
+                endTime: afterparty.endTime,
+                city: afterparty.city,
+                locationName: afterparty.locationName,
+                description: afterparty.description,
+                address: afterparty.address,
+                googleMapsLink: afterparty.googleMapsLink,
+                vibeTag: afterparty.vibeTag,
+                activeUsers: updatedActiveUsers,
+                pendingRequests: afterparty.pendingRequests,
+                createdAt: afterparty.createdAt,
+                title: afterparty.title,
+                ticketPrice: afterparty.ticketPrice,
+                coverPhotoURL: afterparty.coverPhotoURL,
+                maxGuestCount: afterparty.maxGuestCount,
+                visibility: afterparty.visibility,
+                approvalType: afterparty.approvalType,
+                ageRestriction: afterparty.ageRestriction,
+                maxMaleRatio: afterparty.maxMaleRatio,
+                legalDisclaimerAccepted: afterparty.legalDisclaimerAccepted,
+                guestRequests: updatedRequests,
+                earnings: afterparty.earnings,
+                bondfyrFee: afterparty.bondfyrFee,
+                venmoHandle: afterparty.venmoHandle,
+                chatEnded: afterparty.chatEnded,
+                chatEndedAt: afterparty.chatEndedAt
+            )
+            
+            print("🔴 DEBUG: UI updated immediately - request removed")
+        }
+        
         do {
+            print("🔴 DEBUG: Calling afterpartyManager.denyGuestRequest()...")
             try await afterpartyManager.denyGuestRequest(
                 afterpartyId: afterparty.id,
                 guestRequestId: request.id
             )
             
+            print("🔴 DEBUG: denyGuestRequest() succeeded, syncing with Firebase...")
+            // Refresh data to ensure consistency with Firebase
+            await refreshData()
+            
             await MainActor.run {
-                alertMessage = "Request from @\(request.userHandle) was denied"
+                let denialMessage = "Request from @\(request.userHandle) was denied"
+                print("🔴 DEBUG: Showing DENIAL alert: \(denialMessage)")
+                alertMessage = denialMessage
                 showingAlert = true
             }
         } catch {
             await MainActor.run {
-                alertMessage = "Failed to deny request: \(error.localizedDescription)"
+                let errorMessage = "Failed to deny request: \(error.localizedDescription)"
+                print("🔴 DEBUG: denyRequest() FAILED with error: \(errorMessage)")
+                alertMessage = errorMessage
                 showingAlert = true
             }
+            
+            // Rollback optimistic update if backend failed
+            await refreshData()
         }
     }
     
 
     
     private func refreshData() async {
+        print("🔄 REFRESH: refreshData() called for party \(afterparty.id)")
         refreshing = true
-        // In a real app, this would refresh the afterparty data
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        do {
+            print("🔄 REFRESH: Fetching fresh party data from Firebase...")
+            // Use the AfterpartyManager method instead of direct Firestore call
+            let updatedParty = try await afterpartyManager.getAfterpartyById(afterparty.id)
+            
+            await MainActor.run {
+                print("🟢 REFRESH: Successfully loaded party data")
+                print("🟢 REFRESH: Title: \(updatedParty.title)")
+                print("🟢 REFRESH: Guest requests count: \(updatedParty.guestRequests.count)")
+                print("🟢 REFRESH: Active users count: \(updatedParty.activeUsers.count)")
+                
+                if !updatedParty.guestRequests.isEmpty {
+                    for (index, request) in updatedParty.guestRequests.enumerated() {
+                        print("🟢 REFRESH: Request \(index + 1): \(request.userHandle) (\(request.approvalStatus))")
+                    }
+                } else {
+                    print("🟢 REFRESH: No guest requests found")
+                }
+                
+                // CRITICAL FIX: Update the binding, which will also update the parent AfterpartyCard
+                afterparty = updatedParty
+                print("🟢 REFRESH: Binding updated - both GuestListView and AfterpartyCard now have fresh data")
+            }
+        } catch {
+            print("🔴 REFRESH: Failed to refresh data: \(error.localizedDescription)")
+            await MainActor.run {
+                alertMessage = "Failed to refresh data: \(error.localizedDescription)"
+                showingAlert = true
+            }
+        }
         refreshing = false
+        print("🔄 REFRESH: refreshData() completed")
     }
 }
 
@@ -1990,7 +2332,7 @@ struct AfterpartyActionButtons: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                             }
-            } else if afterparty.pendingRequests.contains(currentUserId ?? "") {
+            } else if afterparty.guestRequests.contains(where: { $0.userId == currentUserId && $0.approvalStatus == .pending }) {
                 Text("Request Pending")
                     .frame(maxWidth: .infinity)
                         .padding()
@@ -2102,7 +2444,7 @@ struct AfterpartyDetailView: View {
                     }
                     
                     VStack {
-                        Text("\(afterparty.pendingRequests.count)")
+                        Text("\(afterparty.pendingApprovalCount)")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
@@ -3337,15 +3679,16 @@ struct ContactHostSheet: View {
     }
     
     private func updateUserStatus() {
+        // CRITICAL FIX: Only use activeUsers array for determining confirmed status
+        // This ensures consistency with all other permission checks in the app
         if afterparty.activeUsers.contains(currentUserId) {
             userRequestStatus = .confirmed
         } else if let request = userRequest {
-            if request.paymentStatus == .paid {
-                userRequestStatus = .confirmed
+            // Check approval status, not payment status
+            if request.approvalStatus == .approved {
+                userRequestStatus = .approved // Approved but not yet in activeUsers
             } else {
-                // In TestFlight, we'll treat all requests as "approved" for simplicity
-                // In real version, host would need to manually approve first
-                userRequestStatus = .approved
+                userRequestStatus = .pending // Still waiting for host approval
             }
         } else {
             userRequestStatus = .notRequested

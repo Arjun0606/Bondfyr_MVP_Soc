@@ -321,39 +321,71 @@ class NotificationManager: NSObject {
         checkNotificationStatus()
     }
     
-    private func checkNotificationStatus() {
-        self.notificationCenter.getNotificationSettings { settings in
-            if settings.authorizationStatus != .authorized {
-                
-                DispatchQueue.main.async {
-                    self.requestAuthorization()
-                }
-            } else {
-                
-            }
-        }
-    }
 
     func requestAuthorization() {
+        print("🔔 SETUP: Requesting notification authorization...")
         
         self.notificationCenter.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
+                print("🟢 SETUP: Notification permission GRANTED")
                 
-                
-                // Register for remote notifications on main thread
+                // Set default notification settings to true
                 DispatchQueue.main.async {
+                    let userDefaults = UserDefaults.standard
+                    
+                    // Only set defaults if they haven't been set before
+                    if userDefaults.object(forKey: "notificationSettingsInitialized") == nil {
+                        userDefaults.set(true, forKey: "eventReminders")
+                        userDefaults.set(true, forKey: "partyUpdates")
+                        userDefaults.set(true, forKey: "notificationSettingsInitialized")
+                        print("🔔 SETUP: Default notification settings enabled")
+                    }
+                    
+                    // Register for remote notifications
                     UIApplication.shared.registerForRemoteNotifications()
-                    
-                    
-                    // FCM token will be handled in AppDelegate after APNS token is set
-                    
+                    print("🔔 SETUP: Registered for remote notifications")
                 }
             } else if let error = error {
-                
+                print("🔴 SETUP: Notification permission DENIED with error: \(error.localizedDescription)")
             } else {
-                
+                print("🔴 SETUP: Notification permission DENIED by user")
             }
         }
+    }
+    
+    /// Check current notification permission status and settings
+    func checkNotificationStatus() {
+        print("🔔 CHECK: Checking notification status...")
+        
+        notificationCenter.getNotificationSettings { settings in
+            print("🔔 CHECK: Authorization Status: \(settings.authorizationStatus.rawValue)")
+            print("🔔 CHECK: Alert Setting: \(settings.alertSetting.rawValue)")
+            print("🔔 CHECK: Badge Setting: \(settings.badgeSetting.rawValue)")
+            print("🔔 CHECK: Sound Setting: \(settings.soundSetting.rawValue)")
+            
+            let userDefaults = UserDefaults.standard
+            print("🔔 CHECK: Event Reminders Setting: \(userDefaults.bool(forKey: "eventReminders"))")
+            print("🔔 CHECK: Party Updates Setting: \(userDefaults.bool(forKey: "partyUpdates"))")
+            print("🔔 CHECK: Settings Initialized: \(userDefaults.bool(forKey: "notificationSettingsInitialized"))")
+            
+            if settings.authorizationStatus != .authorized {
+                print("🔴 CHECK: Notifications NOT authorized - user needs to enable in Settings")
+            } else {
+                print("🟢 CHECK: Notifications properly authorized")
+            }
+        }
+    }
+    
+    /// Send a test notification to verify the system is working
+    func sendTestGuestRequestNotification() {
+        print("🧪 TEST: Sending test guest request notification")
+        
+        scheduleGuestStatusNotification(
+            title: "🧪 Test Notification",
+            body: "This is a test notification to verify the system is working",
+            partyId: "test-party-id",
+            delaySeconds: 1
+        )
     }
     
     // Add requestPermission for backward compatibility
@@ -508,12 +540,19 @@ class NotificationManager: NSObject {
     // MARK: - Local Notifications
     
     func scheduleLocalNotification(for notificationType: NotificationType, delaySeconds: TimeInterval = 0) {
+        print("🔔 SCHEDULE: scheduleLocalNotification called for: \(notificationType.title)")
+        print("🔔 SCHEDULE: Delay seconds: \(delaySeconds)")
+        
         // Check if notifications are authorized
         self.notificationCenter.getNotificationSettings { settings in
-            guard settings.authorizationStatus == .authorized else {
+            print("🔔 SCHEDULE: Authorization status: \(settings.authorizationStatus.rawValue)")
                 
+            guard settings.authorizationStatus == .authorized else {
+                print("🔴 SCHEDULE: Notifications not authorized - status: \(settings.authorizationStatus.rawValue)")
                 return
             }
+            
+            print("🟢 SCHEDULE: Notifications authorized, creating notification content...")
             
             // Create the notification content
             let content = UNMutableNotificationContent()
@@ -521,6 +560,11 @@ class NotificationManager: NSObject {
             content.body = notificationType.body
             content.sound = .default
             content.userInfo = notificationType.userInfo
+            
+            print("🔔 SCHEDULE: Notification content created")
+            print("🔔 SCHEDULE: Title: \(content.title)")
+            print("🔔 SCHEDULE: Body: \(content.body)")
+            print("🔔 SCHEDULE: Identifier: \(notificationType.identifier)")
             
             // Create the trigger (time-based)
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, delaySeconds), repeats: false)
@@ -532,10 +576,14 @@ class NotificationManager: NSObject {
                 trigger: trigger
             )
             
+            print("🔔 SCHEDULE: Adding notification request to center...")
+            
             // Schedule the notification
             self.notificationCenter.add(request) { error in
                 if let error = error {
-                    
+                    print("🔴 SCHEDULE: Failed to schedule notification: \(error.localizedDescription)")
+                } else {
+                    print("🟢 SCHEDULE: Notification scheduled successfully!")
                 }
             }
         }
@@ -797,6 +845,8 @@ class NotificationManager: NSObject {
     // MARK: - Settings-Based Notification Methods
     
     func scheduleNotificationIfEnabled(type: NotificationType, delaySeconds: TimeInterval = 0) {
+        print("🔔 NOTIFICATION: scheduleNotificationIfEnabled called for type: \(type.title)")
+        
         // Check user settings before sending notification
         let userDefaults = UserDefaults.standard
         let shouldSend: Bool
@@ -804,22 +854,45 @@ class NotificationManager: NSObject {
         switch type {
         case .upcomingEvent, .partyStartReminder, .partyStartingSoon:
             shouldSend = userDefaults.bool(forKey: "eventReminders")
+            print("🔔 NOTIFICATION: Event reminder setting: \(shouldSend)")
         case .guestRequestReceived, .partyLocationUpdate, .partyTimeUpdate, .hostMessage, .requestApproved, .requestDenied:
             shouldSend = userDefaults.bool(forKey: "partyUpdates")
+            print("🔔 NOTIFICATION: Party updates setting: \(shouldSend)")
+            print("🔔 NOTIFICATION: UserDefaults partyUpdates key value: \(userDefaults.object(forKey: "partyUpdates") ?? "nil")")
         default:
             shouldSend = true // Always send system notifications
+            print("🔔 NOTIFICATION: System notification - always send")
         }
         
+        print("🔔 NOTIFICATION: Final shouldSend decision: \(shouldSend)")
+        
         if shouldSend {
+            print("🟢 NOTIFICATION: Sending notification")
             scheduleLocalNotification(for: type, delaySeconds: delaySeconds)
+        } else {
+            print("🔴 NOTIFICATION: Notification disabled in settings")
         }
     }
     
     // MARK: - Host Notification Methods
     
     func notifyHostOfGuestRequest(partyId: String, partyTitle: String, guestName: String) {
+        print("🔔 NOTIFICATION: notifyHostOfGuestRequest called")
+        print("🔔 NOTIFICATION: Party: \(partyTitle), Guest: \(guestName)")
+        print("🔔 NOTIFICATION: PartyId: \(partyId)")
+        
+        // Check notification permissions first
+        notificationCenter.getNotificationSettings { settings in
+            print("🔔 NOTIFICATION: Authorization status: \(settings.authorizationStatus.rawValue)")
+            print("🔔 NOTIFICATION: Alert setting: \(settings.alertSetting.rawValue)")
+            print("🔔 NOTIFICATION: Badge setting: \(settings.badgeSetting.rawValue)")
+            print("🔔 NOTIFICATION: Sound setting: \(settings.soundSetting.rawValue)")
+            
+            DispatchQueue.main.async {
         let notification = NotificationType.guestRequestReceived(partyId: partyId, partyTitle: partyTitle, guestName: guestName)
-        scheduleNotificationIfEnabled(type: notification)
+                self.scheduleNotificationIfEnabled(type: notification)
+            }
+        }
     }
     
     func notifyHostOfCapacityAlert(partyId: String, partyTitle: String, currentCount: Int, maxCount: Int) {
@@ -918,6 +991,125 @@ class NotificationManager: NSObject {
     func announceNewFeature(featureName: String) {
         let notification = NotificationType.newFeatureAvailable(featureName: featureName)
         scheduleLocalNotification(for: notification, delaySeconds: 2)
+    }
+
+    // MARK: - Enhanced Guest Flow Notifications
+    
+    func scheduleGuestStatusNotification(title: String, body: String, partyId: String, delaySeconds: TimeInterval = 0) {
+        print("🔔 GUEST: Scheduling guest status notification")
+        print("🔔 GUEST: Title: \(title)")
+        print("🔔 GUEST: Body: \(body)")
+        print("🔔 GUEST: Party ID: \(partyId)")
+        
+        // Check if notifications are authorized first
+        self.notificationCenter.getNotificationSettings { settings in
+            print("🔔 GUEST: Authorization status: \(settings.authorizationStatus.rawValue)")
+            
+            guard settings.authorizationStatus == .authorized else {
+                print("🔴 GUEST: Notifications not authorized - requesting permission")
+                DispatchQueue.main.async {
+                    self.requestAuthorization()
+                }
+                return
+            }
+            
+            print("🟢 GUEST: Notifications authorized, creating notification...")
+            
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = UNNotificationSound.default
+            content.badge = 1
+            
+            // Rich notification data for deep linking
+            content.userInfo = [
+                "partyId": partyId,
+                "type": "guest_status_update",
+                "timestamp": Date().timeIntervalSince1970,
+                "action": "open_party"
+            ]
+            
+            // Add notification category for interactive actions
+            content.categoryIdentifier = "GUEST_STATUS"
+            
+            // Create trigger
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(delaySeconds, 1), repeats: false)
+            
+            // Create request with unique identifier
+            let requestId = "guest_status_\(partyId)_\(Int(Date().timeIntervalSince1970))"
+            let request = UNNotificationRequest(identifier: requestId, content: content, trigger: trigger)
+            
+            // Schedule notification
+            self.notificationCenter.add(request) { error in
+                if let error = error {
+                    print("🔴 GUEST: Error scheduling notification: \(error)")
+                } else {
+                    print("🟢 GUEST: Successfully scheduled notification with ID: \(requestId)")
+                }
+            }
+        }
+    }
+    
+    func setupNotificationCategories() {
+        print("🔔 SETUP: Setting up notification categories")
+        
+        // Guest status category
+        let viewPartyAction = UNNotificationAction(
+            identifier: "VIEW_PARTY",
+            title: "View Party",
+            options: [.foreground]
+        )
+        
+        let joinChatAction = UNNotificationAction(
+            identifier: "JOIN_CHAT",
+            title: "Join Chat",
+            options: [.foreground]
+        )
+        
+        let guestStatusCategory = UNNotificationCategory(
+            identifier: "GUEST_STATUS",
+            actions: [viewPartyAction, joinChatAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        
+        // Host approval category
+        let approveAction = UNNotificationAction(
+            identifier: "APPROVE_GUEST",
+            title: "Approve",
+            options: [.foreground]
+        )
+        
+        let denyAction = UNNotificationAction(
+            identifier: "DENY_GUEST",
+            title: "Deny",
+            options: [.destructive]
+        )
+        
+        let hostApprovalCategory = UNNotificationCategory(
+            identifier: "HOST_APPROVAL",
+            actions: [approveAction, denyAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        
+        notificationCenter.setNotificationCategories([guestStatusCategory, hostApprovalCategory])
+        print("🟢 SETUP: Notification categories configured")
+    }
+    
+    // MARK: - Enhanced Host Notifications
+    
+    func sendHostGuestRequestNotification(partyId: String, partyTitle: String, guestName: String) {
+        print("🔔 HOST: Sending host guest request notification")
+        print("🔔 HOST: Party: \(partyTitle)")
+        print("🔔 HOST: Guest: \(guestName)")
+        
+        scheduleGuestStatusNotification(
+            title: "🎉 New Guest Request",
+            body: "\(guestName) wants to join \(partyTitle)",
+            partyId: partyId,
+            delaySeconds: 0
+        )
     }
 }
 

@@ -17,6 +17,9 @@ class PartyChatManager: ObservableObject {
     @Published var replyingTo: ChatMessage?
     @Published var isUploadingImage: Bool = false
     
+    // CRITICAL FIX: Add protection against concurrent message sending
+    private var isSendingMessage: Bool = false
+    
     // Anonymous numbering system
     private var guestNumbers: [String: Int] = [:]  // userId -> guestNumber
     private var nextGuestNumber: Int = 1
@@ -83,15 +86,26 @@ class PartyChatManager: ObservableObject {
     func sendMessage(text: String) {
         guard let party = currentParty,
               let userId = Auth.auth().currentUser?.uid,
-              canPost else { 
-            print("Debug: Can't send message - party: \(currentParty?.title ?? "nil"), userId: \(Auth.auth().currentUser?.uid ?? "nil"), canPost: \(canPost)")
+              canPost,
+              !isSendingMessage else { // CRITICAL FIX: Prevent concurrent sends
+            print("Debug: Can't send message - party: \(currentParty?.title ?? "nil"), userId: \(Auth.auth().currentUser?.uid ?? "nil"), canPost: \(canPost), isSending: \(isSendingMessage)")
             return 
         }
+        
+        // CRITICAL FIX: Validate message content
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            print("Debug: Cannot send empty message")
+            return
+        }
+        
+        // CRITICAL FIX: Set flag to prevent concurrent sends
+        isSendingMessage = true
         
         let displayName = getDisplayName(for: userId, in: party)
         
         let message = ChatMessage(
-            text: text,
+            text: trimmedText,
             userHandle: displayName,
             userId: userId,
             timestamp: Date(),
@@ -112,6 +126,11 @@ class PartyChatManager: ObservableObject {
         
         // Save to Firebase (this will also trigger the listener, but we already have it locally)
         saveMessage(message)
+        
+        // CRITICAL FIX: Reset flag after a short delay to allow next message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.isSendingMessage = false
+        }
     }
     
     func sendImage(_ image: UIImage, caption: String = "") {
@@ -369,12 +388,9 @@ class PartyChatManager: ObservableObject {
             return
         }
         
-        // Check if user is an approved guest
-        let isApprovedGuest = party.guestRequests.contains { request in
-            request.userId == userId && request.paymentStatus == .paid
-        }
-        
-        canPost = isApprovedGuest
+        // CRITICAL FIX: Check if user is in activeUsers array (approved guests)
+        // This matches the same logic used throughout the app for party access
+        canPost = party.activeUsers.contains(userId)
     }
     
     private func getDisplayName(for userId: String, in party: Afterparty) -> String {

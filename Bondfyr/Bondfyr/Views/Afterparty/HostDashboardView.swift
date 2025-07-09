@@ -463,6 +463,7 @@ struct PartyManagementSheet: View {
     @State private var showingGuestList = false
     @State private var showingEditSheet = false
     @State private var showingDeleteAlert = false
+    @State private var partyState: Afterparty?
     
     var body: some View {
         NavigationView {
@@ -489,7 +490,12 @@ struct PartyManagementSheet: View {
             )
         }
         .sheet(isPresented: $showingGuestList) {
-            GuestListView(afterparty: party)
+            if let partyBinding = Binding($partyState) {
+                GuestListView(afterparty: partyBinding)
+            }
+        }
+        .onAppear {
+            partyState = party
         }
         .sheet(isPresented: $showingEditSheet) {
             EditAfterpartyView(afterparty: party)

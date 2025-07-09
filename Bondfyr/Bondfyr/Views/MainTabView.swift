@@ -40,11 +40,11 @@ struct MainTabView: View {
             .tag(Tab.hostParty)
             
             NavigationView {
-                MyTicketsView()  // User's purchased tickets
+                MyTicketsView()  // User's accepted party invites
             }
             .tabItem {
-                Image(systemName: "ticket.fill")
-                Text("My Tickets")
+                Image(systemName: "envelope.fill")
+                Text("Party Invites")
             }
             .tag(Tab.tickets)
 
