@@ -90,12 +90,7 @@ struct UserInfoView: View {
             // Verification Status
             verificationSection(user: user)
             
-            // Host Performance (if applicable)
-            if (user.hostedPartiesCount ?? 0) > 0 {
-                hostPerformanceSection(user: user)
-            }
-            
-            // Recent Parties Hosted
+            // Recent Parties Hosted (if user has hosted parties)
             if !hostedParties.isEmpty {
                 recentPartiesSection()
             }
@@ -144,17 +139,15 @@ struct UserInfoView: View {
                             .foregroundColor(.white)
                     }
                     
-                    // Verification badges
+                    // Verification badges (simplified)
                     if user.isHostVerified == true {
-                        Image(systemName: "checkmark.shield.fill")
-                            .foregroundColor(.green)
-                            .font(.title3)
+                        Text("🏆")
+                            .help("Verified Host")
                     }
                     
                     if user.isGuestVerified == true {
-                        Image(systemName: "person.badge.shield.checkmark.fill")
-                            .foregroundColor(.blue)
-                            .font(.title3)
+                        Text("⭐")
+                            .help("Verified Guest")
                     }
                 }
                 
@@ -200,22 +193,39 @@ struct UserInfoView: View {
             
             HStack(spacing: 30) {
                 StatView(
-                    value: "\(user.hostedPartiesCount ?? 0)",
+                    value: "\(user.partiesHosted ?? 0)",
                     label: "Parties Hosted",
                     subtitle: (user.isHostVerified == true) ? "✓ Verified" : nil
                 )
                 
                 StatView(
-                    value: "\(user.attendedPartiesCount ?? 0)",
-                    label: "Parties Attended",
+                    value: "\(user.partiesAttended ?? 0)",
+                    label: "Parties Attended", 
                     subtitle: (user.isGuestVerified == true) ? "✓ Verified" : nil
                 )
                 
                 StatView(
-                    value: String(format: "%.1f", user.hostRating ?? 0.0),
-                    label: "Host Rating",
-                    subtitle: (user.hostRatingsCount ?? 0) > 0 ? "(\(user.hostRatingsCount ?? 0) reviews)" : nil
+                    value: "\(user.totalPartyHours ?? 0)h",
+                    label: "Party Hours",
+                    subtitle: "Time spent partying"
                 )
+            }
+            
+            // Additional stats row if user has significant activity
+            if (user.partiesHosted ?? 0) + (user.partiesAttended ?? 0) > 0 {
+                HStack(spacing: 30) {
+                    StatView(
+                        value: user.accountAgeDisplayText,
+                        label: "Member",
+                        subtitle: "Account age"
+                    )
+                    
+                    StatView(
+                        value: "\(user.totalPartyHours ?? 0)h",
+                        label: "Total Hours",
+                        subtitle: "Time at parties"
+                    )
+                }
             }
         }
         .padding()
@@ -299,7 +309,7 @@ struct UserInfoView: View {
                 .foregroundColor(.white)
             
             VStack(spacing: 12) {
-                // Host Verification
+                // Host Verification (simplified threshold)
                 HStack {
                     Image(systemName: (user.isHostVerified == true) ? "checkmark.shield.fill" : "shield.slash")
                         .foregroundColor((user.isHostVerified == true) ? .green : .gray)
@@ -312,7 +322,7 @@ struct UserInfoView: View {
                         
                         Text((user.isHostVerified == true) ? 
                              "Verified host with successful parties" : 
-                             "Needs \(max(0, 4 - (user.hostedPartiesCount ?? 0))) more successful parties")
+                             "Needs \(max(0, 3 - (user.partiesHosted ?? 0))) more successful parties")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -320,7 +330,7 @@ struct UserInfoView: View {
                     Spacer()
                 }
                 
-                // Guest Verification
+                // Guest Verification (simplified threshold)
                 HStack {
                     Image(systemName: (user.isGuestVerified == true) ? "person.badge.shield.checkmark.fill" : "person.badge.shield.checkmark.fill")
                         .foregroundColor((user.isGuestVerified == true) ? .blue : .gray)
@@ -332,60 +342,14 @@ struct UserInfoView: View {
                             .foregroundColor(.white)
                         
                         Text((user.isGuestVerified == true) ? 
-                             "Verified attendee with good reputation" : 
-                             "Needs \(max(0, 8 - (user.attendedPartiesCount ?? 0))) more attended parties")
+                             "Verified attendee with great activity" : 
+                             "Needs \(max(0, 5 - (user.partiesAttended ?? 0))) more attended parties")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
                     
                     Spacer()
                 }
-            }
-        }
-        .padding()
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(15)
-    }
-    
-    private func hostPerformanceSection(user: AppUser) -> some View {
-        VStack(spacing: 16) {
-            Text("Host Performance")
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-            
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Average Rating:")
-                    Spacer()
-                    HStack(spacing: 4) {
-                        ForEach(1...5, id: \.self) { star in
-                            Image(systemName: star <= Int(user.hostRating ?? 0) ? "star.fill" : "star")
-                                .foregroundColor(star <= Int(user.hostRating ?? 0) ? .yellow : .gray)
-                                .font(.caption)
-                        }
-                        Text(String(format: "%.1f", user.hostRating ?? 0.0))
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-                .foregroundColor(.white)
-                
-                HStack {
-                    Text("Total Reviews:")
-                    Spacer()
-                    Text("\(user.hostRatingsCount ?? 0)")
-                        .foregroundColor(.gray)
-                }
-                .foregroundColor(.white)
-                
-                HStack {
-                    Text("Success Rate:")
-                    Spacer()
-                    Text("\(calculateSuccessRate())%")
-                        .foregroundColor(calculateSuccessRate() >= 70 ? .green : .orange)
-                }
-                .foregroundColor(.white)
             }
         }
         .padding()
@@ -511,7 +475,7 @@ struct UserInfoView: View {
                 }
             
             // Set up real-time listener for hosted parties (only if user has hosted parties)
-            if (user.hostedPartiesCount ?? 0) > 0 {
+            if (user.partiesHosted ?? 0) > 0 {
                 partiesListener = db.collection("afterparties")
                 .whereField("userId", isEqualTo: user.uid)
                 .order(by: "createdAt", descending: true)
@@ -552,12 +516,6 @@ struct UserInfoView: View {
         let calendar = Calendar.current
         let ageComponents = calendar.dateComponents([.year], from: dob, to: Date())
         return ageComponents.year
-    }
-    
-    private func calculateSuccessRate() -> Int {
-        guard let user = user, (user.hostedPartiesCount ?? 0) > 0 else { return 0 }
-        // For now, use a simple calculation based on rating
-        return Int(((user.hostRating ?? 0.0) / 5.0) * 100)
     }
     
     private func formatDate(_ date: Date) -> String {

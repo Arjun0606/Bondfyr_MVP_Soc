@@ -7,6 +7,7 @@ struct RequestToJoinSheet: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @StateObject private var dodoPaymentService = DodoPaymentService.shared
     
     @State private var introMessage = ""
     @State private var isSubmitting = false
@@ -177,10 +178,10 @@ struct RequestToJoinSheet: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    FlowStepView(number: "1", text: "Your request goes to the host")
-                    FlowStepView(number: "2", text: "Host reviews and approves/denies")
-                    FlowStepView(number: "3", text: "If approved: address & Venmo details revealed")
-                    FlowStepView(number: "4", text: "Send payment via Venmo to secure spot")
+                    FlowStepView(number: "1", text: "Submit request to join party")
+                    FlowStepView(number: "2", text: "Host reviews your request")
+                    FlowStepView(number: "3", text: "If approved: pay via Dodo Payments")
+                    FlowStepView(number: "4", text: "Party details & address revealed")
                     FlowStepView(number: "5", text: "Show up and party! 🎉")
                 }
             }
@@ -221,32 +222,38 @@ struct RequestToJoinSheet: View {
                 .font(.system(size: 60))
                 .foregroundColor(.green)
             
-            Text("Request Sent!")
+            Text("Request Submitted!")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
-            Text("Your request has been sent to @\(afterparty.hostHandle)")
+            Text("Your request has been sent to @\(afterparty.hostHandle) for approval")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
             
             VStack(spacing: 12) {
-                Text("You'll be notified when:")
+                Text("What happens next:")
                     .font(.subheadline)
                     .foregroundColor(.white)
                 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: "bell.fill")
+                            .foregroundColor(.orange)
+                        Text("Host reviews your request")
+                        Spacer()
+                    }
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                        Text("Host approves your request")
+                        Text("If approved, you'll pay via Dodo")
                         Spacer()
                     }
                     HStack {
                         Image(systemName: "location.fill")
                             .foregroundColor(.blue)
-                        Text("Address & payment details are revealed")
+                        Text("Party address will be revealed")
                         Spacer()
                     }
                 }
@@ -276,23 +283,25 @@ struct RequestToJoinSheet: View {
         print("🟡 REQUEST: submitRequest() called for party \(afterparty.id)")
         print("🟡 REQUEST: Current user: \(currentUser.name) (\(currentUser.uid))")
         print("🟡 REQUEST: Intro message: '\(introMessage.trimmingCharacters(in: .whitespacesAndNewlines))'")
+        print("🟡 REQUEST: NEW FLOW - Sending request WITHOUT payment (payment comes after approval)")
         
         isSubmitting = true
         
         Task {
             do {
+                // NEW FLOW: Create guest request WITHOUT payment processing
                 let guestRequest = GuestRequest(
                     userId: currentUser.uid,
                     userName: currentUser.name,
                     userHandle: currentUser.username ?? currentUser.name,
                     introMessage: introMessage.trimmingCharacters(in: .whitespacesAndNewlines),
-                    paymentStatus: .pending
+                    paymentStatus: .pending // Will process payment AFTER approval
                 )
                 
                 print("🟡 REQUEST: Created GuestRequest with ID: \(guestRequest.id)")
                 print("🟡 REQUEST: Calling afterpartyManager.submitGuestRequest()...")
                 
-                // Add request to Firestore
+                // Submit request to Firestore (NO PAYMENT YET)
                 try await afterpartyManager.submitGuestRequest(
                     afterpartyId: afterparty.id,
                     guestRequest: guestRequest
@@ -308,9 +317,7 @@ struct RequestToJoinSheet: View {
                 }
                 
             } catch {
-                print("🔴 REQUEST: submitRequest() FAILED with error: \(error.localizedDescription)")
-                print("🔴 REQUEST: Full error: \(error)")
-                
+                print("🔴 REQUEST: Error submitting request: \(error)")
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true

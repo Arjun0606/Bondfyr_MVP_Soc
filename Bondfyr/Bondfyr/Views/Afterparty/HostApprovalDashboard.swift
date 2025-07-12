@@ -14,14 +14,21 @@ struct HostApprovalDashboard: View {
     @State private var searchText = ""
     @State private var filterOption: FilterOption = .all
     @State private var showingPartyAnalytics = false
+    @State private var refreshTrigger = 0 // Force view refresh when party updates
     
     // Real-time party data
     private var currentParty: Afterparty {
-        realTimeManager.getParty(party.id) ?? party
+        print("🔍 HOST DASHBOARD: currentParty computed - ID: \(party.id)")
+        let updatedParty = realTimeManager.getParty(party.id) ?? party
+        print("🔍 HOST DASHBOARD: Found \(updatedParty.guestRequests.count) requests")
+        print("🔍 HOST DASHBOARD: Original party had \(party.guestRequests.count) requests")
+        print("🔍 HOST DASHBOARD: Real-time manager has party: \(realTimeManager.getParty(party.id) != nil)")
+        return updatedParty
     }
     
     private var filteredRequests: [GuestRequest] {
         let requests = currentParty.guestRequests.filter { request in
+            print("🔍 FILTER: Checking request from \(request.userHandle) with status \(request.approvalStatus)")
             switch filterOption {
             case .all:
                 return true
@@ -33,6 +40,8 @@ struct HostApprovalDashboard: View {
                 return request.paymentStatus == .paid
             }
         }
+        
+        print("🔍 FILTER: After filtering (\(filterOption.rawValue)): \(requests.count) requests")
         
         if searchText.isEmpty {
             return requests.sorted { $0.requestedAt > $1.requestedAt }
@@ -129,10 +138,39 @@ struct HostApprovalDashboard: View {
             }
         }
         .onAppear {
+            print("🟢 HOST DASHBOARD: Starting to listen for party \(party.id)")
+            print("🟢 HOST DASHBOARD: Current guest requests: \(party.guestRequests.count)")
+            
+            // CRITICAL FIX: Force immediate refresh from Firebase
+            Task {
+                do {
+                    let freshParty = try await afterpartyManager.getAfterpartyById(party.id)
+                    print("🔄 HOST DASHBOARD: Fresh party data - requests: \(freshParty.guestRequests.count)")
+                } catch {
+                    print("🔴 HOST DASHBOARD: Error fetching fresh party data: \(error)")
+                }
+            }
+            
             realTimeManager.startListening(to: party.id)
         }
         .onDisappear {
+            print("🔴 HOST DASHBOARD: Stopping listener for party \(party.id)")
             realTimeManager.stopListening(to: party.id)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PartyDataUpdated"))) { notification in
+            print("🔄 HOST DASHBOARD: Received party data update notification")
+            if let userInfo = notification.userInfo,
+               let updatedPartyId = userInfo["partyId"] as? String,
+               updatedPartyId == party.id,
+               let updatedParty = userInfo["party"] as? Afterparty {
+                print("🔄 HOST DASHBOARD: Party \(updatedPartyId) updated - guest requests: \(updatedParty.guestRequests.count)")
+                
+                // CRITICAL FIX: Force view refresh by updating a state variable
+                DispatchQueue.main.async {
+                    // Trigger view refresh
+                    refreshTrigger += 1
+                }
+            }
         }
         .sheet(isPresented: $showingPartyAnalytics) {
             PartyAnalyticsSheet(party: currentParty)

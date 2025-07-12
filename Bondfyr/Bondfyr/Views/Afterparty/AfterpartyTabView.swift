@@ -148,7 +148,7 @@ struct AfterpartyTabView: View {
         vibes: [],
         timeFilter: .all,
         showOnlyAvailable: true,
-        maxGuestCount: 200
+        maxGuestCount: 500
     )
     @State private var isLoadingMarketplace = false
     
@@ -190,7 +190,7 @@ struct AfterpartyTabView: View {
                !currentFilters.vibes.isEmpty ||
                currentFilters.timeFilter != .all ||
                currentFilters.showOnlyAvailable != true ||
-               currentFilters.maxGuestCount != 200
+               currentFilters.maxGuestCount != 500
     }
     
     var body: some View {
@@ -342,7 +342,7 @@ struct AfterpartyTabView: View {
                                 VStack(spacing: 4) {
                                     Text("• Early hosts get featured first")
                                     Text("• Build your reputation early")
-                                    Text("• Direct payments via Venmo/CashApp")
+                                    Text("• Secure payments via Dodo Payments")
                                     Text("• Keep 100% during TestFlight")
                                 }
                                 .font(.subheadline)
@@ -531,6 +531,7 @@ struct ActionButtonsView: View {
     @Binding var showingDeleteConfirmation: Bool
     @Binding var showingShareSheet: Bool
     @Binding var showingContactHost: Bool
+    @Binding var showingPaymentSheet: Bool // NEW FLOW: Add payment sheet binding
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
     
@@ -697,8 +698,8 @@ struct ActionButtonsView: View {
             Image(systemName: "checkmark.circle.fill")
             Text("Going")
         case .approved:
-            Image(systemName: "checkmark.circle")
-            Text("Approved - Join Chat!")
+            Image(systemName: "creditcard.fill")
+            Text("Complete Payment ($\(Int(afterparty.ticketPrice)))")
         case .pending:
             Image(systemName: "clock.fill")
             Text("Pending")
@@ -735,12 +736,23 @@ struct ActionButtonsView: View {
             // TESTFLIGHT VERSION: Show contact host sheet
             showingContactHost = true
         case .approved:
-            // Navigate to party chat
-            // TODO: Add navigation to party chat
-            print("🔍 UI: Approved user wants to join chat")
+            // NEW FLOW: Initiate Dodo payment for approved guest
+            print("🔍 UI: Approved user initiating payment flow")
+            initiatePaymentFlow()
         default:
             break
         }
+    }
+    
+    // NEW FLOW: Payment initiation for approved guests
+    private func initiatePaymentFlow() {
+        guard let currentUserId = authViewModel.currentUser?.uid else {
+            print("🔴 PAYMENT: No current user for payment")
+            return
+        }
+        
+        // Show payment sheet for Dodo payment processing
+        showingPaymentSheet = true
     }
     
     private var shareButton: some View {
@@ -765,6 +777,7 @@ struct AfterpartyCard: View {
     @State private var showingContactHost = false // TESTFLIGHT: Contact host sheet
     @State private var isJoining = false // Missing state variable for ContactHostSheet
     @State private var showingHostInfo = false // Host profile sheet
+    @State private var showingPaymentSheet = false // NEW FLOW: Payment sheet for approved guests
     
     // CRITICAL FIX: Add initializer to set the @State property
     init(afterparty: Afterparty) {
@@ -951,7 +964,7 @@ struct AfterpartyCard: View {
                             Text("you keep")
                                 .font(.caption2)
                                 .foregroundColor(.green.opacity(0.8))
-                            Text("100%")
+                            Text("80%")
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.green)
@@ -1042,16 +1055,53 @@ struct AfterpartyCard: View {
                 }
             }
             
-            // Action buttons
-            ActionButtonsView(
-                afterparty: afterparty,
-                isHost: isHost,
-                showingGuestList: $showingGuestList,
-                showingEditSheet: $showingEditSheet,
-                showingDeleteConfirmation: $showingDeleteConfirmation,
-                showingShareSheet: $showingShareSheet,
-                showingContactHost: $showingContactHost
-            )
+            // FIXED: Use new action button system
+            if isHost {
+                // Host controls with cancel party option
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        Button(action: { showingGuestList = true }) {
+                            HStack {
+                                Image(systemName: "person.2.fill")
+                                Text("Manage Guests (\(afterparty.guestRequests.count))")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        
+                        Button(action: { showingShareSheet = true }) {
+                            Image(systemName: "square.and.arrow.up")
+                                .padding()
+                                .background(Color.gray)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                        }
+                    }
+                    
+                    // Cancel Party Button
+                    Button(action: { showingDeleteConfirmation = true }) {
+                        HStack {
+                            Image(systemName: "xmark.circle.fill")
+                            Text("Cancel Party")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.red.opacity(0.2))
+                        .foregroundColor(.red)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                        )
+                    }
+                }
+            } else {
+                // FIXED: Guest action button
+                FixedGuestActionButton(afterparty: afterparty)
+            }
         }
         .padding(16)
         .background(Color(.systemGray6).opacity(0.1))
@@ -1061,16 +1111,13 @@ struct AfterpartyCard: View {
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
         .sheet(isPresented: $showingGuestList) {
-            GuestListView(afterparty: $afterparty)
+            FixedGuestListView(partyId: afterparty.id, originalParty: afterparty)
         }
         .sheet(isPresented: $showingEditSheet) {
             EditAfterpartyView(afterparty: afterparty)
         }
         .sheet(isPresented: $showingShareSheet) {
-            let message = isHost ? 
-                "Hosting an afterparty at \(afterparty.locationName)! Join me!" :
-                "Heading to \(afterparty.hostHandle)'s afterparty at \(afterparty.locationName)!"
-            ShareSheet(activityItems: [message])
+            SocialShareSheet(party: afterparty, isPresented: $showingShareSheet)
         }
         .sheet(isPresented: $showingContactHost) {
             RequestToJoinSheet(afterparty: afterparty) {
@@ -1088,6 +1135,12 @@ struct AfterpartyCard: View {
         }
         .sheet(isPresented: $showingHostInfo) {
             UserInfoView(userId: afterparty.userId)
+        }
+        .sheet(isPresented: $showingPaymentSheet) {
+            DodoPaymentSheet(afterparty: afterparty) {
+                // Refresh party data after payment completion
+                refreshAfterpartyData()
+            }
         }
         .alert("Stop Invitation?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -1248,7 +1301,6 @@ struct ApprovedGuestSimpleRow: View {
     let request: GuestRequest
     let afterparty: Afterparty
     @State private var showingUserInfo = false
-    @State private var showingVenmoInfo = false
     
     var body: some View {
         HStack {
@@ -1276,21 +1328,17 @@ struct ApprovedGuestSimpleRow: View {
             
             Spacer()
             
-            Button(action: { showingVenmoInfo = true }) {
-                Text("Venmo Info")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(6)
-            }
+            // Payment now handled through Dodo - no Venmo UI needed
+            Text("✅ Approved")
+                .font(.caption)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.green)
+                .foregroundColor(.white)
+                .cornerRadius(6)
         }
         .sheet(isPresented: $showingUserInfo) {
             UserInfoView(userId: request.userId)
-        }
-        .sheet(isPresented: $showingVenmoInfo) {
-            VenmoPaymentInfoSheet(afterparty: afterparty, guestName: request.userName)
         }
     }
     
@@ -1495,18 +1543,25 @@ struct GuestListView: View {
     @State private var refreshing = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var lastUpdateTime = Date()  // CRITICAL FIX: Track when binding updates
+    @State private var forceRefresh = 0  // CRITICAL FIX: Force view refresh
     
-    // Organize requests by approval status
+    // CRITICAL FIX: Make computed properties more reactive by depending on forceRefresh
     private var pendingRequests: [GuestRequest] {
+        let _ = forceRefresh  // Force dependency on refresh trigger
         let pending = afterparty.guestRequests.filter { $0.approvalStatus == .pending }
+        print("🔍 UI: pendingRequests computed at \(Date()) - afterparty last updated: \(lastUpdateTime)")
+        print("🔍 UI: afterparty.guestRequests count: \(afterparty.guestRequests.count)")
+        print("🔍 UI: forceRefresh value: \(forceRefresh)")
         print("🔍 UI: pendingRequests computed - found \(pending.count) pending requests")
         for (index, request) in pending.enumerated() {
-            print("🔍 UI: Pending \(index + 1): \(request.userHandle) (status: \(request.approvalStatus), payment: \(request.paymentStatus))")
+            print("🔍 UI: Pending \(index + 1): \(request.userHandle) (status: \(request.approvalStatus))")
         }
         return pending
     }
     
     private var approvedGuests: [GuestRequest] {
+        let _ = forceRefresh  // Force dependency on refresh trigger
         let approved = afterparty.guestRequests.filter { $0.approvalStatus == .approved }
         print("🔍 UI: approvedGuests computed - found \(approved.count) approved guests")
         for (index, request) in approved.enumerated() {
@@ -1570,34 +1625,7 @@ struct GuestListView: View {
                 }
                 
                 // Debug Section (for testing notifications)
-                Section("🔧 Debug Tools") {
-                    VStack(spacing: 8) {
-                        Button("Test Notifications") {
-                            print("🧪 DEBUG: Testing notification system...")
-                            NotificationManager.shared.checkNotificationStatus()
-                            NotificationManager.shared.sendTestGuestRequestNotification()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                        
-                        Button("Check Notification Permissions") {
-                            NotificationManager.shared.checkNotificationStatus()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.orange)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                        
-                        Text("Use these tools to test if notifications are working")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                    }
-                }
+                // Debug section removed - was causing guests to receive host notifications
             }
             .listStyle(InsetGroupedListStyle())
             .navigationTitle("Guest Management")
@@ -1615,6 +1643,11 @@ struct GuestListView: View {
                 }
                 .disabled(refreshing)
             )
+        }
+        .id(lastUpdateTime)  // CRITICAL FIX: Force view refresh when binding changes
+        .onChange(of: afterparty.guestRequests.count) { newCount in
+            print("🔄 UI: afterparty.guestRequests.count changed to \(newCount) - updating lastUpdateTime")
+            lastUpdateTime = Date()
         }
         .refreshable {
             print("🔄 UI: refreshable action triggered")
@@ -1843,8 +1876,13 @@ struct GuestListView: View {
                 }
                 
                 // CRITICAL FIX: Update the binding, which will also update the parent AfterpartyCard
+                print("🔄 REFRESH: About to update binding - current requests: \(afterparty.guestRequests.count), new requests: \(updatedParty.guestRequests.count)")
                 afterparty = updatedParty
+                lastUpdateTime = Date()  // Force view refresh
+                forceRefresh += 1  // CRITICAL FIX: Trigger computed property refresh
                 print("🟢 REFRESH: Binding updated - both GuestListView and AfterpartyCard now have fresh data")
+                print("🟢 REFRESH: forceRefresh incremented to \(forceRefresh)")
+                print("🟢 REFRESH: UI should now show \(updatedParty.guestRequests.filter { $0.approvalStatus == .pending }.count) pending requests")
             }
         } catch {
             print("🔴 REFRESH: Failed to refresh data: \(error.localizedDescription)")
@@ -1926,9 +1964,10 @@ struct CreateAfterpartyView: View {
     // MARK: - New Marketplace Fields
     @State private var title = ""
     @State private var ticketPrice: Double = 10.0
-    @State private var coverPhotoURL: String = ""
-    @State private var coverPhotoImage: UIImage? = nil
-    @State private var maxGuestCount: Int = 25
+    @State private var maxGuestCount = 25
+    @State private var selectedVibeTag = "BYOB"
+    @State private var coverPhotoImage: UIImage?
+    @State private var coverPhotoURL = ""
     @State private var visibility: PartyVisibility = .publicFeed
     @State private var approvalType: ApprovalType = .manual
     @State private var ageRestriction: Int? = nil
@@ -1941,7 +1980,6 @@ struct CreateAfterpartyView: View {
     @State private var selectedDate = Date()
     @State private var customStartTime = Date().addingTimeInterval(3600)
     @State private var customEndTime = Date().addingTimeInterval(3600 * 5)
-    
     // MARK: - TESTFLIGHT: Payment Details
     @State private var venmoHandle = ""
     
@@ -2015,7 +2053,6 @@ struct CreateAfterpartyView: View {
         return !title.isEmpty &&
                !selectedVibes.isEmpty &&
                !address.isEmpty &&
-               !venmoHandle.isEmpty && // TESTFLIGHT: Require Venmo handle
                ticketPrice >= 5.0 && // Minimum $5
                maxGuestCount >= 5 && // Minimum 5 guests
                legalDisclaimerAccepted // Must accept legal responsibility
@@ -2042,7 +2079,6 @@ struct CreateAfterpartyView: View {
                     )
                     
                     // MARK: - Payment Details (TestFlight)
-                    VenmoPaymentSection(venmoHandle: $venmoHandle)
                     
                     // MARK: - Cover Photo
                     CoverPhotoSectionWithBinding(
@@ -2233,7 +2269,6 @@ struct CreateAfterpartyView: View {
                     legalDisclaimerAccepted: legalDisclaimerAccepted,
                     
                     // TESTFLIGHT: Payment details
-                    venmoHandle: venmoHandle.isEmpty ? nil : venmoHandle
             )
             await MainActor.run {
                     presentationMode.wrappedValue.dismiss()
@@ -2520,15 +2555,7 @@ struct AlertError: Identifiable {
     let error: Error
 }
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
+// SocialShareSheet has been moved to Views/Shared/SocialShareSheet.swift
 
 // MARK: - Demo Banner Component
 struct DemoPartiesBanner: View {
@@ -2589,10 +2616,8 @@ struct DemoPartiesBanner: View {
                 .stroke(Color.blue.opacity(0.3), lineWidth: 1)
         )
         .padding(.horizontal)
-    }
-} 
-
-// MARK: - Extracted Form Sections to Fix Type-Checking
+    } 
+}
 
 struct PartyDetailsSection: View {
     @Binding var title: String
@@ -2699,15 +2724,15 @@ struct PartyDetailsSection: View {
                         .foregroundColor(.white)
                     
                     Button("+") {
-                        if maxGuestCount < 200 {
+                        if maxGuestCount < 500 {
                             maxGuestCount += 5
                         }
                     }
                     .padding()
-                    .background(maxGuestCount >= 200 ? Color(.systemGray4) : Color(.systemGray6))
+                    .background(maxGuestCount >= 500 ? Color(.systemGray4) : Color(.systemGray6))
                     .cornerRadius(8)
-                    .foregroundColor(maxGuestCount >= 200 ? .gray : .white)
-                    .disabled(maxGuestCount >= 200)
+                    .foregroundColor(maxGuestCount >= 500 ? .gray : .white)
+                    .disabled(maxGuestCount >= 500)
                 }
             }
         }
@@ -3255,57 +3280,6 @@ struct LegalDisclaimerSection: View {
     }
 }
 
-struct VenmoPaymentSection: View {
-    @Binding var venmoHandle: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "dollarsign.circle.fill")
-                    .foregroundColor(.green)
-                Text("Payment Details")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Your Venmo Handle *")
-                    .font(.body)
-                    .foregroundColor(.white)
-                
-                TextField("@your-venmo-handle", text: $venmoHandle)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .foregroundColor(.white)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("💰 Guests will send payments to this Venmo")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    
-                    Text("🔒 Only shown to approved guests")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    
-                    Text("📱 Payment format: \"Party: [Your Party Name]\"")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
-            }
-        }
-        .padding()
-        .background(Color.green.opacity(0.1))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.green.opacity(0.3), lineWidth: 1)
-        )
-    }
-}
 
 struct TestFlightDisclaimerSection: View {
     var body: some View {
@@ -3346,8 +3320,8 @@ struct TestFlightDisclaimerSection: View {
                     Text("   • 20% Bondfyr service fee (you keep 80%)")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-                    Text("   • Secure payments & dispute resolution")
-                        .font(.subheadline)
+                    Text("   • Secure payments via Dodo Payments")
+                        .font(.caption)
                         .foregroundColor(.gray)
                     Text("   • Advanced analytics & promotion tools")
                         .font(.subheadline)
@@ -3541,65 +3515,7 @@ struct ContactHostSheet: View {
             .background(Color.green.opacity(0.1))
             .cornerRadius(12)
             
-            // Venmo Payment Details
-            if let venmoHandle = afterparty.venmoHandle {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Payment Instructions")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    VStack(spacing: 12) {
-                        HStack {
-                            Text("Send to:")
-                            Spacer()
-                            Text(venmoHandle)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                        }
-                        
-                        HStack {
-                            Text("Amount:")
-                            Spacer()
-                            Text("$\(Int(afterparty.ticketPrice))")
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Payment message:")
-                                .foregroundColor(.gray)
-                            Text("\"Party: \(afterparty.title)\"")
-                                .font(.monospaced(.body)())
-                                .padding(8)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .foregroundColor(.white)
-                    
-                    Button("Open Venmo") {
-                        if let venmoURL = URL(string: "venmo://paycharge?txn=pay&recipients=\(venmoHandle)&amount=\(Int(afterparty.ticketPrice))&note=Party: \(afterparty.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
-                            UIApplication.shared.open(venmoURL) { success in
-                                if !success {
-                                    // Fallback to Venmo website
-                                    if let webURL = URL(string: "https://venmo.com/\(venmoHandle)") {
-                                        UIApplication.shared.open(webURL)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-                .padding()
-                .background(Color(.systemGray6).opacity(0.1))
-                .cornerRadius(12)
-            }
+            // Payment now handled through Dodo - no Venmo UI needed
         }
     }
     
@@ -3655,7 +3571,7 @@ struct ContactHostSheet: View {
                     .cornerRadius(12)
                 
             case .approved:
-                Text("Send payment via Venmo to confirm your spot")
+                Text("Payment via Dodo confirmed - you're in!")
                     .foregroundColor(.green)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -3699,28 +3615,55 @@ struct ContactHostSheet: View {
         isJoining = true
         Task {
             do {
-                // Track estimated transaction for analytics
-                await afterpartyManager.trackEstimatedTransaction(
-                    afterpartyId: afterparty.id,
-                    estimatedValue: afterparty.ticketPrice
+                guard let currentUser = authViewModel.currentUser else {
+                    print("🔴 REQUEST: No current user")
+                    throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+                }
+                
+                print("🟡 REQUEST: Sending join request for party \(afterparty.id)")
+                print("🟡 REQUEST: User: \(currentUser.name) (\(currentUser.uid))")
+                
+                // CRITICAL FIX: Use proper submitGuestRequest flow that triggers notifications
+                let guestRequest = GuestRequest(
+                    userId: currentUser.uid,
+                    userName: currentUser.name,
+                    userHandle: currentUser.username ?? currentUser.name,
+                    introMessage: "Excited to join this party!", // Default intro message
+                    paymentStatus: .pending // Will be handled after approval
                 )
                 
-                // Simple join request (no payment)
-                try await afterpartyManager.requestFreeAccess(
-                    to: afterparty,
-                    userHandle: authViewModel.currentUser?.username ?? authViewModel.currentUser?.name ?? "",
-                    userName: authViewModel.currentUser?.name ?? ""
+                print("🟡 REQUEST: Created GuestRequest - calling submitGuestRequest()...")
+                
+                // Use the PROPER method that handles transactions and notifications
+                try await afterpartyManager.submitGuestRequest(
+                    afterpartyId: afterparty.id,
+                    guestRequest: guestRequest
                 )
+                
+                print("🟢 REQUEST: submitGuestRequest() SUCCESS - request submitted and host notified")
                 
                 await MainActor.run {
-                    userRequestStatus = .approved // Auto-approve for TestFlight
+                    userRequestStatus = .pending // Proper pending state (not auto-approved)
                     showingSuccess = true
                 }
             } catch {
-                
+                print("🔴 REQUEST: submitGuestRequest() FAILED: \(error.localizedDescription)")
+                await MainActor.run {
+                    // Handle error properly
+                }
             }
             isJoining = false
         }
     }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
  

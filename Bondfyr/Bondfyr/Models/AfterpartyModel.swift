@@ -32,7 +32,7 @@ enum PaymentStatus: String, Codable {
 }
 
 // MARK: - Guest request with payment info
-struct GuestRequest: Identifiable, Codable {
+struct GuestRequest: Identifiable, Codable, Equatable {
     let id: String
     let userId: String
     let userName: String
@@ -42,6 +42,7 @@ struct GuestRequest: Identifiable, Codable {
     let paymentStatus: PaymentStatus
     let approvalStatus: ApprovalStatus
     let paypalOrderId: String?
+    let dodoPaymentIntentId: String?
     let paidAt: Date?
     let refundedAt: Date?
     let approvedAt: Date?
@@ -55,6 +56,7 @@ struct GuestRequest: Identifiable, Codable {
          paymentStatus: PaymentStatus = .pending,
          approvalStatus: ApprovalStatus = .pending,
          paypalOrderId: String? = nil,
+         dodoPaymentIntentId: String? = nil,
          paidAt: Date? = nil,
          refundedAt: Date? = nil,
          approvedAt: Date? = nil) {
@@ -67,6 +69,7 @@ struct GuestRequest: Identifiable, Codable {
         self.paymentStatus = paymentStatus
         self.approvalStatus = approvalStatus
         self.paypalOrderId = paypalOrderId
+        self.dodoPaymentIntentId = dodoPaymentIntentId
         self.paidAt = paidAt
         self.refundedAt = refundedAt
         self.approvedAt = approvedAt
@@ -119,6 +122,10 @@ struct Afterparty: Identifiable, Codable {
     let chatEnded: Bool?
     let chatEndedAt: Date?
     
+    // MARK: - Stats Processing (Realistic Metrics System)
+    let statsProcessed: Bool?        // Whether user stats have been updated
+    let statsProcessedAt: Date?      // When stats were processed
+    
     // MARK: - Computed properties
     var isExpired: Bool {
         return Date() > endTime
@@ -148,15 +155,14 @@ struct Afterparty: Identifiable, Codable {
     
     var hostEarnings: Double {
         let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
-        // TESTFLIGHT: Host keeps 100% during testing phase
-        return Double(confirmedPaidGuests) * ticketPrice * 1.0 // 100% to host during TestFlight
+        // Updated to 80% commission (20% platform fee)
+        return Double(confirmedPaidGuests) * ticketPrice * 0.80 // 80% to host
     }
     
     var bondfyrRevenue: Double {
-        // TESTFLIGHT: No commission during testing phase
-        return 0.0 // Full version will be 20% of revenue
-        // let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
-        // return Double(confirmedPaidGuests) * ticketPrice * 0.20
+        // Updated to 20% commission
+        let confirmedPaidGuests = guestRequests.filter { $0.paymentStatus == .paid }.count
+        return Double(confirmedPaidGuests) * ticketPrice * 0.20 // 20% platform fee
     }
     
     var spotsRemaining: Int {
@@ -230,6 +236,9 @@ struct Afterparty: Identifiable, Codable {
         
         // Party Chat fields
         case chatEnded, chatEndedAt
+        
+        // Stats Processing (Realistic Metrics System)
+        case statsProcessed, statsProcessedAt
     }
     
     // MARK: - Initializer
@@ -269,7 +278,11 @@ struct Afterparty: Identifiable, Codable {
          
          // Party Chat fields
          chatEnded: Bool? = nil,
-         chatEndedAt: Date? = nil) {
+         chatEndedAt: Date? = nil,
+         
+         // Stats Processing (Realistic Metrics System)
+         statsProcessed: Bool? = nil,
+         statsProcessedAt: Date? = nil) {
         
         self.id = id
         self.userId = userId
@@ -308,6 +321,10 @@ struct Afterparty: Identifiable, Codable {
         // Party Chat fields
         self.chatEnded = chatEnded
         self.chatEndedAt = chatEndedAt
+        
+        // Stats Processing (Realistic Metrics System)
+        self.statsProcessed = statsProcessed
+        self.statsProcessedAt = statsProcessedAt
     }
     
     // Helper to convert GeoPoint to CLLocationCoordinate2D
@@ -370,6 +387,14 @@ struct Afterparty: Identifiable, Codable {
             chatEndedAt = chatEndTimestamp.dateValue()
         } else {
             chatEndedAt = try? container.decode(Date.self, forKey: .chatEndedAt)
+        }
+        
+        // Stats Processing (Realistic Metrics System)
+        statsProcessed = try? container.decode(Bool.self, forKey: .statsProcessed)
+        if let statsProcessedTimestamp = try? container.decode(Timestamp.self, forKey: .statsProcessedAt) {
+            statsProcessedAt = statsProcessedTimestamp.dateValue()
+        } else {
+            statsProcessedAt = try? container.decode(Date.self, forKey: .statsProcessedAt)
         }
         
         // Handle Timestamps
@@ -447,6 +472,14 @@ struct Afterparty: Identifiable, Codable {
             try container.encode(Timestamp(date: chatEndedAt), forKey: .chatEndedAt)
         } else {
             try container.encodeNil(forKey: .chatEndedAt)
+        }
+        
+        // Stats Processing (Realistic Metrics System)
+        try container.encode(statsProcessed, forKey: .statsProcessed)
+        if let statsProcessedAt = statsProcessedAt {
+            try container.encode(Timestamp(date: statsProcessedAt), forKey: .statsProcessedAt)
+        } else {
+            try container.encodeNil(forKey: .statsProcessedAt)
         }
     }
 } 

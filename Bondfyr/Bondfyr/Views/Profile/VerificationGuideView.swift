@@ -19,11 +19,8 @@ struct VerificationGuideView: View {
                         // Benefits Section
                         benefitsSection
                         
-                        // Social Features
-                        socialFeaturesSection
-                        
-                        // Rating System
-                        ratingSystemSection
+                        // Achievement Milestones
+                        achievementMilestonesSection
                         
                         Spacer(minLength: 20)
                     }
@@ -59,11 +56,10 @@ struct VerificationGuideView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
-            // Host Verification
+            // Host Verification (updated threshold)
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Image(systemName: "checkmark.shield.fill")
-                        .foregroundColor(.green)
+                    Text("🏆")
                         .font(.title3)
                     Text("Host Verification")
                         .font(.headline)
@@ -74,13 +70,13 @@ struct VerificationGuideView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     RequirementRow(
                         icon: "calendar.badge.plus",
-                        requirement: "Host 4 successful parties",
-                        description: "Organize and host 4 events through Bondfyr"
+                        requirement: "Host 3 successful parties",
+                        description: "Organize and host 3 events through Bondfyr"
                     )
                     RequirementRow(
-                        icon: "star.fill",
-                        requirement: "Maintain good ratings",
-                        description: "Keep a positive host rating from guests"
+                        icon: "checkmark.circle.fill",
+                        requirement: "Complete party requirements",
+                        description: "Ensure guests have a great experience"
                     )
                 }
                 .padding(.leading, 40)
@@ -89,11 +85,10 @@ struct VerificationGuideView: View {
             .background(Color.white.opacity(0.05))
             .cornerRadius(12)
             
-            // Guest Verification
+            // Guest Verification (updated threshold)
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Image(systemName: "person.badge.shield.checkmark.fill")
-                        .foregroundColor(.blue)
+                    Text("⭐")
                         .font(.title3)
                     Text("Guest Verification")
                         .font(.headline)
@@ -104,13 +99,13 @@ struct VerificationGuideView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     RequirementRow(
                         icon: "person.3.fill",
-                        requirement: "Attend 8 parties",
-                        description: "Check in to 8 events and participate actively"
+                        requirement: "Attend 5 parties",
+                        description: "Check in to 5 events and participate actively"
                     )
                     RequirementRow(
-                        icon: "heart.fill",
-                        requirement: "Be an engaged member",
-                        description: "Receive ratings and connect with other party-goers"
+                        icon: "checkmark.circle.fill",
+                        requirement: "Complete party check-ins",
+                        description: "Successfully check in and out at each party"
                     )
                 }
                 .padding(.leading, 40)
@@ -156,66 +151,41 @@ struct VerificationGuideView: View {
         }
     }
     
-    private var socialFeaturesSection: some View {
+    private var achievementMilestonesSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("❤️ Social Connection System")
+            Text("🏆 Achievement Milestones")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
             VStack(alignment: .leading, spacing: 12) {
-                FeatureRow(
-                    icon: "heart.fill",
-                    title: "Event Likes",
-                    description: "Like other party-goers during events to show appreciation"
-                )
-                FeatureRow(
-                    icon: "person.crop.circle.fill",
-                    title: "User Profiles",
-                    description: "View detailed profiles showing reputation and verification status"
-                )
-                FeatureRow(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "Reputation Tracking",
-                    description: "Build your reputation through positive interactions"
-                )
-            }
-            .padding()
-            .background(Color.white.opacity(0.05))
-            .cornerRadius(12)
-        }
-    }
-    
-    private var ratingSystemSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("⭐ Rating System")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("After each event, hosts and guests can rate each other:")
+                Text("Celebrate your Bondfyr journey with meaningful milestones:")
                     .foregroundColor(.gray)
                 
-                RatingExplainRow(
-                    stars: 5,
-                    description: "Outstanding experience, would highly recommend"
+                AchievementMilestoneRow(
+                    emoji: "🎉",
+                    title: "First Host",
+                    description: "Successfully host your first afterparty"
                 )
-                RatingExplainRow(
-                    stars: 4,
-                    description: "Great experience, very enjoyable"
+                AchievementMilestoneRow(
+                    emoji: "🕺",
+                    title: "Party Goer",
+                    description: "Attend your first afterparty"
                 )
-                RatingExplainRow(
-                    stars: 3,
-                    description: "Good experience, met expectations"
+                AchievementMilestoneRow(
+                    emoji: "🏆",
+                    title: "Verified Host",
+                    description: "Become a verified, trusted host"
                 )
-                RatingExplainRow(
-                    stars: 2,
-                    description: "Fair experience, some room for improvement"
+                AchievementMilestoneRow(
+                    emoji: "⭐",
+                    title: "Verified Guest",
+                    description: "Become a verified community member"
                 )
-                RatingExplainRow(
-                    stars: 1,
-                    description: "Poor experience, significant issues"
+                AchievementMilestoneRow(
+                    emoji: "💎",
+                    title: "Party Legend",
+                    description: "Reach major party milestones (10, 25, 50+)"
                 )
             }
             .padding()
@@ -277,17 +247,16 @@ struct VerificationBenefitRow: View {
     }
 }
 
-struct FeatureRow: View {
-    let icon: String
+struct AchievementMilestoneRow: View {
+    let emoji: String
     let title: String
     let description: String
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
+            Text(emoji)
+                .font(.title3)
                 .foregroundColor(.pink)
-                .font(.system(size: 16))
-                .frame(width: 20)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -299,29 +268,6 @@ struct FeatureRow: View {
                     .foregroundColor(.gray)
                     .lineLimit(nil)
             }
-        }
-    }
-}
-
-struct RatingExplainRow: View {
-    let stars: Int
-    let description: String
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            HStack(spacing: 2) {
-                ForEach(1...5, id: \.self) { index in
-                    Image(systemName: "star.fill")
-                        .foregroundColor(index <= stars ? .yellow : .gray.opacity(0.3))
-                        .font(.caption)
-                }
-            }
-            .frame(width: 60)
-            
-            Text(description)
-                .font(.caption)
-                .foregroundColor(.gray)
-                .lineLimit(nil)
         }
     }
 }

@@ -491,7 +491,7 @@ struct PartyManagementSheet: View {
         }
         .sheet(isPresented: $showingGuestList) {
             if let partyBinding = Binding($partyState) {
-                GuestListView(afterparty: partyBinding)
+                FixedGuestListView(partyId: party.id, originalParty: party)
             }
         }
         .onAppear {

@@ -1,10 +1,8 @@
 import SwiftUI
-import BondfyrPhotos
 
-struct BadgesView: View {
-    let badges: [PhotoBadge]
-    @State private var selectedBadge: PhotoBadge?
-    @State private var showBadgeDetail = false
+struct SimpleAchievementsView: View {
+    let achievements: [SimpleAchievement]
+    @Environment(\.presentationMode) var presentationMode
     
     private let columns = [
         GridItem(.flexible()),
@@ -13,26 +11,25 @@ struct BadgesView: View {
     ]
     
     var body: some View {
-        ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
-            
-            VStack(spacing: 16) {
-                // Header
-                Text("Achievements")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                    .padding(.top)
+        NavigationView {
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
                 
-                if badges.isEmpty {
-                    emptyStateView
-                } else {
-                    badgeGrid
+                VStack(spacing: 16) {
+                    if achievements.isEmpty {
+                        emptyStateView
+                    } else {
+                        achievementGrid
+                    }
                 }
             }
-            .sheet(item: $selectedBadge) { badge in
-                BadgeDetailView(badge: badge)
-            }
+            .navigationTitle("Achievements")
+            .navigationBarTitleDisplayMode(.large)
+            .navigationBarItems(
+                trailing: Button("Done") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            )
         }
     }
     
@@ -40,15 +37,14 @@ struct BadgesView: View {
         VStack(spacing: 20) {
             Spacer()
             
-            Image(systemName: "star.circle")
+            Text("🏆")
                 .font(.system(size: 60))
-                .foregroundColor(.gray)
             
-            Text("No Badges Yet")
+            Text("No Achievements Yet")
                 .font(.title2)
                 .foregroundColor(.white)
             
-            Text("Participate in the community to earn badges!")
+            Text("Attend or host your first party to get started!")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
@@ -58,14 +54,11 @@ struct BadgesView: View {
         }
     }
     
-    private var badgeGrid: some View {
+    private var achievementGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(badges) { badge in
-                    BadgeCell(badge: badge)
-                        .onTapGesture {
-                            selectedBadge = badge
-                        }
+                ForEach(achievements) { achievement in
+                    SimpleAchievementGridCell(achievement: achievement)
                 }
             }
             .padding()
@@ -73,143 +66,100 @@ struct BadgesView: View {
     }
 }
 
-struct BadgeCell: View {
-    let badge: PhotoBadge
-    @State private var isAnimating = false
+struct SimpleAchievementGridCell: View {
+    let achievement: SimpleAchievement
     
     var body: some View {
-        VStack(spacing: 8) {
-            // Badge Icon
-            AsyncImage(url: URL(string: badge.imageURL)) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                case .failure:
-                    Image(systemName: "star.circle.fill")
-                        .font(.system(size: 30))
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(width: 60, height: 60)
-            .background(
-                Circle()
-                    .fill(Color(hex: badge.level.color))
-                    .opacity(0.2)
-            )
-            .overlay(
-                Circle()
-                    .stroke(Color(hex: badge.level.color), lineWidth: 2)
-                    .opacity(isAnimating ? 0.8 : 0.4)
-            )
-            .scaleEffect(isAnimating ? 1.1 : 1.0)
+        VStack(spacing: 12) {
+            // Achievement Emoji
+            Text(achievement.emoji)
+                .font(.system(size: 50))
+                .background(
+                    Circle()
+                        .fill(Color.purple.opacity(0.2))
+                        .frame(width: 80, height: 80)
+                )
             
-            // Badge Name
-            Text(badge.name)
-                .font(.caption)
-                .fontWeight(.medium)
+            // Achievement Title
+            Text(achievement.displayTitle)
+                .font(.subheadline)
+                .fontWeight(.semibold)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
             
-            // Level Indicator
-            Text(badge.level.rawValue)
+            // Achievement Description
+            Text(achievement.description)
+                .font(.caption)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+            
+            // Earned Date
+            Text("Earned \(achievement.earnedDate.formatted(date: .abbreviated, time: .omitted))")
                 .font(.caption2)
-                .foregroundColor(Color(hex: badge.level.color))
+                .foregroundColor(.gray.opacity(0.8))
         }
-        .frame(height: 120)
-        .onAppear {
-            withAnimation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                isAnimating = true
-            }
-        }
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(15)
     }
 }
 
-struct BadgeDetailView: View {
-    let badge: PhotoBadge
-    @Environment(\.presentationMode) var presentationMode
+struct SimpleAchievementToastView: View {
+    let achievement: SimpleAchievement
+    @Binding var isPresented: Bool
     
     var body: some View {
-        ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
-            
-            VStack(spacing: 24) {
-                // Close Button
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding()
-                
-                // Badge Image
-                AsyncImage(url: URL(string: badge.imageURL)) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    case .failure:
-                        Image(systemName: "star.circle.fill")
-                            .font(.system(size: 60))
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(width: 120, height: 120)
+        HStack(spacing: 16) {
+            // Achievement Emoji
+            Text(achievement.emoji)
+                .font(.system(size: 40))
                 .background(
                     Circle()
-                        .fill(Color(hex: badge.level.color))
-                        .opacity(0.2)
+                        .fill(Color.purple.opacity(0.3))
+                        .frame(width: 60, height: 60)
                 )
-                .overlay(
-                    Circle()
-                        .stroke(Color(hex: badge.level.color), lineWidth: 3)
-                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Achievement Unlocked!")
+                    .font(.caption)
+                    .foregroundColor(.purple)
+                    .fontWeight(.semibold)
                 
-                // Badge Info
-                VStack(spacing: 12) {
-                    Text(badge.name)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    
-                    Text(badge.description)
-                        .font(.body)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    Text(badge.level.rawValue)
-                        .font(.headline)
-                        .foregroundColor(Color(hex: badge.level.color))
-                    
-                    // Progress Bar
-                    ProgressView(value: badge.progress)
-                        .progressViewStyle(LinearProgressViewStyle(tint: Color(hex: badge.level.color)))
-                        .frame(width: 200)
-                    
-                    Text("Earned \(badge.earnedDate.formatted(date: .abbreviated, time: .omitted))")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                Text(achievement.displayTitle)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text(achievement.description)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                withAnimation {
+                    isPresented = false
                 }
-                
-                Spacer()
+            }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(.gray)
+                    .padding(8)
             }
         }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 15)
+                .fill(Color.black.opacity(0.9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(Color.purple.opacity(0.5), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 } 

@@ -18,10 +18,6 @@ struct EventCheckInView: View {
 
     @Environment(\.presentationMode) var presentationMode
     
-    // For Rating System
-    @State private var showRatingSheet = false
-    @State private var userToRate: AppUser?
-    
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea(.container, edges: .bottom)
@@ -31,15 +27,6 @@ struct EventCheckInView: View {
                 eventInfoView
                 checkInStatusView
                 attendeesListView
-            }
-        }
-        .sheet(isPresented: $showRatingSheet) {
-            if let userToRate = userToRate {
-                UserPartyProfileView(
-                    isPresented: $showRatingSheet,
-                    user: userToRate,
-                    eventId: event.id.uuidString
-                )
             }
         }
         .onAppear {
@@ -256,7 +243,29 @@ struct EventCheckInView: View {
                                                 .font(.headline)
                                         }
                                         
-                                        ReputationView(user: user)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Text(user.name)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(.white)
+                                                
+                                                // Simple verification badges
+                                                if user.isHostVerified == true {
+                                                    Text("🏆")
+                                                        .font(.caption)
+                                                }
+                                                
+                                                if user.isGuestVerified == true {
+                                                    Text("⭐")
+                                                        .font(.caption)
+                                                }
+                                            }
+                                            
+                                            Text("Checked in")
+                                                .font(.caption)
+                                                .foregroundColor(.gray)
+                                        }
                                         
                                         Spacer()
                                     }
@@ -264,15 +273,6 @@ struct EventCheckInView: View {
                                     .padding(.horizontal, 15)
                                     .background(Color.white.opacity(0.05))
                                     .cornerRadius(8)
-                                    .onTapGesture {
-                                        // Allow host to rate a guest
-                                        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
-                                        // Make sure host can't rate themselves
-                                        if user.uid != currentUserId {
-                                            userToRate = user
-                                            showRatingSheet = true
-                                        }
-                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -297,7 +297,7 @@ struct EventCheckInView: View {
             for userId in userIds {
                 group.enter()
                 
-                db.collection("users").document(userId).getDocument { snapshot, error in
+                db.collection("users").document(userId).getDocument(source: .default) { snapshot, error in
                     defer { group.leave() }
                     
                     if let data = snapshot?.data(),
@@ -325,15 +325,10 @@ struct EventCheckInView: View {
                             email: email,
                             dob: dob,
                             phoneNumber: phoneNumber,
+                            partiesHosted: hostedPartiesCount,
+                            partiesAttended: attendedPartiesCount,
                             isHostVerified: isHostVerified,
-                            isGuestVerified: isGuestVerified,
-                            hostedPartiesCount: hostedPartiesCount,
-                            attendedPartiesCount: attendedPartiesCount,
-                            hostRating: hostRating,
-                            guestRating: guestRating,
-                            hostRatingsCount: hostRatingsCount,
-                            guestRatingsCount: guestRatingsCount,
-                            totalLikesReceived: totalLikesReceived
+                            isGuestVerified: isGuestVerified
                         )
                         users.append(user)
                     }

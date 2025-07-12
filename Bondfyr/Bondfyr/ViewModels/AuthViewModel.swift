@@ -213,7 +213,7 @@ class AuthViewModel: ObservableObject {
         }
         
         let db = Firestore.firestore()
-        db.collection("users").document(uid).getDocument { [weak self] snapshot, error in
+        db.collection("users").document(uid).getDocument(source: .default) { [weak self] snapshot, error in
             if let error = error {
                 
                 completion(false)
@@ -265,16 +265,10 @@ class AuthViewModel: ObservableObject {
                     avatarURL: avatarURL,
                     googleID: googleID,
                     city: city,
+                    partiesHosted: hostedPartiesCount,
+                    partiesAttended: attendedPartiesCount,
                     isHostVerified: isHostVerified,
-                    isGuestVerified: isGuestVerified,
-                    hostedPartiesCount: hostedPartiesCount,
-                    attendedPartiesCount: attendedPartiesCount,
-                    hostRating: hostRating,
-                    guestRating: guestRating,
-                    hostRatingsCount: hostRatingsCount,
-                    guestRatingsCount: guestRatingsCount,
-                    totalLikesReceived: totalLikesReceived,
-                    successfulPartiesCount: successfulPartiesCount
+                    isGuestVerified: isGuestVerified
                 )
                 
                 DispatchQueue.main.async {
@@ -527,7 +521,7 @@ class AuthViewModel: ObservableObject {
         ]
         
         // Save to Firestore
-        db.collection("users").document(user.uid).setData(userData) { [weak self] error in
+        db.collection("users").document(user.uid).setData(userData, completion: { [weak self] error in
             guard let self = self else { return }
             
             DispatchQueue.main.async {
@@ -553,15 +547,10 @@ class AuthViewModel: ObservableObject {
                     dob: dob,
                     phoneNumber: phoneNumber,
                     role: .user, // Explicitly set the role to match Firestore
+                    partiesHosted: 0,
+                    partiesAttended: 0,
                     isHostVerified: false,
-                    isGuestVerified: false,
-                    hostedPartiesCount: 0,
-                    attendedPartiesCount: 0,
-                    hostRating: 0.0,
-                    guestRating: 0.0,
-                    hostRatingsCount: 0,
-                    guestRatingsCount: 0,
-                    totalLikesReceived: 0
+                    isGuestVerified: false
                 )
                 
                 DispatchQueue.main.async {
@@ -571,7 +560,7 @@ class AuthViewModel: ObservableObject {
                 
                 completion(true, nil)
             }
-        }
+        })
     }
 
     func updateProfile(
@@ -600,7 +589,7 @@ class AuthViewModel: ObservableObject {
         }
         
         // First check if user document exists
-        db.collection("users").document(uid).getDocument { [weak self] document, error in
+        db.collection("users").document(uid).getDocument(source: .default) { [weak self] document, error in
             guard let self = self else { return }
             
             if let error = error {

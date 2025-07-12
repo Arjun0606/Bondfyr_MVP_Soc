@@ -66,7 +66,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select photos to upload as party cover images and share memories from events.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take photos to upload as party cover images and capture event memories.</string>
+	<string>We need camera access to let you take photos for party cover images and photo contests.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Bondfyr</string>
 	<key>CFBundleShortVersionString</key>
@@ -77,5 +77,11 @@
 	<false/>
 	<key>FirebaseMessagingAutoInitEnabled</key>
 	<false/>
+	<key>DODO_API_KEY</key>
+	<string>4YFLxz5l9Uo2OR2H.ga00ZtyevUkptjQv6Y1SLb7w-3XFSTCo_rV5wVKtykKFCs4m</string>
+	<key>DODO_WEBHOOK_SECRET</key>
+	<string>YOUR_DODO_WEBHOOK_SECRET</string>
+	<key>UILaunchScreen</key>
+	<dict/>
 </dict>
 </plist>

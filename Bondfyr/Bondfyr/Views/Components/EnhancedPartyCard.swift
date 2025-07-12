@@ -10,6 +10,7 @@ struct EnhancedPartyCard: View {
     
     @State private var showingRequestSheet = false
     @State private var showingPartyDetails = false
+    @State private var showingSocialShare = false
     @State private var isAnimating = false
     
     // MARK: - Computed Properties
@@ -117,16 +118,39 @@ struct EnhancedPartyCard: View {
                     Spacer()
                 }
                 
-                // MARK: - Action Button
-                ActionButton(
-                    status: guestState.status,
-                    isLoading: guestState.isLoading,
-                    isAnimating: $isAnimating
-                ) {
-                    handleAction()
+                // MARK: - Action Buttons Row
+                HStack(spacing: 12) {
+                    // Main Action Button
+                    ActionButton(
+                        status: guestState.status,
+                        isLoading: guestState.isLoading,
+                        isAnimating: $isAnimating
+                    ) {
+                        handleAction()
+                    }
+                    .scaleEffect(isAnimating ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.3), value: isAnimating)
+                    
+                    // Social Share Button
+                    Button(action: { showingSocialShare = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Share")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .frame(width: 100, height: 50)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [.pink, .purple]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                 }
-                .scaleEffect(isAnimating ? 1.05 : 1.0)
-                .animation(.spring(response: 0.3), value: isAnimating)
             }
             .padding(16)
         }
@@ -144,6 +168,9 @@ struct EnhancedPartyCard: View {
                 guestState.transitionTo(.requestSubmitted)
                 updateGuestStatus()
             }
+        }
+        .sheet(isPresented: $showingSocialShare) {
+            SocialShareSheet(party: party, isPresented: $showingSocialShare)
         }
         .fullScreenCover(isPresented: $showingPartyDetails) {
             // TODO: Replace with actual PartyDetailsView when implemented

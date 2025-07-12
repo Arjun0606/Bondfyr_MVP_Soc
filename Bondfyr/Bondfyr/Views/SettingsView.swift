@@ -9,8 +9,10 @@ struct SettingsView: View {
     
     @State private var showDeleteAccountAlert = false
     @State private var showPrivacyPolicy = false
-        @State private var showTermsOfService = false
+    @State private var showTermsOfService = false
     @State private var showHelpFAQ = false
+    @State private var showingNotificationTest = false
+    @State private var showingNotificationStatus = false
     
     var body: some View {
         NavigationView {
@@ -82,6 +84,52 @@ struct SettingsView: View {
                                         .padding(.bottom, 4)
                                 }
                             )
+                        }
+                        
+                        // Notification Settings Section
+                        Section("🔔 Notifications") {
+                            Toggle("Event Reminders", isOn: $eventReminders)
+                                .onChange(of: eventReminders) { value in
+                                    UserDefaults.standard.set(value, forKey: "eventReminders")
+                                    print("🔔 SETTINGS: Event reminders \(value ? "enabled" : "disabled")")
+                                }
+                            
+                            Toggle("Party Updates", isOn: $partyUpdates)
+                                .onChange(of: partyUpdates) { value in
+                                    UserDefaults.standard.set(value, forKey: "partyUpdates")
+                                    print("🔔 SETTINGS: Party updates \(value ? "enabled" : "disabled")")
+                                }
+                            
+                            // Test Notifications Button
+                            Button(action: {
+                                print("🧪 TESTING: User requested notification test")
+                                NotificationManager.shared.testAllNotifications()
+                                showingNotificationTest = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "bell.badge")
+                                        .foregroundColor(.blue)
+                                    Text("Test Notifications")
+                                        .foregroundColor(.blue)
+                                    Spacer()
+                                    Text("Tap to test")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            
+                            // Notification Status Info
+                            Button(action: {
+                                NotificationManager.shared.checkNotificationStatus()
+                                showingNotificationStatus = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "info.circle")
+                                        .foregroundColor(.orange)
+                                    Text("Check Notification Status")
+                                        .foregroundColor(.orange)
+                                }
+                            }
                         }
                         
                         // Privacy section
@@ -196,6 +244,17 @@ struct SettingsView: View {
             .sheet(isPresented: $showHelpFAQ) {
                 HelpFAQView()
             }
+            .alert("Notification Test", isPresented: $showingNotificationTest) {
+                Button("OK") { }
+            } message: {
+                Text("Test notifications have been scheduled! You should receive 4 test notifications over the next 8 seconds to verify the system is working.")
+            }
+            .alert("Notification Status", isPresented: $showingNotificationStatus) {
+                Button("Settings", action: openNotificationSettings)
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Check the console output for detailed notification status. If notifications aren't working, enable them in Settings.")
+            }
         }
     }
     
@@ -208,6 +267,16 @@ struct SettingsView: View {
             // Silent error handling for production
         }
     }
+
+    // MARK: - Helper Methods
+    
+    private func openNotificationSettings() {
+        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(settingsUrl)
+        }
+    }
+    
+    // MARK: - Debug Notification Section
 
 }
 
@@ -587,19 +656,19 @@ struct HelpFAQView: View {
                     expandedFAQ: $expandedFAQ
                 )
                 
-                                 FAQRow(
-                     id: "location",
-                     question: "Why does the app need location access?",
-                     answer: "Location access is essential for Bondfyr to work:\n• Find parties near you\n• Show distance to events\n• Allow hosts to create location-based parties\n• Connect you with your local party community",
-                     expandedFAQ: $expandedFAQ
-                 )
-                 
-                 FAQRow(
-                     id: "safety",
-                     question: "How is safety ensured?",
-                     answer: "• All users go through verification\n• Rating system for hosts and guests\n• 24/7 emergency support available\n• Report system for inappropriate behavior\n• Location-based safety features",
-                     expandedFAQ: $expandedFAQ
-                 )
+                FAQRow(
+                    id: "location",
+                    question: "Why does the app need location access?",
+                    answer: "Location access is essential for Bondfyr to work:\n• Find parties near you\n• Show distance to events\n• Allow hosts to create location-based parties\n• Connect you with your local party community",
+                    expandedFAQ: $expandedFAQ
+                )
+                
+                FAQRow(
+                    id: "safety",
+                    question: "How is safety ensured?",
+                    answer: "• All users go through verification\n• Rating system for hosts and guests\n• 24/7 emergency support available\n• Report system for inappropriate behavior\n• Location-based safety features",
+                    expandedFAQ: $expandedFAQ
+                )
                 
                 FAQRow(
                     id: "host-approval",
@@ -663,7 +732,6 @@ struct HelpFAQView: View {
     
     // MARK: - Debug Notification Section
     
-
 }
 
 // MARK: - Supporting Views for Help & FAQ

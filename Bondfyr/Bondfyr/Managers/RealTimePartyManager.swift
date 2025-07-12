@@ -127,6 +127,7 @@ class RealTimePartyManager: ObservableObject {
             let party = try Firestore.Decoder().decode(Afterparty.self, from: partyData)
             
             // Update party data
+            print("🔄 REALTIME: Party data updated - old requests: \(parties[partyId]?.guestRequests.count ?? 0), new requests: \(party.guestRequests.count)")
             let wasUpdated = parties[partyId] != nil
             parties[partyId] = party
             

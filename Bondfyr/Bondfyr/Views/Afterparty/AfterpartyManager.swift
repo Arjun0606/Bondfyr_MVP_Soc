@@ -18,9 +18,12 @@ class AfterpartyManager: NSObject, ObservableObject {
     private var currentLocation: CLLocationCoordinate2D?
     private var afterpartyListeners: [ListenerRegistration] = []
     
+    private var statsProcessingTimer: Timer?
+    
     private override init() {
         super.init()
         setupLocationManager()
+        setupStatsProcessingTimer()
     }
     
     private func setupLocationManager() {
@@ -139,7 +142,10 @@ class AfterpartyManager: NSObject, ObservableObject {
             legalDisclaimerAccepted: legalDisclaimerAccepted,
             
             // TESTFLIGHT: Payment details
-            venmoHandle: venmoHandle
+            venmoHandle: venmoHandle,
+            
+            // Stats processing (Realistic Metrics System)
+            statsProcessed: false  // New parties haven't processed stats yet
         )
         
         let data = try Firestore.Encoder().encode(afterparty)
@@ -294,8 +300,17 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         print("🟡 BACKEND: Starting Firestore transaction...")
         
+        // Get party title first for notifications
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            print("🔴 BACKEND: submitGuestRequest() FAILED - party not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        let partyTitle = afterparty.title
+        
         // CRITICAL FIX: Use Firestore transaction to prevent race conditions
-        let partyTitle = try await db.runTransaction { (transaction, errorPointer) -> String? in
+        try await db.runTransaction { (transaction, errorPointer) -> Any? in
             print("🟡 BACKEND: Inside transaction - getting party document...")
             let afterpartyRef = self.db.collection("afterparties").document(afterpartyId)
             
@@ -310,24 +325,24 @@ class AfterpartyManager: NSObject, ObservableObject {
             }
             
             guard let data = afterpartyDocument.data(),
-              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+              let currentAfterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
                 print("🔴 BACKEND: Failed to decode party data")
                 let error = NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
                 errorPointer?.pointee = error
                 return nil
         }
         
-            print("🟡 BACKEND: Party found - title: \(afterparty.title), current requests: \(afterparty.guestRequests.count)")
+            print("🟡 BACKEND: Party found - title: \(currentAfterparty.title), current requests: \(currentAfterparty.guestRequests.count)")
             
             // CRITICAL FIX: Check for existing requests/membership within transaction
-        if afterparty.activeUsers.contains(userId) {
+        if currentAfterparty.activeUsers.contains(userId) {
                 print("🔴 BACKEND: User already in activeUsers array")
                 let error = NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You're already going to this afterparty"])
                 errorPointer?.pointee = error
                 return nil
         }
         
-        if afterparty.guestRequests.contains(where: { $0.userId == userId }) {
+        if currentAfterparty.guestRequests.contains(where: { $0.userId == userId }) {
                 print("🔴 BACKEND: User already has pending request")
                 let error = NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "You've already requested to join this afterparty"])
                 errorPointer?.pointee = error
@@ -335,7 +350,7 @@ class AfterpartyManager: NSObject, ObservableObject {
         }
         
             // Add the new request
-            var updatedRequests = afterparty.guestRequests
+            var updatedRequests = currentAfterparty.guestRequests
             updatedRequests.append(guestRequest)
             
             print("🟡 BACKEND: Adding request to party - new total: \(updatedRequests.count)")
@@ -351,28 +366,32 @@ class AfterpartyManager: NSObject, ObservableObject {
                 return nil
             }
             
-            return afterparty.title
+            return nil
         }
         
         print("🟢 BACKEND: Transaction completed successfully")
         
-        // Send enhanced notification to host
-        print("🔔 BACKEND: Sending enhanced notification to host...")
-        NotificationManager.shared.sendHostGuestRequestNotification(
-                partyId: afterpartyId,
-                partyTitle: partyTitle as! String,
-                guestName: guestRequest.userHandle
+        // WORKING: Send notification to HOST about new guest request
+        Task {
+            let content = UNMutableNotificationContent()
+            content.title = "🔔 New Guest Request"
+            content.body = "\(guestRequest.userHandle) wants to join \(afterparty.title). Tap to review!"
+            content.sound = .default
+            
+            let request = UNNotificationRequest(
+                identifier: "host_new_guest_\(UUID().uuidString)",
+                content: content,
+                trigger: nil
             )
-        
-        // Send test notification to verify system is working
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            NotificationManager.shared.sendTestGuestRequestNotification()
+            
+            try? await UNUserNotificationCenter.current().add(request)
+            print("✅ HOST NOTIFICATION: Sent to host about new guest request")
         }
         
         print("🟢 BACKEND: submitGuestRequest() completed successfully")
     }
     
-    /// Approve guest request (Host action)
+    /// Approve guest request (Host action) - NEW FLOW: Triggers payment after approval
     func approveGuestRequest(afterpartyId: String, guestRequestId: String) async throws {
         print("🟢 BACKEND: approveGuestRequest() called for party \(afterpartyId), request \(guestRequestId)")
         
@@ -388,9 +407,7 @@ class AfterpartyManager: NSObject, ObservableObject {
             let originalRequest = afterparty.guestRequests[index]
             print("🟢 BACKEND: Found request for user \(originalRequest.userHandle), approving...")
             
-            // CRITICAL FIX: Preserve original paymentStatus for TestFlight compatibility
-            // For TestFlight users who have paymentStatus = .paid, keep it as .paid
-            // For production PayPal users, keep it as .pending until webhook updates it
+            // NEW FLOW: Mark as approved but keep payment as pending
             let updatedRequest = GuestRequest(
                 id: originalRequest.id,
                 userId: originalRequest.userId,
@@ -398,7 +415,7 @@ class AfterpartyManager: NSObject, ObservableObject {
                 userHandle: originalRequest.userHandle,
                 introMessage: originalRequest.introMessage,
                 requestedAt: originalRequest.requestedAt,
-                paymentStatus: originalRequest.paymentStatus, // PRESERVE original status
+                paymentStatus: .pending, // Still pending - payment happens AFTER approval
                 approvalStatus: .approved,
                 paypalOrderId: originalRequest.paypalOrderId,
                 paidAt: originalRequest.paidAt,
@@ -409,45 +426,37 @@ class AfterpartyManager: NSObject, ObservableObject {
             var updatedRequests = afterparty.guestRequests
             updatedRequests[index] = updatedRequest
             
-            // CRITICAL FIX: Add approved user to activeUsers array
-            var updatedActiveUsers = afterparty.activeUsers
-            if !updatedActiveUsers.contains(originalRequest.userId) {
-                updatedActiveUsers.append(originalRequest.userId)
-                print("🟢 BACKEND: Added user \(originalRequest.userHandle) to activeUsers array")
-            } else {
-                print("🟢 BACKEND: User \(originalRequest.userHandle) already in activeUsers array")
-            }
+            // DON'T add to activeUsers yet - wait for payment completion
             
-            // Update Firestore with both the updated request AND activeUsers
+            // Update Firestore with the approved request (but no activeUsers change yet)
             try await db.collection("afterparties").document(afterpartyId).updateData([
-                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
-                "activeUsers": updatedActiveUsers
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
             ])
             
-            print("🟢 BACKEND: approveGuestRequest() SUCCESS - Updated Firestore for \(originalRequest.userHandle)")
+            print("🟢 BACKEND: approveGuestRequest() SUCCESS - Marked \(originalRequest.userHandle) as approved, waiting for payment")
             
-            // Send approval notification to guest
-            NotificationManager.shared.notifyGuestOfApproval(
-                partyId: afterpartyId,
-                partyTitle: afterparty.title,
-                hostName: afterparty.hostHandle
-            )
-            
-            // CRITICAL FIX: Send capacity alert if party is getting full (80%+ capacity)
-            let currentCapacity = Double(updatedActiveUsers.count)
-            let maxCapacity = Double(afterparty.maxGuestCount)
-            let capacityPercentage = currentCapacity / maxCapacity
-            
-            if capacityPercentage >= 0.8 {
-                NotificationManager.shared.notifyHostOfCapacityAlert(
-                    partyId: afterpartyId,
-                    partyTitle: afterparty.title,
-                    currentCount: updatedActiveUsers.count,
-                    maxCount: afterparty.maxGuestCount
-                )
+            // FIXED: Only send guest notifications if this is being triggered by the host
+            // Don't send guest notifications when guests themselves are testing
+            if let currentUser = Auth.auth().currentUser {
+                print("🔔 BACKEND: Current user ID: \(currentUser.uid)")
+                print("🔔 BACKEND: Party host ID: \(afterparty.userId)")
+                print("🔔 BACKEND: Guest being approved ID: \(originalRequest.userId)")
+                
+                // FIXED: Use new notification system
+                Task {
+                    await FixedNotificationManager.shared.notifyGuestOfApproval(
+                        partyId: afterpartyId,
+                        partyTitle: afterparty.title,
+                        hostName: afterparty.hostHandle,
+                        guestUserId: originalRequest.userId,
+                        amount: afterparty.ticketPrice
+                    )
+                }
+                
+                print("✅ FIXED: Used new notification system for guest approval")
             }
             
-            print("✅ CRITICAL FIX: Approved guest \(originalRequest.userHandle) with preserved paymentStatus: \(originalRequest.paymentStatus)")
+            print("✅ NEW FLOW: Approved guest \(originalRequest.userHandle) - payment required to confirm spot")
         } else {
             print("🔴 BACKEND: approveGuestRequest() FAILED - request not found")
             throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
@@ -709,6 +718,18 @@ class AfterpartyManager: NSObject, ObservableObject {
         guard let userId = Auth.auth().currentUser?.uid,
               afterparty.userId == userId else { return }
         
+        // CRITICAL: Process party stats if it had attendees before deletion
+        if !afterparty.activeUsers.isEmpty && afterparty.endTime <= Date() {
+            print("🎯 STATS: Party being deleted had attendees - processing completion first")
+            do {
+                try await processPartyCompletion(afterparty: afterparty)
+            } catch {
+                print("🔴 STATS: Error processing stats before deletion: \(error)")
+            }
+        } else {
+            print("🎯 STATS: Party being deleted had no attendees or hadn't ended - no stats to process")
+        }
+        
         // End the party chat first
         await MainActor.run {
             PartyChatManager.shared.endPartyChatForDeletedParty()
@@ -751,6 +772,7 @@ class AfterpartyManager: NSObject, ObservableObject {
     
     deinit {
         afterpartyListeners.forEach { $0.remove() }
+        statsProcessingTimer?.invalidate()
     }
     
     /// Get specific afterparty by ID
@@ -774,10 +796,226 @@ class AfterpartyManager: NSObject, ObservableObject {
         print("🔍 BACKEND: getAfterpartyById() SUCCESS - party found with \(afterparty.activeUsers.count) active users")
         return afterparty
     }
+    
+    /// Process party completion and update user stats (REALISTIC TRACKING)
+    func processPartyCompletion(afterparty: Afterparty) async throws {
+        print("🎯 STATS: Processing party completion for '\(afterparty.title)'")
+        
+        // Only process if party has actually ended
+        guard afterparty.endTime <= Date() else {
+            print("🎯 STATS: Party hasn't ended yet - skipping stats update")
+            return
+        }
+        
+        // Only process if party had actual attendees
+        guard !afterparty.activeUsers.isEmpty else {
+            print("🎯 STATS: Party had no attendees - not updating stats")
+            return
+        }
+        
+        // Get attendee user objects
+        var attendees: [AppUser] = []
+        for userId in afterparty.activeUsers {
+            do {
+                let userDoc = try await db.collection("users").document(userId).getDocument()
+                if let userData = userDoc.data() {
+                    var userDataWithId = userData
+                    userDataWithId["uid"] = userId
+                    let user = try Firestore.Decoder().decode(AppUser.self, from: userDataWithId)
+                    attendees.append(user)
+                }
+            } catch {
+                print("🎯 STATS: Error loading user \(userId): \(error)")
+            }
+        }
+        
+        print("🎯 STATS: Party completed successfully with \(attendees.count) attendees")
+        print("🎯 STATS: Duration: \(Int(afterparty.endTime.timeIntervalSince(afterparty.startTime) / 3600)) hours")
+        
+        // Update user stats with realistic metrics
+        ReputationManager.shared.updateUserStatsAfterEvent(
+            afterparty: afterparty,
+            attendees: attendees
+        )
+        
+        // Mark party as stats processed
+        try await db.collection("afterparties").document(afterparty.id).updateData([
+            "statsProcessed": true,
+            "statsProcessedAt": Timestamp(date: Date())
+        ])
+        
+        print("🎯 STATS: Successfully processed party completion")
+    }
+    
+    /// Check for completed parties and process their stats (called periodically)
+    func processCompletedParties() async {
+        print("🔄 STATS: Checking for completed parties to process...")
+        
+        do {
+            let twoHoursAgo = Date().addingTimeInterval(-7200) // 2 hours ago
+            let oneDayAgo = Date().addingTimeInterval(-86400) // 1 day ago
+            
+            // Find parties that ended 2+ hours ago but haven't been processed
+            let snapshot = try await db.collection("afterparties")
+                .whereField("endTime", isLessThan: Timestamp(date: twoHoursAgo))
+                .whereField("endTime", isGreaterThan: Timestamp(date: oneDayAgo)) // Don't process old parties
+                .whereField("statsProcessed", isEqualTo: false)
+                .limit(to: 10) // Process max 10 at a time
+                .getDocuments()
+            
+            print("🔄 STATS: Found \(snapshot.documents.count) completed parties to process")
+            
+            for document in snapshot.documents {
+                do {
+                    var docData = document.data()
+                    docData["id"] = document.documentID
+                    
+                    let afterparty = try Firestore.Decoder().decode(Afterparty.self, from: docData)
+                    
+                    // Process this party's completion
+                    try await processPartyCompletion(afterparty: afterparty)
+                    
+                } catch {
+                    print("🔴 STATS: Error processing party \(document.documentID): \(error)")
+                    
+                    // Mark as processed even if there was an error to avoid infinite retries
+                    try? await db.collection("afterparties").document(document.documentID).updateData([
+                        "statsProcessed": true,
+                        "statsProcessedAt": Timestamp(date: Date()),
+                        "statsProcessingError": error.localizedDescription
+                    ])
+                }
+            }
+            
+            print("✅ STATS: Completed processing \(snapshot.documents.count) parties")
+            
+        } catch {
+            print("🔴 STATS: Error checking for completed parties: \(error)")
+        }
+    }
+    
+    /// Setup timer to periodically process completed party stats
+    private func setupStatsProcessingTimer() {
+        // Check every 30 minutes for completed parties
+        statsProcessingTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { _ in
+            Task {
+                await self.processCompletedParties()
+            }
+        }
+        
+        // Also run once on app start after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            Task {
+                await self.processCompletedParties()
+            }
+        }
+        
+        print("🔄 STATS: Setup automatic party stats processing (every 30 minutes)")
+    }
+    
+    /// Complete party membership after payment (NEW FLOW)
+    func completePartyMembershipAfterPayment(afterpartyId: String, userId: String, paymentIntentId: String) async throws {
+        print("🟢 PAYMENT: completePartyMembershipAfterPayment() called")
+        print("🟢 PAYMENT: Adding user \(userId) to activeUsers after successful payment")
+        
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            print("🔴 PAYMENT: Party not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        // Find the guest request and update payment status
+        var updatedRequests = afterparty.guestRequests
+        var guestRequest: GuestRequest?
+        
+        for (index, request) in updatedRequests.enumerated() {
+            if request.userId == userId {
+                guestRequest = request
+                // Update payment status to paid
+                let paidRequest = GuestRequest(
+                    id: request.id,
+                    userId: request.userId,
+                    userName: request.userName,
+                    userHandle: request.userHandle,
+                    introMessage: request.introMessage,
+                    requestedAt: request.requestedAt,
+                    paymentStatus: .paid,
+                    approvalStatus: request.approvalStatus,
+                    paypalOrderId: request.paypalOrderId,
+                    dodoPaymentIntentId: paymentIntentId,
+                    paidAt: Date(), // Mark when payment was completed
+                    refundedAt: request.refundedAt,
+                    approvedAt: request.approvedAt
+                )
+                updatedRequests[index] = paidRequest
+                break
+            }
+        }
+        
+        guard let request = guestRequest else {
+            print("🔴 PAYMENT: Guest request not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
+        }
+        
+        // Add user to activeUsers (NOW they're officially in!)
+        var updatedActiveUsers = afterparty.activeUsers
+        if !updatedActiveUsers.contains(userId) {
+            updatedActiveUsers.append(userId)
+            print("🟢 PAYMENT: Added user \(request.userHandle) to activeUsers after payment")
+        }
+        
+        // Update Firestore with payment completion and membership
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+            "activeUsers": updatedActiveUsers
+        ])
+        
+        // Send all the follow-up notifications now that they're officially in
+        
+        // 1. Notify host of payment received
+        let hostEarnings = afterparty.ticketPrice * 0.8 // 80% to host
+        NotificationManager.shared.notifyHostOfPaymentReceived(
+            partyId: afterpartyId,
+            partyTitle: afterparty.title,
+            guestName: request.userHandle,
+            amount: String(format: "$%.2f", hostEarnings)
+        )
+        
+        // 2. Send final confirmation to guest
+        NotificationManager.shared.sendPaymentConfirmationNotification(
+            partyId: afterpartyId,
+            partyTitle: afterparty.title,
+            guestName: request.userHandle
+        )
+        
+        // 3. Schedule party reminders for new member
+        NotificationManager.shared.schedulePartyStartReminder(
+            partyId: afterpartyId,
+            partyTitle: afterparty.title,
+            startTime: afterparty.startTime
+        )
+        
+        // 4. Check if party is getting full and alert host
+        let currentCapacity = Double(updatedActiveUsers.count)
+        let maxCapacity = Double(afterparty.maxGuestCount)
+        let capacityPercentage = currentCapacity / maxCapacity
+        
+        if capacityPercentage >= 0.8 {
+            NotificationManager.shared.notifyHostOfCapacityAlert(
+                partyId: afterpartyId,
+                partyTitle: afterparty.title,
+                currentCount: updatedActiveUsers.count,
+                maxCount: afterparty.maxGuestCount
+            )
+        }
+        
+        print("✅ NEW FLOW: Payment completed - \(request.userHandle) is now officially attending \(afterparty.title)")
+    }
 }
 
-// Add CLLocationManagerDelegate conformance
-extension AfterpartyManager: CLLocationManagerDelegate {
+// MARK: - CLLocationManagerDelegate
+extension AfterpartyManager: @preconcurrency CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last?.coordinate else { return }
         

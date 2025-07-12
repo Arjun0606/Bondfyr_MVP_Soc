@@ -173,7 +173,7 @@ struct MarketplaceFiltersView: View {
                             Slider(value: Binding(
                                 get: { Double(maxGuestCount) },
                                 set: { maxGuestCount = Int($0) }
-                            ), in: 5...200, step: 5)
+                            ), in: 5...500, step: 5)
                             .accentColor(.pink)
                         }
                     }
@@ -185,7 +185,7 @@ struct MarketplaceFiltersView: View {
                             selectedVibes.removeAll()
                             selectedTimeFilter = .all
                             showOnlyAvailable = true
-                            maxGuestCount = 200
+                            maxGuestCount = 500
                             
                             // Immediately apply cleared filters
                             let clearedFilters = MarketplaceFilters(
@@ -193,7 +193,7 @@ struct MarketplaceFiltersView: View {
                                 vibes: [],
                                 timeFilter: .all,
                                 showOnlyAvailable: true,
-                                maxGuestCount: 200
+                                maxGuestCount: 500
                             )
                             onApplyFilters(clearedFilters)
                             isPresented = false

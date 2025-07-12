@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import BondfyrPhotos
 
 enum BadgeEmoji {
     static func getEmoji(for type: BadgeType, level: BadgeLevel) -> String {

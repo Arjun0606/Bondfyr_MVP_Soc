@@ -41,9 +41,10 @@ struct BondfyrApp: App {
         let providerFactory = DeviceCheckProviderFactory()
         AppCheck.setAppCheckProviderFactory(providerFactory)
         
-        // Setup enhanced notifications system
-        NotificationManager.shared.requestAuthorization()
-        NotificationManager.shared.setupNotificationCategories()
+        // FIXED: Use new notification system instead of broken one
+        Task {
+            _ = await FixedNotificationManager.shared.requestPermissions()
+        }
         
         // Initialize the party chat manager
         _ = PartyChatManager.shared
@@ -229,8 +230,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             
             if settings.authorizationStatus == .notDetermined {
-                
-                NotificationManager.shared.requestAuthorization()
+                // FIXED: Use new notification system
+                Task {
+                    _ = await FixedNotificationManager.shared.requestPermissions()
+                }
             } else if settings.authorizationStatus != .authorized {
                 
                 DispatchQueue.main.async {
@@ -285,8 +288,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         }
         
-        // Also pass to NotificationManager
-        NotificationManager.shared.registerDeviceToken(deviceToken)
+        // REMOVED: Old notification manager call - using FixedNotificationManager instead
+        // NotificationManager.shared.registerDeviceToken(deviceToken)
     }
     
     // Handle registration errors
