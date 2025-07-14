@@ -453,7 +453,7 @@ class DodoPaymentService: ObservableObject {
     }
 }
 
-// MARK: - Dodo Environment
+// MARK: - Environment Configuration
 enum DodoEnvironment {
     case dev
     case production
@@ -461,9 +461,9 @@ enum DodoEnvironment {
     var baseURL: String {
         switch self {
         case .dev:
-            return "https://test.dodopayments.com"
+            return "https://api.dodopayments.com/api/v1" // Corrected URL
         case .production:
-            return "https://live.dodopayments.com"
+            return "https://api.dodopayments.com/api/v1" // Corrected URL
         }
     }
 }
