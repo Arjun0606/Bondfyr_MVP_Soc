@@ -167,8 +167,8 @@ class DodoPaymentService: ObservableObject {
                 "userName": userName,
                 "userHandle": userHandle,
                 "hostId": afterparty.userId,
-                "platformFee": platformFee,
-                "hostEarnings": hostEarnings
+                "platformFee": String(format: "%.2f", platformFee),
+                "hostEarnings": String(format: "%.2f", hostEarnings)
             ]
         ]
         
