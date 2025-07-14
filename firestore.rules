@@ -142,6 +142,10 @@ service cloud.firestore {
       allow update: if request.auth != null && 
                      // Only allow updating guestRequests field
                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestRequests']);
+      // Allow authenticated users to update guestRequests and activeUsers for payment processing
+      allow update: if request.auth != null && 
+                     // Allow updating both fields for payment completion
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestRequests', 'activeUsers']);
     }
     
     // Party chat messages collection

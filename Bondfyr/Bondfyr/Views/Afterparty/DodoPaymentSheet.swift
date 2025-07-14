@@ -164,10 +164,24 @@ struct DodoPaymentSheet: View {
                 )
                 
                 if success {
-                    // Payment initiated successfully, dismiss and call completion
-                    await MainActor.run {
-                        presentationMode.wrappedValue.dismiss()
-                        onCompletion()
+                    // Check if we have a payment URL (production mode)
+                    if let paymentURL = DodoPaymentService.shared.paymentURL {
+                        await MainActor.run {
+                            errorMessage = "Opening payment page in Safari..."
+                            showingError = true
+                            
+                            // Dismiss after a short delay to show the message
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                presentationMode.wrappedValue.dismiss()
+                                onCompletion()
+                            }
+                        }
+                    } else {
+                        // Test mode - payment completed immediately
+                        await MainActor.run {
+                            presentationMode.wrappedValue.dismiss()
+                            onCompletion()
+                        }
                     }
                 } else {
                     throw DodoPaymentError.intentCreationFailed
