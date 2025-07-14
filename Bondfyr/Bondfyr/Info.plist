@@ -78,9 +78,11 @@
 	<key>FirebaseMessagingAutoInitEnabled</key>
 	<false/>
 	<key>DODO_API_KEY</key>
-	<string>4YFLxz5l9Uo2OR2H.ga00ZtyevUkptjQv6Y1SLb7w-3XFSTCo_rV5wVKtykKFCs4m</string>
+	<string>WwodcwFpKfwwrjg5.Or4_3_Zl8Sv3APNRllVNh35fUlyzxZYBV1nrE7W3Xzmfmo</string>
+	<key>DODO_PUBLISHABLE_KEY</key>
+	<string>pk_snd_00d98d270105488582b957a0c911dc79</string>
 	<key>DODO_WEBHOOK_SECRET</key>
-	<string>YOUR_DODO_WEBHOOK_SECRET</string>
+	<string>whsec_xKI9UUl00JcHyVasRJRuMKT0</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>

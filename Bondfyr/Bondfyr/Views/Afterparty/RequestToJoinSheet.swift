@@ -14,6 +14,7 @@ struct RequestToJoinSheet: View {
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var requestSubmitted = false
+    @State private var refreshTimer: Timer?
     
     var body: some View {
         NavigationView {
@@ -60,6 +61,41 @@ struct RequestToJoinSheet: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .onAppear {
+            checkUserStatus()
+            // Start a timer to periodically check if user has been approved
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+                checkUserStatus()
+            }
+        }
+        .onDisappear {
+            refreshTimer?.invalidate()
+            refreshTimer = nil
+        }
+    }
+    
+    private func checkUserStatus() {
+        guard let currentUserId = authViewModel.currentUser?.uid else { return }
+        
+        Task {
+            do {
+                // Get the latest party data
+                let updatedParty = try await afterpartyManager.getAfterpartyById(afterparty.id)
+                
+                // Check if user has a request and if it's approved
+                if let request = updatedParty.guestRequests.first(where: { $0.userId == currentUserId }) {
+                    if request.approvalStatus == .approved {
+                        print("🎉 User has been approved! Dismissing sheet...")
+                        DispatchQueue.main.async {
+                            presentationMode.wrappedValue.dismiss()
+                            onRequestSubmitted?()
+                        }
+                    }
+                }
+            } catch {
+                print("Error checking user status: \(error)")
+            }
         }
     }
     

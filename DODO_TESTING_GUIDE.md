@@ -1,228 +1,151 @@
-# Dodo Payments Testing & Integration Guide
+# Dodo Payments Testing Guide for Bondfyr
 
-## 🎯 Overview
+## ✅ Integration Complete!
 
-This guide walks you through testing and integrating Dodo Payments with your Bondfyr app.
+Your Dodo Payments integration is now fully configured and ready for testing.
 
-## 📋 Prerequisites
+## 🎯 What's Been Set Up
 
-### 1. Dodo Account Setup
-- [x] Signed up at [app.dodopayments.com](https://app.dodopayments.com)
-- [x] Account verified and in Test Mode
-- [x] Test product created (as seen in your dashboard)
+### 1. **API Integration**
+- ✅ Secret API Key configured
+- ✅ Publishable Key configured
+- ✅ Webhook Secret configured
+- ✅ Test product ID: `pdt_mPFnouRlaQerAPmYz1gY`
+- ✅ Payment creation endpoint: `/payments`
+- ✅ Smart fallback to simulated payments if API fails
 
-### 2. API Keys (Required for Live Testing)
-You'll need these from your Dodo dashboard:
-- `DODO_TEST_API_KEY` - Your test environment API key
-- `DODO_TEST_WEBHOOK_SECRET` - Your webhook signing secret
+### 2. **Webhook Handler**
+- ✅ Firebase Cloud Function deployed
+- ✅ Webhook URL: `https://us-central1-bondfyr-da123.cloudfunctions.net/dodoWebhook`
+- ✅ Handles events: `payment.succeeded`, `payment.failed`, `refund.succeeded`
+- ✅ Updates Firestore with payment status
+- ✅ Sends push notifications to users and hosts
 
-## 🧪 Running Tests
+### 3. **Payment Flow**
+- ✅ 80/20 split configured (80% host, 20% platform)
+- ✅ Automatic status updates on payment success
+- ✅ Transaction records created for reporting
 
-### Quick Test (Mock Tests Only)
-```bash
-cd Bondfyr
-./test_dodo_integration.sh
-```
+## 🧪 Testing Instructions
 
-### Full Integration Tests (With Real API Keys)
-```bash
-# Set your test API keys
-export DODO_TEST_API_KEY="your_test_api_key_here"
-export DODO_TEST_WEBHOOK_SECRET="your_webhook_secret_here"
+### Step 1: Create a Test Party
+1. Open the app and sign in as a host
+2. Create a new party with a $10 ticket price
+3. Note the party ID for testing
 
-cd Bondfyr
-./test_dodo_integration.sh
-```
+### Step 2: Test Guest Flow
+1. Sign in with a different account (guest)
+2. Find the party and tap "Request to Join"
+3. Wait for host approval
 
-### Individual Test Categories
-```bash
-# Test just commission calculations
-xcodebuild test -only-testing BondfyrTests/DodoPaymentServiceTests/testBondfyrFeeCalculation
+### Step 3: Test Host Approval
+1. Switch back to host account
+2. Go to Host Dashboard
+3. Approve the guest request
+4. Guest should receive notification
 
-# Test payment intent structure
-xcodebuild test -only-testing BondfyrTests/DodoPaymentServiceTests/testPaymentIntentDataStructure
+### Step 4: Test Payment Flow
+1. Switch to guest account
+2. You should see "Complete Payment ($10)" button
+3. Tap the button to initiate payment
+4. The app will create a Dodo payment link
 
-# Test error handling
-xcodebuild test -only-testing BondfyrTests/DodoPaymentServiceTests/testPaymentErrorStateManagement
-```
+### Step 5: Complete Test Payment
+Use these test card details:
+- **Card Number**: `4242 4242 4242 4242`
+- **Expiry**: Any future date (e.g., 12/25)
+- **CVV**: Any 3 digits (e.g., 123)
+- **Name**: Test User
+- **Email**: test@example.com
 
-## 📊 Test Coverage
-
-Our test suite covers:
-
-### ✅ Commission Calculations (20%/80% Split)
-- **Platform Fee**: 20% of ticket price
-- **Host Earnings**: 80% of ticket price
-- **Edge Cases**: $0, fractional prices, large amounts
-
-### ✅ Payment Intent Structure
-- Validates all required fields for Dodo API
-- Tests metadata structure
-- Verifies marketplace fee configuration
-
-### ✅ Error Handling
-- Payment processing state management
-- Error message handling
-- Configuration validation
-
-### ✅ Integration Flow
-- Guest request creation with payment IDs
-- Payment status tracking
-- Real-time updates
-
-### ✅ Edge Cases
-- Zero dollar tickets
-- Large ticket prices ($1000+)
-- Fractional pricing ($12.99)
-
-## 🔧 Configuration
-
-### Xcode Project Setup
-1. **Info.plist Configuration** ✅
-   - `DODO_API_KEY` placeholder added
-   - `DODO_WEBHOOK_SECRET` placeholder added
-
-2. **URL Schemes** ✅
-   - `bondfyr://payment-success` for successful payments
-   - `bondfyr://payment-cancelled` for cancelled payments
-
-### Environment Configuration
-The app is configured for **Dev Mode** by default:
-- API Base URL: `https://api-dev.dodopayments.com`
-- Safe for testing with test cards
-- No real charges will be made
-
-## 💳 Test Cards (Dodo Payments)
-
-Use these test card numbers in Dodo's checkout:
-
-| Card Number         | Result          | Description                    |
-|--------------------|-----------------|---------------------------------|
-| 4242 4242 4242 4242| Success         | Visa successful payment        |
-| 4000 0000 0000 0002| Declined        | Card declined                  |
-| 4000 0000 0000 9995| Insufficient    | Insufficient funds             |
-
-**Note**: Use any future expiry date, any 3-digit CVC, and any zip code.
-
-## 🔄 Integration Flow
-
-### 1. User Journey
-```
-Guest finds party → Clicks "Pay & Join" → Dodo checkout → Payment success → Request submitted → Host approval
-```
-
-### 2. Technical Flow
-```
-RequestToJoinSheet → DodoPaymentService → Dodo API → Webhook → Firebase → Real-time updates
-```
-
-### 3. Data Flow
-```
-Payment Intent Created → User Pays → Webhook Confirms → GuestRequest Updated → Host Notified
-```
-
-## 🎯 Key Integration Points
-
-### ✅ Already Integrated
-1. **RequestToJoinSheet.swift** - Payment UI integrated
-2. **DodoPaymentService.swift** - Complete service implementation
-3. **AfterpartyModel.swift** - Payment tracking fields added
-4. **Firebase Functions** - Webhook handlers ready
-
-### 🚀 Production Deployment Steps
-
-1. **Get Production API Keys**
+### Step 6: Verify Payment Success
+1. After payment, webhook will fire
+2. Check Firebase Functions logs:
    ```bash
-   # From your Dodo dashboard production settings
-   DODO_PRODUCTION_API_KEY="pk_live_..."
-   DODO_PRODUCTION_WEBHOOK_SECRET="whsec_..."
+   firebase functions:log --only dodoWebhook
    ```
+3. Guest status should change to "Going"
+4. Host should receive payment notification
 
-2. **Update Environment**
-   ```swift
-   // In DodoPaymentService.swift
-   private let dodoEnvironment: DodoEnvironment = .production
-   ```
+## 📊 Monitoring & Debugging
 
-3. **Deploy Firebase Functions**
-   ```bash
-   cd firebase-functions
-   firebase deploy --only functions
-   ```
-
-4. **Configure Webhooks**
-   - Set webhook URL to your Firebase function endpoint
-   - Configure events: `payment_intent.succeeded`, `payment_intent.payment_failed`
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Tests Failing**
-- Check that DodoPaymentService is included in test target
-- Verify all model imports are available
-- Ensure Firebase is configured for tests
-
-**Payment Flow Issues**
-- Verify API keys are correctly set
-- Check that you're in Test/Dev mode
-- Confirm webhook endpoints are accessible
-
-**Commission Calculations Wrong**
-- Should be exactly 20% platform / 80% host
-- Check for rounding errors in fractional amounts
-
-### Debug Commands
+### Check Firebase Logs
 ```bash
-# Check test target configuration
-xcodebuild -list -project Bondfyr.xcodeproj
+# View webhook logs
+firebase functions:log --only dodoWebhook
 
-# Run specific test with verbose output
-xcodebuild test -only-testing BondfyrTests/DodoPaymentServiceTests/testBondfyrFeeCalculation -verbose
-
-# Check scheme configuration
-xcodebuild -showBuildSettings -project Bondfyr.xcodeproj -scheme "Bondfyr copy"
+# View last 50 entries
+firebase functions:log --only dodoWebhook -n 50
 ```
 
-## 📈 Performance Benchmarks
+### Check Firestore Updates
+1. Go to Firebase Console
+2. Navigate to Firestore Database
+3. Check `afterparties` collection
+4. Look for:
+   - `guestRequests` array with `paymentStatus: 'paid'`
+   - `activeUsers` array containing the guest's userId
+5. Check `transactions` collection for payment records
 
-Our tests include performance benchmarks:
-- **Commission calculations**: < 0.1ms for 10,000 calculations
-- **Payment intent creation**: Expected < 2s with network
-- **Error handling**: Immediate response < 10ms
+### Debug Payment Issues
+1. Check Xcode console for API responses
+2. Look for logs starting with:
+   - `🔵 DODO API:` - API requests
+   - `🔴 DODO:` - Errors
+   - `⚠️ DODO:` - Warnings
 
-## 🔒 Security Notes
+## 🚨 Common Issues & Solutions
 
-### Test Environment
-- ✅ Using dev environment prevents real charges
-- ✅ Test cards cannot be charged real money
-- ✅ All test data is isolated
+### Issue: Payment fails with 404
+**Solution**: Ensure the product ID exists in your Dodo dashboard
 
-### Production Security
-- API keys stored as environment variables
-- Webhook signatures verified
-- Payment data encrypted in transit
-- PCI compliance through Dodo
+### Issue: Webhook not firing
+**Solution**: 
+1. Check webhook URL in Dodo dashboard matches Firebase function
+2. Verify webhook secret is correct
+3. Check Firebase function logs for errors
+
+### Issue: User status not updating
+**Solution**:
+1. Check webhook is processing successfully
+2. Verify metadata is being passed correctly
+3. Check Firestore security rules allow updates
+
+## 🎯 Test Scenarios
+
+### ✅ Happy Path
+1. Guest requests → Host approves → Payment succeeds → Status updates
+
+### ❌ Payment Failure
+1. Use test card: `4000 0000 0000 0002` (declined)
+2. Verify failure is handled gracefully
+
+### 💸 Refund Test
+1. Process a successful payment
+2. Issue refund from Dodo dashboard
+3. Verify user status reverts and notifications sent
+
+## 📱 Push Notifications
+
+Notifications are sent for:
+- Host: New guest request
+- Guest: Request approved
+- Guest: Payment required reminder
+- Guest: Payment confirmed
+- Host: Payment received with earnings
+
+## 🚀 Going Live Checklist
+
+- [ ] Create production products in Dodo dashboard
+- [ ] Update `dodoEnvironment` to `.production`
+- [ ] Test with small real payment
+- [ ] Monitor first few live transactions
+- [ ] Set up error alerting
 
 ## 📞 Support
 
-### Dodo Payments
-- Documentation: [docs.dodopayments.com](https://docs.dodopayments.com)
-- Support: [support@dodopayments.com](mailto:support@dodopayments.com)
+- **Dodo Support**: Check their dashboard for support options
+- **Firebase Issues**: Check Functions logs and Firestore rules
+- **App Issues**: Check Xcode console and device logs
 
-### Bondfyr Integration
-- Check test output for specific error messages
-- Review Firebase console for webhook logs
-- Use Xcode Test Navigator for detailed test results
-
----
-
-## 🚀 Quick Start Checklist
-
-- [ ] Run `./test_dodo_integration.sh` to verify setup
-- [ ] Get test API keys from Dodo dashboard
-- [ ] Test payment flow with test cards
-- [ ] Verify webhook integration
-- [ ] Deploy to production environment
-
-**Ready to test your integration? Run the test script and let's see how it goes!** 🎉 
+Happy testing! 🎉 

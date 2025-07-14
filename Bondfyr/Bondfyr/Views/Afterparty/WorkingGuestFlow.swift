@@ -148,16 +148,17 @@ struct WorkingGuestFlow: View {
         }
     }
     
-    // MARK: - Working Notifications
+    // MARK: - Notifications (DISABLED - Using FCM instead)
     
-    /// When guest submits request → notify HOST
+    /// When guest sends request → notify HOST
     private func sendHostNotification() {
-        guard let currentUser = authViewModel.currentUser else { return }
-        
+        // DISABLED: Local notifications show on wrong device
+        // This is now handled by Firebase Cloud Functions
+        /*
         Task {
             let content = UNMutableNotificationContent()
             content.title = "🔔 New Guest Request"
-            content.body = "\(currentUser.name) wants to join \(afterparty.title). Tap to review!"
+            content.body = "\(authViewModel.currentUser?.name ?? "Someone") wants to join \(afterparty.title). Tap to review!"
             content.sound = .default
             
             let request = UNNotificationRequest(
@@ -169,10 +170,14 @@ struct WorkingGuestFlow: View {
             try? await UNUserNotificationCenter.current().add(request)
             print("✅ WORKING: Sent HOST notification about new guest request")
         }
+        */
     }
     
     /// When host approves guest → notify GUEST
     private func sendGuestApprovalNotification() {
+        // DISABLED: Local notifications show on wrong device
+        // This is now handled by Firebase Cloud Functions
+        /*
         Task {
             let content = UNMutableNotificationContent()
             content.title = "🎉 Request Approved!"
@@ -188,10 +193,14 @@ struct WorkingGuestFlow: View {
             try? await UNUserNotificationCenter.current().add(request)
             print("✅ WORKING: Sent GUEST notification about approval")
         }
+        */
     }
     
     /// When guest pays → notify HOST
     private func sendHostPaymentNotification() {
+        // DISABLED: Local notifications show on wrong device
+        // This is now handled by Firebase Cloud Functions
+        /*
         guard let currentUser = authViewModel.currentUser else { return }
         
         Task {
@@ -209,5 +218,6 @@ struct WorkingGuestFlow: View {
             try? await UNUserNotificationCenter.current().add(request)
             print("✅ WORKING: Sent HOST notification about payment received")
         }
+        */
     }
 } 

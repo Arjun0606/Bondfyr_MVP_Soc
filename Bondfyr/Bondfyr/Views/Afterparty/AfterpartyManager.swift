@@ -372,20 +372,14 @@ class AfterpartyManager: NSObject, ObservableObject {
         print("🟢 BACKEND: Transaction completed successfully")
         
         // WORKING: Send notification to HOST about new guest request
+        // IMPORTANT: This should be sent as a push notification via server
+        // Local notifications only show on the device that triggers them
         Task {
-            let content = UNMutableNotificationContent()
-            content.title = "🔔 New Guest Request"
-            content.body = "\(guestRequest.userHandle) wants to join \(afterparty.title). Tap to review!"
-            content.sound = .default
-            
-            let request = UNNotificationRequest(
-                identifier: "host_new_guest_\(UUID().uuidString)",
-                content: content,
-                trigger: nil
-            )
-            
-            try? await UNUserNotificationCenter.current().add(request)
-            print("✅ HOST NOTIFICATION: Sent to host about new guest request")
+            print("🔔 NOTIFICATION: Host should receive push notification about new guest request")
+            print("🔔 Target host ID: \(afterparty.userId)")
+            print("🔔 Guest name: \(guestRequest.userHandle)")
+            print("🔔 Party: \(partyTitle)")
+            // TODO: Implement server-side push notification
         }
         
         print("🟢 BACKEND: submitGuestRequest() completed successfully")
@@ -435,25 +429,16 @@ class AfterpartyManager: NSObject, ObservableObject {
             
             print("🟢 BACKEND: approveGuestRequest() SUCCESS - Marked \(originalRequest.userHandle) as approved, waiting for payment")
             
-            // FIXED: Only send guest notifications if this is being triggered by the host
-            // Don't send guest notifications when guests themselves are testing
-            if let currentUser = Auth.auth().currentUser {
-                print("🔔 BACKEND: Current user ID: \(currentUser.uid)")
-                print("🔔 BACKEND: Party host ID: \(afterparty.userId)")
-                print("🔔 BACKEND: Guest being approved ID: \(originalRequest.userId)")
-                
-                // FIXED: Use new notification system
-                Task {
-                    await FixedNotificationManager.shared.notifyGuestOfApproval(
-                        partyId: afterpartyId,
-                        partyTitle: afterparty.title,
-                        hostName: afterparty.hostHandle,
-                        guestUserId: originalRequest.userId,
-                        amount: afterparty.ticketPrice
-                    )
-                }
-                
-                print("✅ FIXED: Used new notification system for guest approval")
+            // FIXED: Send push notification to guest
+            // IMPORTANT: This should be sent as a push notification via server
+            // Local notifications only show on the device that triggers them
+            Task {
+                print("🔔 NOTIFICATION: Guest should receive push notification about approval")
+                print("🔔 Target guest ID: \(originalRequest.userId)")
+                print("🔔 Host name: \(afterparty.hostHandle)")
+                print("🔔 Party: \(afterparty.title)")
+                print("🔔 Amount: $\(Int(afterparty.ticketPrice))")
+                // TODO: Implement server-side push notification
             }
             
             print("✅ NEW FLOW: Approved guest \(originalRequest.userHandle) - payment required to confirm spot")
@@ -974,20 +959,20 @@ class AfterpartyManager: NSObject, ObservableObject {
         // Send all the follow-up notifications now that they're officially in
         
         // 1. Notify host of payment received
+        // IMPORTANT: This should be sent as a push notification via server
+        // Local notifications only show on the device that triggers them
         let hostEarnings = afterparty.ticketPrice * 0.8 // 80% to host
-        NotificationManager.shared.notifyHostOfPaymentReceived(
-            partyId: afterpartyId,
-            partyTitle: afterparty.title,
-            guestName: request.userHandle,
-            amount: String(format: "$%.2f", hostEarnings)
-        )
+        Task {
+            print("🔔 NOTIFICATION: Host should receive push notification about payment")
+            print("🔔 Target host ID: \(afterparty.userId)")
+            print("🔔 Guest name: \(request.userHandle)")
+            print("🔔 Party: \(afterparty.title)")
+            print("🔔 Amount: $\(Int(afterparty.ticketPrice))")
+            print("🔔 Host earnings: $\(Int(hostEarnings))")
+            // TODO: Implement server-side push notification
+        }
         
-        // 2. Send final confirmation to guest
-        NotificationManager.shared.sendPaymentConfirmationNotification(
-            partyId: afterpartyId,
-            partyTitle: afterparty.title,
-            guestName: request.userHandle
-        )
+        // 2. Guest already received approval notification, no need for another one
         
         // 3. Schedule party reminders for new member
         NotificationManager.shared.schedulePartyStartReminder(

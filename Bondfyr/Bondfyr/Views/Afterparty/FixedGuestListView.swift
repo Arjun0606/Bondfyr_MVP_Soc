@@ -174,6 +174,8 @@ struct FixedGuestListView: View {
                 )
                 
                 // FIXED: Use new notification system
+                // COMMENTED OUT: Local notifications show on the wrong device
+                /*
                 await fixedNotificationManager.notifyGuestOfApproval(
                     partyId: partyId,
                     partyTitle: currentParty?.title ?? "Party",
@@ -181,6 +183,7 @@ struct FixedGuestListView: View {
                     guestUserId: request.userId,
                     amount: currentParty?.ticketPrice ?? 10
                 )
+                */
                 
                 await MainActor.run {
                     alertMessage = "✅ @\(request.userHandle) approved! They'll receive payment instructions."

@@ -69,29 +69,34 @@ exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
   }
 
   try {
-    // Verify webhook signature (Dodo uses standard webhook verification)
-    const dodoSignature = req.headers['dodo-signature'];
-    const webhookSecret = functions.config().dodo?.webhook_secret;
+    // Get webhook headers for verification
+    const webhookId = req.headers['webhook-id'];
+    const webhookSignature = req.headers['webhook-signature'];
+    const webhookTimestamp = req.headers['webhook-timestamp'];
     
-    // Note: Dodo webhook signature verification would go here
-    // For now, we'll process the webhook without verification in development
+    console.log('📋 Dodo webhook headers:', {
+      id: webhookId,
+      signature: webhookSignature,
+      timestamp: webhookTimestamp
+    });
     
-    const { type, data } = req.body;
-    
-    console.log(`Received Dodo webhook: ${type}`);
+    // Parse the webhook payload
+    const event = req.body;
+    console.log(`Received Dodo webhook: ${event.event_type}`);
+    console.log('📦 Webhook payload:', JSON.stringify(event, null, 2));
 
-    switch (type) {
-      case 'payment_intent.succeeded':
-        await handleDodoPaymentSucceeded(data.object);
+    switch (event.event_type) {
+      case 'payment.succeeded':
+        await handleDodoPaymentSucceeded(event.data);
         break;
-      case 'payment_intent.payment_failed':
-        await handleDodoPaymentFailed(data.object);
+      case 'payment.failed':
+        await handleDodoPaymentFailed(event.data);
         break;
-      case 'charge.dispute.created':
-        await handleDodoChargeDispute(data.object);
+      case 'refund.succeeded':
+        await handleDodoRefundSucceeded(event.data);
         break;
       default:
-        console.log(`Unhandled Dodo webhook event: ${type}`);
+        console.log(`Unhandled Dodo webhook event: ${event.event_type}`);
     }
 
     res.status(200).send('OK');
@@ -102,146 +107,186 @@ exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
 });
 
 // Handle successful Dodo payment
-async function handleDodoPaymentSucceeded(paymentIntent) {
+async function handleDodoPaymentSucceeded(data) {
   try {
-    const metadata = paymentIntent.metadata;
-    const intentId = paymentIntent.id;
-    const amount = parseFloat(paymentIntent.amount_received / 100); // Convert from cents
+    const payment = data;
+    const metadata = payment.metadata || {};
+    const paymentId = payment.payment_id;
+    const amount = payment.amount; // Already in dollars, not cents
 
     if (!metadata) {
       console.error('Missing metadata in Dodo payment success');
       return;
     }
 
-    const { afterparty_id, user_id, user_handle, host_id, platform_fee, host_earnings } = metadata;
+    const { afterpartyId, userId, userName, userHandle, hostId, platformFee, hostEarnings } = metadata;
 
-    if (!user_id || !afterparty_id) {
+    if (!userId || !afterpartyId) {
       console.error('Invalid metadata format in Dodo payment success');
       return;
     }
 
-    console.log(`Processing Dodo payment success for user ${user_handle} in afterparty ${afterparty_id}`);
+    console.log(`Processing Dodo payment success for user ${userHandle} in afterparty ${afterpartyId}`);
 
     const db = admin.firestore();
     
     // Get the afterparty document
-    const afterpartyRef = db.collection('afterparties').doc(afterparty_id);
+    const afterpartyRef = db.collection('afterparties').doc(afterpartyId);
     const afterpartyDoc = await afterpartyRef.get();
     
     if (!afterpartyDoc.exists) {
-      console.error(`Afterparty ${afterparty_id} not found`);
+      console.error(`Afterparty ${afterpartyId} not found`);
       return;
     }
 
     const afterpartyData = afterpartyDoc.data();
     const guestRequests = afterpartyData.guestRequests || [];
+    const activeUsers = afterpartyData.activeUsers || [];
     
     // Find and update the guest request
     const updatedRequests = guestRequests.map(request => {
-      if (request.userId === user_id) {
+      if (request.userId === userId) {
         return {
           ...request,
           paymentStatus: 'paid',
-          dodoPaymentIntentId: intentId,
+          dodoPaymentId: paymentId,
           paidAt: admin.firestore.FieldValue.serverTimestamp()
         };
       }
       return request;
     });
 
+    // Add user to activeUsers if not already there
+    if (!activeUsers.includes(userId)) {
+      activeUsers.push(userId);
+    }
+
     // Update the afterparty document
     await afterpartyRef.update({
-      guestRequests: updatedRequests
+      guestRequests: updatedRequests,
+      activeUsers: activeUsers,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Create transaction record with 20% commission
     await db.collection('transactions').add({
-      id: intentId,
-      userId: user_id,
-      afterpartyId: afterparty_id,
+      id: paymentId,
+      userId: userId,
+      afterpartyId: afterpartyId,
       afterpartyTitle: afterpartyData.title,
       amount: amount,
-      platformFee: amount * 0.20, // 20% platform fee
-      hostEarnings: amount * 0.80, // 80% to host
+      platformFee: platformFee || (amount * 0.20), // 20% platform fee
+      hostEarnings: hostEarnings || (amount * 0.80), // 80% to host
       type: 'purchase',
       status: 'paid',
-      dodoIntentId: intentId,
+      dodoPaymentId: paymentId,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Send confirmation notification to user
-    await sendPaymentConfirmationNotification(user_id, afterpartyData.title);
+    await sendPaymentConfirmationNotification(userId, afterpartyData.title);
 
-    console.log(`✅ Successfully processed Dodo payment for intent ${intentId}`);
+    // Send payment received notification to host
+    await notifyHostOfPaymentReceived(hostId, afterpartyData.title, userName, amount);
+
+    console.log(`✅ Successfully processed Dodo payment for payment ${paymentId}`);
   } catch (error) {
     console.error('Error handling Dodo payment success:', error);
   }
 }
 
 // Handle failed Dodo payment
-async function handleDodoPaymentFailed(paymentIntent) {
+async function handleDodoPaymentFailed(data) {
   try {
-    const metadata = paymentIntent.metadata;
-    const intentId = paymentIntent.id;
+    const payment = data;
+    const metadata = payment.metadata || {};
+    const paymentId = payment.payment_id;
 
     if (!metadata) {
       console.error('Missing metadata in Dodo payment failure');
       return;
     }
 
-    const { afterparty_id, user_id } = metadata;
+    const { afterpartyId, userId } = metadata;
 
-    console.log(`Processing Dodo payment failure for user ${user_id} in afterparty ${afterparty_id}`);
-
-    const db = admin.firestore();
-    
-    // Find the transaction and mark as failed
-    const transactionQuery = await db.collection('transactions')
-      .where('dodoIntentId', '==', intentId)
-      .get();
-
-    if (!transactionQuery.empty) {
-      const transactionDoc = transactionQuery.docs[0];
-      await transactionDoc.ref.update({
-        status: 'failed',
-        failedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-    }
+    console.log(`Processing Dodo payment failure for user ${userId} in afterparty ${afterpartyId}`);
 
     // Send payment failure notification
-    await sendPaymentFailureNotification(user_id, intentId);
+    await sendPaymentFailureNotification(userId, paymentId);
 
-    console.log(`✅ Successfully processed Dodo payment failure for intent ${intentId}`);
+    console.log(`✅ Successfully processed Dodo payment failure for payment ${paymentId}`);
   } catch (error) {
     console.error('Error handling Dodo payment failure:', error);
   }
 }
 
-// Handle Dodo charge dispute
-async function handleDodoChargeDispute(dispute) {
+// Handle Dodo refund
+async function handleDodoRefundSucceeded(data) {
   try {
-    const disputeId = dispute.id;
-    const amount = parseFloat(dispute.amount / 100);
+    const refund = data;
+    const paymentId = refund.payment_id;
+    const refundAmount = refund.amount;
     
-    console.log(`Processing Dodo charge dispute ${disputeId} for amount $${amount}`);
+    console.log(`Processing Dodo refund for payment ${paymentId}, amount: $${refundAmount}`);
 
     const db = admin.firestore();
     
-    // Create dispute record
-    await db.collection('disputes').add({
-      disputeId: disputeId,
-      amount: amount,
-      status: dispute.status,
-      reason: dispute.reason,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    // Find the transaction by Dodo payment ID
+    const transactionQuery = await db.collection('transactions')
+      .where('dodoPaymentId', '==', paymentId)
+      .get();
+
+    if (transactionQuery.empty) {
+      console.error(`Transaction not found for Dodo payment ${paymentId}`);
+      return;
+    }
+
+    const transactionDoc = transactionQuery.docs[0];
+    const transactionData = transactionDoc.data();
+    
+    // Update transaction status
+    await transactionDoc.ref.update({
+      status: 'refunded',
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      refundAmount: refundAmount
     });
 
-    // Send dispute notification to admin
-    await sendDisputeNotification(disputeId, amount);
+    // Update guest request status in afterparty
+    const afterpartyRef = db.collection('afterparties').doc(transactionData.afterpartyId);
+    const afterpartyDoc = await afterpartyRef.get();
+    
+    if (afterpartyDoc.exists) {
+      const afterpartyData = afterpartyDoc.data();
+      const guestRequests = afterpartyData.guestRequests || [];
+      const activeUsers = afterpartyData.activeUsers || [];
+      
+      const updatedRequests = guestRequests.map(request => {
+        if (request.userId === transactionData.userId) {
+          return {
+            ...request,
+            paymentStatus: 'refunded',
+            refundedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+        }
+        return request;
+      });
 
-    console.log(`✅ Successfully processed Dodo dispute ${disputeId}`);
+      // Remove user from activeUsers
+      const updatedActiveUsers = activeUsers.filter(id => id !== transactionData.userId);
+
+      await afterpartyRef.update({
+        guestRequests: updatedRequests,
+        activeUsers: updatedActiveUsers,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // Send refund notification
+    await sendRefundNotification(transactionData.userId, transactionData.afterpartyTitle);
+
+    console.log(`✅ Successfully processed Dodo refund for payment ${paymentId}`);
   } catch (error) {
-    console.error('Error handling Dodo dispute:', error);
+    console.error('Error handling Dodo refund:', error);
   }
 }
 
@@ -630,6 +675,60 @@ async function sendDisputeNotification(disputeId, amount) {
   }
 }
 
+// Helper function to notify host of payment received
+async function notifyHostOfPaymentReceived(hostId, partyTitle, guestName, amount) {
+  try {
+    const hostEarnings = amount * 0.8; // 80% to host
+    
+    // Get host's FCM tokens
+    const tokensSnapshot = await admin.firestore()
+      .collection('users')
+      .doc(hostId)
+      .collection('fcmTokens')
+      .get();
+    
+    const tokens = [];
+    tokensSnapshot.forEach(doc => {
+      const tokenData = doc.data();
+      if (tokenData.token) {
+        tokens.push(tokenData.token);
+      }
+    });
+
+    if (tokens.length === 0) {
+      const userDoc = await admin.firestore().collection('users').doc(hostId).get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        tokens.push(userDoc.data().fcmToken);
+      }
+    }
+
+    if (tokens.length > 0) {
+      const message = {
+        notification: {
+          title: '💰 Payment Received!',
+          body: `${guestName} paid $${amount} for ${partyTitle}. You earned $${hostEarnings.toFixed(2)}!`
+        },
+        data: {
+          type: 'payment_received',
+          partyTitle: partyTitle,
+          guestName: guestName,
+          amount: amount.toString(),
+          hostEarnings: hostEarnings.toFixed(2)
+        }
+      };
+
+      const promises = tokens.map(token => {
+        return admin.messaging().send({ ...message, token });
+      });
+
+      await Promise.allSettled(promises);
+      console.log(`Sent payment notification to host ${hostId}`);
+    }
+  } catch (error) {
+    console.error('Error notifying host of payment:', error);
+  }
+}
+
 // MARK: - Analytics and Reporting
 exports.generateWeeklyReport = functions.pubsub.schedule('0 10 * * 1').onRun(async (context) => {
   try {
@@ -785,3 +884,287 @@ async function sendTestNotificationToToken(fcmToken) {
     throw error;
   }
 }
+
+// MARK: - Party Notification Functions
+
+// Send notification to host when guest requests to join
+exports.notifyHostOfGuestRequest = functions.https.onCall(async (data, context) => {
+  // Verify user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { hostUserId, partyId, partyTitle, guestName } = data;
+
+  if (!hostUserId || !partyId || !partyTitle || !guestName) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters');
+  }
+
+  try {
+    console.log(`Sending guest request notification to host ${hostUserId}`);
+    
+    // Get host's FCM tokens
+    const tokensSnapshot = await admin.firestore()
+      .collection('users')
+      .doc(hostUserId)
+      .collection('fcmTokens')
+      .get();
+    
+    const tokens = [];
+    tokensSnapshot.forEach(doc => {
+      const tokenData = doc.data();
+      if (tokenData.token) {
+        tokens.push(tokenData.token);
+      }
+    });
+
+    // Also check for legacy fcmToken field
+    if (tokens.length === 0) {
+      const userDoc = await admin.firestore().collection('users').doc(hostUserId).get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        tokens.push(userDoc.data().fcmToken);
+      }
+    }
+
+    if (tokens.length === 0) {
+      console.log(`No FCM tokens found for host ${hostUserId}`);
+      return { success: false, message: 'No FCM tokens found' };
+    }
+
+    // Send notification to all host's devices
+    const message = {
+      notification: {
+        title: '🔔 New Guest Request',
+        body: `${guestName} wants to join ${partyTitle}. Tap to review!`
+      },
+      data: {
+        type: 'host_guest_request',
+        partyId: partyId,
+        partyTitle: partyTitle,
+        guestName: guestName
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      }
+    };
+
+    const promises = tokens.map(token => {
+      return admin.messaging().send({ ...message, token });
+    });
+
+    const results = await Promise.allSettled(promises);
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    
+    console.log(`Sent host notification to ${successCount}/${tokens.length} devices`);
+    return { success: true, sentCount: successCount, totalTokens: tokens.length };
+
+  } catch (error) {
+    console.error('Error sending host notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Send notification to guest when approved
+exports.notifyGuestOfApproval = functions.https.onCall(async (data, context) => {
+  // Verify user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { guestUserId, partyId, partyTitle, hostName, amount } = data;
+
+  if (!guestUserId || !partyId || !partyTitle || !amount) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters');
+  }
+
+  try {
+    console.log(`Sending approval notification to guest ${guestUserId}`);
+    
+    // Get guest's FCM tokens
+    const tokensSnapshot = await admin.firestore()
+      .collection('users')
+      .doc(guestUserId)
+      .collection('fcmTokens')
+      .get();
+    
+    const tokens = [];
+    tokensSnapshot.forEach(doc => {
+      const tokenData = doc.data();
+      if (tokenData.token) {
+        tokens.push(tokenData.token);
+      }
+    });
+
+    // Also check for legacy fcmToken field
+    if (tokens.length === 0) {
+      const userDoc = await admin.firestore().collection('users').doc(guestUserId).get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        tokens.push(userDoc.data().fcmToken);
+      }
+    }
+
+    if (tokens.length === 0) {
+      console.log(`No FCM tokens found for guest ${guestUserId}`);
+      return { success: false, message: 'No FCM tokens found' };
+    }
+
+    // Send notification to all guest's devices
+    const message = {
+      notification: {
+        title: '🎉 Request Approved!',
+        body: `You're approved for ${partyTitle}! Complete payment ($${amount}) to secure your spot.`
+      },
+      data: {
+        type: 'guest_approved',
+        partyId: partyId,
+        partyTitle: partyTitle,
+        hostName: hostName || 'Host',
+        amount: amount.toString(),
+        action: 'show_payment'
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      }
+    };
+
+    const promises = tokens.map(token => {
+      return admin.messaging().send({ ...message, token });
+    });
+
+    const results = await Promise.allSettled(promises);
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    
+    console.log(`Sent guest notification to ${successCount}/${tokens.length} devices`);
+    
+    // Send follow-up payment reminder after 2 seconds
+    setTimeout(async () => {
+      const reminderMessage = {
+        notification: {
+          title: '💳 Payment Required',
+          body: `Don't forget to complete your payment for ${partyTitle} - $${amount}`
+        },
+        data: {
+          type: 'payment_reminder',
+          partyId: partyId,
+          partyTitle: partyTitle
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default'
+            }
+          }
+        }
+      };
+
+      const reminderPromises = tokens.map(token => {
+        return admin.messaging().send({ ...reminderMessage, token });
+      });
+
+      await Promise.allSettled(reminderPromises);
+      console.log('Sent payment reminder to guest');
+    }, 2000);
+
+    return { success: true, sentCount: successCount, totalTokens: tokens.length };
+
+  } catch (error) {
+    console.error('Error sending guest notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Send notification to host when payment received
+exports.notifyHostOfPayment = functions.https.onCall(async (data, context) => {
+  // Verify user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { hostUserId, partyId, partyTitle, guestName, amount } = data;
+
+  if (!hostUserId || !partyId || !partyTitle || !guestName || !amount) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters');
+  }
+
+  try {
+    console.log(`Sending payment notification to host ${hostUserId}`);
+    
+    // Get host's FCM tokens
+    const tokensSnapshot = await admin.firestore()
+      .collection('users')
+      .doc(hostUserId)
+      .collection('fcmTokens')
+      .get();
+    
+    const tokens = [];
+    tokensSnapshot.forEach(doc => {
+      const tokenData = doc.data();
+      if (tokenData.token) {
+        tokens.push(tokenData.token);
+      }
+    });
+
+    // Also check for legacy fcmToken field
+    if (tokens.length === 0) {
+      const userDoc = await admin.firestore().collection('users').doc(hostUserId).get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        tokens.push(userDoc.data().fcmToken);
+      }
+    }
+
+    if (tokens.length === 0) {
+      console.log(`No FCM tokens found for host ${hostUserId}`);
+      return { success: false, message: 'No FCM tokens found' };
+    }
+
+    const hostEarnings = amount * 0.8; // 80% to host
+
+    // Send notification to all host's devices
+    const message = {
+      notification: {
+        title: '💰 Payment Received!',
+        body: `${guestName} paid $${amount} for ${partyTitle}. You earned $${hostEarnings.toFixed(2)}!`
+      },
+      data: {
+        type: 'payment_received',
+        partyId: partyId,
+        partyTitle: partyTitle,
+        guestName: guestName,
+        amount: amount.toString(),
+        hostEarnings: hostEarnings.toFixed(2)
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      }
+    };
+
+    const promises = tokens.map(token => {
+      return admin.messaging().send({ ...message, token });
+    });
+
+    const results = await Promise.allSettled(promises);
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    
+    console.log(`Sent payment notification to ${successCount}/${tokens.length} devices`);
+    return { success: true, sentCount: successCount, totalTokens: tokens.length };
+
+  } catch (error) {
+    console.error('Error sending payment notification:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});

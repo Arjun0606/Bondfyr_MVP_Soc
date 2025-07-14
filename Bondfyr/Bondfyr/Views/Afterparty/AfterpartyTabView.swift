@@ -647,6 +647,8 @@ struct ActionButtonsView: View {
             switch request.approvalStatus {
             case .approved:
                 buttonState = .approved
+                print("🎯 PAYMENT DEBUG: User is APPROVED! Should show payment button")
+                print("🎯 PAYMENT DEBUG: Request payment status: \(request.paymentStatus)")
             case .pending:
                 buttonState = .pending
             case .denied:
@@ -678,7 +680,7 @@ struct ActionButtonsView: View {
             .foregroundColor(.white)
             .cornerRadius(20)
         }
-        .disabled(isJoining || buttonState == .pending || buttonState == .soldOut || buttonState == .approved)
+        .disabled(isJoining || buttonState == .pending || buttonState == .soldOut || buttonState == .denied)
     }
     
     // Enhanced button state enum
@@ -778,6 +780,7 @@ struct AfterpartyCard: View {
     @State private var isJoining = false // Missing state variable for ContactHostSheet
     @State private var showingHostInfo = false // Host profile sheet
     @State private var showingPaymentSheet = false // NEW FLOW: Payment sheet for approved guests
+    @State private var refreshTimer: Timer? // Add timer for periodic refresh
     
     // CRITICAL FIX: Add initializer to set the @State property
     init(afterparty: Afterparty) {
@@ -1128,6 +1131,16 @@ struct AfterpartyCard: View {
         .onAppear {
             // Refresh party data when card appears to ensure UI is up to date
             refreshAfterpartyData()
+            
+            // Start periodic refresh timer for real-time updates
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+                refreshAfterpartyData()
+            }
+        }
+        .onDisappear {
+            // Stop the refresh timer when card disappears
+            refreshTimer?.invalidate()
+            refreshTimer = nil
         }
         .refreshable {
             // Add pull-to-refresh functionality

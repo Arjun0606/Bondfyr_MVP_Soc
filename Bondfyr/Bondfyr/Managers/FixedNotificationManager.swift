@@ -45,8 +45,7 @@ class FixedNotificationManager: ObservableObject {
         print("🔔 FIXED: Target host: \(hostUserId)")
         print("🔔 FIXED: Guest name: \(guestName)")
         
-        // FIXED: Always send host notifications - they should go to hosts!
-        // Remove the blocking logic that was causing wrong targeting
+        // Send notification - removed blocking logic
         print("🟢 FIXED: Sending host notification for new guest request")
         
         // Check permissions first
@@ -96,8 +95,7 @@ class FixedNotificationManager: ObservableObject {
         print("🔔 FIXED: Host name: \(hostName)")
         print("🔔 FIXED: Amount: \(amount)")
         
-        // FIXED: Always send guest notifications - they should go to guests!
-        // Remove the blocking logic that was causing wrong targeting
+        // Send notification - removed blocking logic
         print("🟢 FIXED: Sending guest notification for approval")
         
         // Check permissions first
