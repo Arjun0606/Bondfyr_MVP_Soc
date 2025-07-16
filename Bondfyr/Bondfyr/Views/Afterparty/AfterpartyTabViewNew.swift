@@ -266,7 +266,7 @@ struct HostedPartiesView: View {
     
     private var hostedParties: [Afterparty] {
         realTimeManager.parties.values.filter { party in
-            party.userId == authViewModel.currentUser?.uid
+            party.userId == authViewModel.currentUser?.uid && party.endTime > Date()
         }.sorted { $0.startTime < $1.startTime }
     }
     

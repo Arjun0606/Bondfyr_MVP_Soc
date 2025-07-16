@@ -19,10 +19,45 @@ class RealTimePartyManager: ObservableObject {
     
     private init() {
         setupConnectionMonitoring()
+        // Start periodic cleanup of ended parties
+        startPeriodicCleanup()
     }
     
     deinit {
         removeAllListeners()
+        cleanupTimer?.invalidate()
+    }
+    
+    // MARK: - Periodic Cleanup
+    private var cleanupTimer: Timer?
+    
+    private func startPeriodicCleanup() {
+        // Check for ended parties every 5 minutes
+        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            self?.cleanupEndedParties()
+        }
+    }
+    
+    private func cleanupEndedParties() {
+        let now = Date()
+        var partiesToRemove: [String] = []
+        
+        for (partyId, party) in parties {
+            if party.endTime < now {
+                partiesToRemove.append(partyId)
+            }
+        }
+        
+        for partyId in partiesToRemove {
+            print("🗑️ CLEANUP: Removing ended party \(partyId)")
+            parties.removeValue(forKey: partyId)
+            userPartyStatuses.removeValue(forKey: partyId)
+            stopListening(to: partyId)
+        }
+        
+        if !partiesToRemove.isEmpty {
+            print("🗑️ CLEANUP: Removed \(partiesToRemove.count) ended parties")
+        }
     }
     
     // MARK: - Connection Status
@@ -125,6 +160,15 @@ class RealTimePartyManager: ObservableObject {
             partyData["id"] = snapshot.documentID
             
             let party = try Firestore.Decoder().decode(Afterparty.self, from: partyData)
+            
+            // CRITICAL FIX: Remove ended parties from real-time manager
+            if party.endTime < Date() {
+                print("🗑️ REALTIME: Party \(partyId) has ended - removing from manager")
+                parties.removeValue(forKey: partyId)
+                userPartyStatuses.removeValue(forKey: partyId)
+                stopListening(to: partyId)
+                return
+            }
             
             // Update party data
             print("🔄 REALTIME: Party data updated - old requests: \(parties[partyId]?.guestRequests.count ?? 0), new requests: \(party.guestRequests.count)")

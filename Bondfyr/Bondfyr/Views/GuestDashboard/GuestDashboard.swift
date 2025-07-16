@@ -127,6 +127,9 @@ struct GuestDashboard: View {
     // MARK: - Computed Properties
     private var activeParties: [GuestPartyInfo] {
         realTimeManager.parties.values.compactMap { party in
+            // Filter out ended parties
+            guard party.endTime > Date() else { return nil }
+            
             guard let status = realTimeManager.getUserStatus(for: party.id),
                   status == .going || status == .approved else { return nil }
             
@@ -136,6 +139,9 @@ struct GuestDashboard: View {
     
     private var pendingRequests: [GuestPartyInfo] {
         realTimeManager.parties.values.compactMap { party in
+            // Filter out ended parties
+            guard party.endTime > Date() else { return nil }
+            
             guard let status = realTimeManager.getUserStatus(for: party.id),
                   status == .requestSubmitted else { return nil }
             
