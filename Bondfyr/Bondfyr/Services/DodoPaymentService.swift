@@ -21,16 +21,16 @@ class DodoPaymentService: ObservableObject {
         if let apiKey = Bundle.main.object(forInfoDictionaryKey: "DODO_API_KEY") as? String {
             return apiKey
         }
-        // Fallback to test API key
-        return "WwodcwFpKfwwrjg5.Or4_3_Zl8Sv3APNRllVNh35fUlyzxZYBV1nrE7W3Xzmfmo"
+        // Fresh API key from Dodo dashboard
+        return "V5NKMaH4W8-DkX1A.oj-tjNdW2_L-CsM-xN2ItGSJFjWqPkqDbPuQ3usa9ykCEwNe"
     }()
     
     private let dodoWebhookSecret: String = {
         if let secret = Bundle.main.object(forInfoDictionaryKey: "DODO_WEBHOOK_SECRET") as? String {
             return secret
         }
-        // Fallback to test webhook secret
-        return "whsec_xKI9UUl00JcHyVasRJRuMKT0"
+        // Fresh webhook secret from Dodo dashboard
+        return "whsec_SkxMTLLPZc7xMtkZJNckk2xa"
     }()
     
     // Use dev mode for testing, production for live
@@ -41,18 +41,26 @@ class DodoPaymentService: ObservableObject {
     
     // MARK: - Configuration Validation
     var isConfigured: Bool {
-        // Check if we have actual API keys (not placeholder values)
+        // For sandbox/dev mode, we always want to hit the real API
+        if dodoEnvironment == .dev {
+            print("🔍 DODO Config Check (DEV MODE):")
+            print("  - Using dev environment - API calls enabled")
+            print("  - API Key: \(dodoAPIKey.prefix(10))...")
+            print("  - Webhook Secret: \(dodoWebhookSecret.prefix(10))...")
+            return true // Always use real API in dev mode
+        }
+        
+        // For production, do stricter validation
         let hasValidAPIKey = !dodoAPIKey.isEmpty && 
                            !dodoAPIKey.contains("YOUR_") && 
-                           dodoAPIKey.count > 20 // Dodo keys are long
+                           dodoAPIKey.count > 20
         let hasValidWebhookSecret = !dodoWebhookSecret.isEmpty && 
                                   !dodoWebhookSecret.contains("YOUR_") &&
                                   dodoWebhookSecret.starts(with: "whsec_")
         
-        print("🔍 DODO Config Check:")
+        print("🔍 DODO Config Check (PRODUCTION):")
         print("  - API Key valid: \(hasValidAPIKey) (length: \(dodoAPIKey.count))")
         print("  - Webhook Secret valid: \(hasValidWebhookSecret)")
-        print("  - Environment: \(dodoEnvironment)")
         
         return hasValidAPIKey && hasValidWebhookSecret
     }
@@ -79,8 +87,15 @@ class DodoPaymentService: ObservableObject {
         userHandle: String
     ) async throws -> Bool {
         
+        print("🔍 DODO: Starting payment request for user \(userHandle)")
+        print("🔍 DODO: Party: \(afterparty.title), Price: $\(afterparty.ticketPrice)")
+        
         isProcessingPayment = true
         defer { isProcessingPayment = false }
+        
+        // Check configuration first
+        print("🔍 DODO: Checking configuration...")
+        print("🔍 DODO: isConfigured = \(isConfigured)")
         
         // TESTING MODE: Simulate successful payment without real API
         if !isConfigured {
@@ -110,8 +125,14 @@ class DodoPaymentService: ObservableObject {
         }
         
         // PRODUCTION MODE: Real Dodo payment flow
+        print("🚀 DODO: Starting REAL payment flow with API")
+        
+        // Test API connectivity first
+        await testDodoAPI()
+        
         do {
             // Process payment using Dodo Payments
+            print("🔍 DODO: Creating payment intent...")
             let paymentIntent = try await createDodoPaymentIntent(
                 afterparty: afterparty,
                 userId: userId,
@@ -119,23 +140,31 @@ class DodoPaymentService: ObservableObject {
                 userHandle: userHandle
             )
             
+            print("✅ DODO: Payment intent created successfully!")
+            print("🔍 DODO: Payment URL: \(paymentIntent.url)")
+            
             // Store the payment URL to be opened by the UI
             self.paymentURL = paymentIntent.url
             
             // Open the payment URL in Safari
             await MainActor.run {
                 if let url = URL(string: paymentIntent.url) {
-                    print("🔍 DODO: Opening payment URL: \(paymentIntent.url)")
+                    print("🌐 DODO: Opening payment URL in Safari: \(paymentIntent.url)")
                     UIApplication.shared.open(url)
+                } else {
+                    print("🔴 DODO: Failed to create URL from string: \(paymentIntent.url)")
                 }
             }
             
+            print("✅ DODO: Payment flow initiated successfully")
             // The actual payment completion will be handled by webhook
             // For now, just return true to indicate the payment process has started
             return true
             
         } catch {
-            print("🔴 DODO: API Error - \(error.localizedDescription)")
+            print("🔴 DODO: API Error - \(error)")
+            print("🔴 DODO: Error type: \(type(of: error))")
+            print("🔴 DODO: Error description: \(error.localizedDescription)")
             print("⚠️ DODO: Falling back to test mode due to API error")
             
             // Fallback to test mode if API fails
@@ -162,8 +191,15 @@ class DodoPaymentService: ObservableObject {
         userHandle: String
     ) async throws -> DodoPaymentIntent {
         
+        print("🔍 DODO API: Creating payment intent for \(userName) (\(userHandle))")
+        print("🔍 DODO API: Environment: \(dodoEnvironment)")
+        print("🔍 DODO API: Base URL: \(dodoEnvironment.baseURL)")
+        print("🔍 DODO API: API Key: \(dodoAPIKey.prefix(10))...")
+        
         let platformFee = calculateBondfyrFee(from: afterparty.ticketPrice)
         let hostEarnings = calculateHostEarnings(from: afterparty.ticketPrice)
+        
+        print("🔍 DODO API: Commission split - Platform: $\(platformFee), Host: $\(hostEarnings)")
         
         // Create payment using Dodo's payment API
         let paymentData: [String: Any] = [
@@ -182,7 +218,7 @@ class DodoPaymentService: ObservableObject {
                 "name": userName
             ],
             "product_cart": [[
-                "product_id": "pdt_mPFnouRlaQerAPmYz1gY",
+                "product_id": "pdt_mPFnouIRiaQerAPmYz1gY",
                 "quantity": 1
             ]],
             "return_url": "bondfyr://payment-success?afterpartyId=\(afterparty.id)",
@@ -197,13 +233,17 @@ class DodoPaymentService: ObservableObject {
             ]
         ]
         
-        print("🔍 DODO: Sending payment request with data: \(paymentData)")
+        print("🔍 DODO API: Sending payment request with data: \(paymentData)")
+        print("🔍 DODO API: Making request to: \(dodoEnvironment.baseURL)/payments")
         
         var request = URLRequest(url: URL(string: "\(dodoEnvironment.baseURL)/payments")!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(dodoAPIKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: paymentData)
+        
+        print("🔍 DODO API: Request headers: \(request.allHTTPHeaderFields ?? [:])")
+        print("🔍 DODO API: Sending request...")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -214,6 +254,7 @@ class DodoPaymentService: ObservableObject {
         
         if let httpResponse = response as? HTTPURLResponse {
             print("🔍 DODO API Status Code: \(httpResponse.statusCode)")
+            print("🔍 DODO API Headers: \(httpResponse.allHeaderFields)")
             
             if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -231,15 +272,19 @@ class DodoPaymentService: ObservableObject {
                         )
                     } else {
                         print("🔴 DODO: Missing payment_link or payment_id in response")
+                        print("🔴 DODO: Available keys: \(json.keys)")
                         throw DodoPaymentError.apiError("Invalid response format from Dodo API")
                     }
                 }
             } else {
                 // Parse error response
+                print("🔴 DODO API Error Response: \(String(data: data, encoding: .utf8) ?? "No response body")")
                 if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     let errorMessage = errorJson["message"] as? String ?? "Unknown error"
                     print("🔴 DODO API Error: \(errorMessage)")
                     throw DodoPaymentError.apiError("Dodo API error: \(errorMessage)")
+                } else {
+                    throw DodoPaymentError.apiError("HTTP \(httpResponse.statusCode): Authentication failed")
                 }
             }
         }
@@ -451,6 +496,44 @@ class DodoPaymentService: ObservableObject {
             amount: amount
         )
     }
+    
+    /// Test API connectivity and authentication
+    func testDodoAPI() async {
+        print("🧪 DODO: Testing API connectivity...")
+        
+        let testURL = "\(dodoEnvironment.baseURL)/products" // Try a simple endpoint first
+        guard let url = URL(string: testURL) else {
+            print("🔴 DODO TEST: Invalid URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(dodoAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        print("🧪 DODO TEST: Making GET request to: \(testURL)")
+        print("🧪 DODO TEST: With headers: \(request.allHTTPHeaderFields ?? [:])")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("🧪 DODO TEST: Status Code: \(httpResponse.statusCode)")
+                print("🧪 DODO TEST: Response: \(String(data: data, encoding: .utf8) ?? "No body")")
+                
+                if httpResponse.statusCode == 401 {
+                    print("🔴 DODO TEST: Authentication failed - API key might be invalid")
+                } else if httpResponse.statusCode == 404 {
+                    print("⚠️ DODO TEST: Endpoint not found - but authentication might be OK")
+                } else {
+                    print("✅ DODO TEST: Got response - API connection working")
+                }
+            }
+        } catch {
+            print("🔴 DODO TEST: Request failed: \(error)")
+        }
+    }
 }
 
 // MARK: - Environment Configuration
@@ -461,9 +544,9 @@ enum DodoEnvironment {
     var baseURL: String {
         switch self {
         case .dev:
-            return "https://api.dodopayments.com/api/v1" // Corrected URL
+            return "https://test.dodopayments.com" // Fixed URL for sandbox/test
         case .production:
-            return "https://api.dodopayments.com/api/v1" // Corrected URL
+            return "https://live.dodopayments.com" // Fixed URL for production
         }
     }
 }

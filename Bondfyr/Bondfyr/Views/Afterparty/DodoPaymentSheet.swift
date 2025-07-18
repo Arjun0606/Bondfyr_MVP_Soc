@@ -150,11 +150,16 @@ struct DodoPaymentSheet: View {
             return
         }
         
+        print("🔵 PAYMENT SHEET: Starting payment for user \(currentUser.username ?? "unknown")")
+        print("🔵 PAYMENT SHEET: Party: \(afterparty.title), Price: $\(afterparty.ticketPrice)")
+        
         Task {
             isProcessingPayment = true
             defer { isProcessingPayment = false }
             
             do {
+                print("🔵 PAYMENT SHEET: Calling DodoPaymentService...")
+                
                 // Use DodoPaymentService to process payment
                 let success = try await DodoPaymentService.shared.requestAfterpartyAccess(
                     afterparty: afterparty,
@@ -163,9 +168,12 @@ struct DodoPaymentSheet: View {
                     userHandle: currentUser.username ?? "@\(currentUser.name)"
                 )
                 
+                print("🔵 PAYMENT SHEET: DodoPaymentService returned: \(success)")
+                
                 if success {
                     // Check if we have a payment URL (production mode)
                     if let paymentURL = DodoPaymentService.shared.paymentURL {
+                        print("🔵 PAYMENT SHEET: Got payment URL: \(paymentURL)")
                         await MainActor.run {
                             errorMessage = "Opening payment page in Safari..."
                             showingError = true
@@ -177,6 +185,7 @@ struct DodoPaymentSheet: View {
                             }
                         }
                     } else {
+                        print("🔵 PAYMENT SHEET: No payment URL - using test mode")
                         // Test mode - payment completed immediately
                         await MainActor.run {
                             presentationMode.wrappedValue.dismiss()
@@ -189,7 +198,7 @@ struct DodoPaymentSheet: View {
                 
             } catch {
                 await MainActor.run {
-                    print("🔴 PAYMENT: Error initiating payment: \(error)")
+                    print("🔴 PAYMENT SHEET: Error initiating payment: \(error)")
                     errorMessage = "Payment initialization failed. Please try again."
                     showingError = true
                 }

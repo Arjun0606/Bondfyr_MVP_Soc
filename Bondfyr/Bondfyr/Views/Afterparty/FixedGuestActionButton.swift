@@ -96,24 +96,27 @@ struct FixedGuestActionButton: View {
     }
     
     private func determineGuestButtonState(userId: String) -> GuestButtonState {
+        // CRITICAL FIX: Use the most recent party data from the manager
+        let currentAfterparty = afterpartyManager.nearbyAfterparties.first { $0.id == afterparty.id } ?? afterparty
+        
         print("🔍 FIXED BUTTON: Determining button state for user \(userId)")
-        print("🔍 FIXED BUTTON: activeUsers: \(afterparty.activeUsers)")
-        print("🔍 FIXED BUTTON: guestRequests count: \(afterparty.guestRequests.count)")
+        print("🔍 FIXED BUTTON: activeUsers: \(currentAfterparty.activeUsers)")
+        print("🔍 FIXED BUTTON: guestRequests count: \(currentAfterparty.guestRequests.count)")
         
         // Check if fully confirmed (in activeUsers)
-        if afterparty.activeUsers.contains(userId) {
+        if currentAfterparty.activeUsers.contains(userId) {
             print("🔍 FIXED BUTTON: User is in activeUsers - state: going")
             return .going
         }
         
         // Check if party is sold out
-        if afterparty.activeUsers.count >= afterparty.maxGuestCount {
+        if currentAfterparty.activeUsers.count >= currentAfterparty.maxGuestCount {
             print("🔍 FIXED BUTTON: Party is sold out - state: soldOut")
             return .soldOut
         }
         
-        // Check guest requests
-        if let request = afterparty.guestRequests.first(where: { $0.userId == userId }) {
+        // Check guest requests using fresh data
+        if let request = currentAfterparty.guestRequests.first(where: { $0.userId == userId }) {
             print("🔍 FIXED BUTTON: Found request - approval: \(request.approvalStatus), payment: \(request.paymentStatus)")
             
             switch request.approvalStatus {
@@ -122,7 +125,7 @@ struct FixedGuestActionButton: View {
                 return .pending
             case .approved:
                 // CRITICAL FIX: Check if they're in activeUsers (paid) or not
-                if afterparty.activeUsers.contains(userId) {
+                if currentAfterparty.activeUsers.contains(userId) {
                     print("🔍 FIXED BUTTON: Approved and paid - state: going")
                     return .going
                 } else {
