@@ -90,14 +90,14 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showAchievements) {
             SimpleAchievementsView(achievements: userAchievements)
-        }
-        .sheet(isPresented: $showVerificationGuide) {
-            VerificationGuideView(isPresented: $showVerificationGuide)
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showHelpSupport) {
+            }
+            .sheet(isPresented: $showVerificationGuide) {
+                VerificationGuideView(isPresented: $showVerificationGuide)
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+            }
+            .sheet(isPresented: $showHelpSupport) {
             HelpSupportView()
         }
         .alert(isPresented: $showingLogoutAlert) {
@@ -116,7 +116,7 @@ struct ProfileView: View {
                 message: Text("This action cannot be undone. All your data will be permanently deleted."),
                 primaryButton: .destructive(Text("Delete")) {
                     authViewModel.deleteAccount { error in
-                        if let error = error {
+                            if let error = error {
                             print("❌ Delete account error: \(error)")
                         }
                     }
@@ -129,7 +129,7 @@ struct ProfileView: View {
             Group {
                 if showNewAchievementNotification, let achievement = newAchievement {
                     VStack {
-                        Spacer()
+                Spacer()
                         SimpleAchievementToastView(achievement: achievement, isPresented: $showNewAchievementNotification)
                             .padding()
                     }
@@ -144,25 +144,25 @@ struct ProfileView: View {
             // Profile Image
             if let avatarURL = authViewModel.currentUser?.avatarURL, !avatarURL.isEmpty {
                 AsyncImage(url: URL(string: avatarURL)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Circle()
                         .fill(Color.purple.opacity(0.8))
-                        .overlay(
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        )
-                }
-                .frame(width: 100, height: 100)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.purple, lineWidth: 3))
-            } else {
-                Circle()
-                    .fill(Color.purple.opacity(0.8))
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            )
+                    }
                     .frame(width: 100, height: 100)
-                    .overlay(
+                    .clipShape(Circle())
+                .overlay(Circle().stroke(Color.purple, lineWidth: 3))
+                } else {
+                    Circle()
+                    .fill(Color.purple.opacity(0.8))
+                        .frame(width: 100, height: 100)
+                        .overlay(
                         Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "?")
                             .font(.largeTitle)
                             .fontWeight(.bold)
@@ -174,9 +174,9 @@ struct ProfileView: View {
             VStack(spacing: 8) {
                 HStack {
                     Text(authViewModel.currentUser?.name ?? "Unknown")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
                     
                     // Verification badges
                     if isHostVerified {
@@ -192,8 +192,8 @@ struct ProfileView: View {
                 
                 if let username = authViewModel.currentUser?.username, !username.isEmpty {
                     Text("@\(username)")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
                 }
                 
                 Text(authViewModel.currentUser?.city ?? "Location not set")
@@ -337,7 +337,7 @@ struct ProfileView: View {
                     .foregroundColor(.white)
                 Spacer()
                 Text("\(totalAchievements)")
-                    .font(.subheadline)
+                        .font(.subheadline)
                     .foregroundColor(.gray)
                 Button(action: { showAchievements = true }) {
                     Text("View All")
@@ -386,16 +386,16 @@ struct ProfileView: View {
             if userAchievements.count > 3 {
                 VStack {
                     Text("+\(userAchievements.count - 3)")
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(.gray)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
                     Text("more")
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
-                .frame(width: 60, height: 60)
-                .background(Color.white.opacity(0.1))
-                .clipShape(Circle())
+                    .frame(width: 60, height: 60)
+                    .background(Color.white.opacity(0.1))
+                    .clipShape(Circle())
             }
         }
     }
@@ -507,7 +507,7 @@ struct SimpleAchievementCell: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(achievement.emoji)
-                .font(.system(size: 30))
+                        .font(.system(size: 30))
             
             Text(achievement.displayTitle)
                 .font(.caption2)

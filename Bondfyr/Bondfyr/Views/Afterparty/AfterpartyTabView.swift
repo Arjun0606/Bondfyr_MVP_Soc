@@ -405,7 +405,7 @@ struct AfterpartyTabView: View {
                 }
             }
         }
-        .onChange(of: afterpartyManager.nearbyAfterparties) { _ in
+        .onChange(of: afterpartyManager.nearbyAfterparties) {
             Task {
                 if let isActive = try? await afterpartyManager.hasActiveAfterparty() {
                     hasActiveParty = isActive
@@ -832,20 +832,19 @@ struct AfterpartyCard: View {
     private var timeRemaining: String {
         let now = Date()
         let endTime = afterparty.endTime
-        let creationTime = afterparty.createdAt
         
-        // If more than 9 hours have passed since creation, show expired
-        let nineHoursFromCreation = Calendar.current.date(byAdding: .hour, value: 9, to: creationTime) ?? Date()
-        if now >= nineHoursFromCreation {
-            return "Expired"
+        // Check if party has actually ended (past its real end time)
+        if now >= endTime {
+            return "Ended"
         }
         
-        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: nineHoursFromCreation)
+        // Show time until actual end time
+        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: endTime)
         if let hours = components.hour, let minutes = components.minute {
             if hours > 0 {
-                return "Expires in \(hours)h \(minutes)m"
+                return "Ends in \(hours)h \(minutes)m"
             } else {
-                return "Expires in \(minutes)m"
+                return "Ends in \(minutes)m"
             }
         }
         return ""
@@ -1133,8 +1132,26 @@ struct AfterpartyCard: View {
             refreshAfterpartyData()
             
             // Start periodic refresh timer for real-time updates
-            refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
                 refreshAfterpartyData()
+            }
+            
+            // Listen for payment completion notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PaymentCompleted"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                print("🔔 PARTY CARD: Received payment completion notification - refreshing")
+                // Check if this notification is for our party
+                let notificationPartyId = notification.object as? String ?? notification.userInfo?["partyId"] as? String
+                if let partyId = notificationPartyId, partyId == afterparty.id {
+                    print("🔔 PARTY CARD: Notification is for our party - refreshing data")
+                    refreshAfterpartyData()
+                } else {
+                    print("🔔 PARTY CARD: Notification is for different party or no party ID - refreshing anyway")
+                    refreshAfterpartyData()
+                }
             }
         }
         .onDisappear {
@@ -1343,12 +1360,12 @@ struct ApprovedGuestSimpleRow: View {
             
             // Payment now handled through Dodo - no Venmo UI needed
             Text("✅ Approved")
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.green)
-                .foregroundColor(.white)
-                .cornerRadius(6)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
         }
         .sheet(isPresented: $showingUserInfo) {
             UserInfoView(userId: request.userId)
@@ -2244,7 +2261,7 @@ struct CreateAfterpartyView: View {
         isCreating = true
         Task {
             do {
-                // Combine selected date with start time - end time is auto-calculated
+                // Combine selected date with start time
                 let finalStartTime = Calendar.current.date(
                     bySettingHour: Calendar.current.component(.hour, from: customStartTime),
                     minute: Calendar.current.component(.minute, from: customStartTime),
@@ -2252,17 +2269,16 @@ struct CreateAfterpartyView: View {
                     of: selectedDate
                 ) ?? customStartTime
                 
-                // End time is automatically set to next morning (6 AM) or 8 hours later, whichever is sooner
-                let nextMorning = Calendar.current.date(bySettingHour: 6, minute: 0, second: 0, of: Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate) ?? finalStartTime
-                let eightHoursLater = Calendar.current.date(byAdding: .hour, value: 8, to: finalStartTime) ?? finalStartTime
-                let finalEndTime = min(nextMorning, eightHoursLater)
+                // Parties run indefinitely until host ends them manually
+                // Set end time far in the future (1 year) - will be ended by host's "End Party" button
+                let distantFuture = Calendar.current.date(byAdding: .year, value: 1, to: finalStartTime) ?? finalStartTime
                 
                 try await afterpartyManager.createAfterparty(
                     hostHandle: authViewModel.currentUser?.name ?? "",
                     coordinate: location,
                     radius: 5000, // 5km radius
                     startTime: finalStartTime,
-                    endTime: finalEndTime,
+                    endTime: distantFuture,  // Open-ended - host controls when it ends
                     city: currentCity,
                     locationName: address,
                 description: description,
@@ -2629,8 +2645,8 @@ struct DemoPartiesBanner: View {
                 .stroke(Color.blue.opacity(0.3), lineWidth: 1)
         )
         .padding(.horizontal)
-    } 
-}
+    }
+} 
 
 struct PartyDetailsSection: View {
     @Binding var title: String
@@ -2838,7 +2854,7 @@ struct CoverPhotoSectionWithBinding: View {
             }
             .disabled(isUploading)
         }
-        .onChange(of: showImagePicker) { _ in
+        .onChange(of: showImagePicker) {
             // This will be handled by the parent view's ImagePicker
         }
     }
@@ -3253,7 +3269,7 @@ struct EnhancedDateTimeSection: View {
             
             // Party info note
             HStack {
-                Text("Parties are automatically visible until the next morning")
+                Text("Parties run until you end them - no time limits!")
                     .font(.caption)
                     .foregroundColor(.gray)
                 Spacer()

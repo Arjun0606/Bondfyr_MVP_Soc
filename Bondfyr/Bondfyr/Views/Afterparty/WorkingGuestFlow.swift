@@ -41,7 +41,7 @@ struct WorkingGuestFlow: View {
         .onAppear {
             checkGuestStatus()
         }
-        .onChange(of: afterparty.guestRequests) { _ in
+        .onChange(of: afterparty.guestRequests) {
             checkGuestStatus()
         }
         .sheet(isPresented: $showingRequestSheet) {

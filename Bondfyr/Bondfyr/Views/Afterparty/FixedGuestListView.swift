@@ -119,9 +119,35 @@ struct FixedGuestListView: View {
             }
         }
         .onAppear {
+            print("🔍 GUEST LIST: View appeared - refreshing data")
             Task {
-                await loadInitialData()
+                await refreshData()
             }
+            
+            // Listen for payment completion notifications to refresh guest status
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PaymentCompleted"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                print("🔔 GUEST LIST: Received payment completion notification - refreshing")
+                // Check if this notification is for our party
+                let notificationPartyId = notification.object as? String ?? notification.userInfo?["partyId"] as? String
+                if let partyId = notificationPartyId, partyId == originalParty.id {
+                    print("🔔 GUEST LIST: Notification is for our party - refreshing data")
+                    Task {
+                        await refreshData()
+                    }
+                } else {
+                    print("🔔 GUEST LIST: Notification is for different party or no party ID - refreshing anyway")
+                    Task {
+                        await refreshData()
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("PaymentCompleted"), object: nil)
         }
         .alert("Action Result", isPresented: $showingAlert) {
             Button("OK") { }
@@ -153,6 +179,15 @@ struct FixedGuestListView: View {
             approvedGuests = freshParty.guestRequests.filter { $0.approvalStatus == .approved }
             
             print("🔄 FIXED LIST: Data refreshed - Pending: \(pendingRequests.count), Approved: \(approvedGuests.count)")
+            print("🔄 FIXED LIST: Active users: \(freshParty.activeUsers.count)")
+            
+            // Debug payment status for all guest requests
+            for (index, request) in freshParty.guestRequests.enumerated() {
+                print("🔄 FIXED LIST: Request \(index): \(request.userHandle) - Approval: \(request.approvalStatus), Payment: \(request.paymentStatus)")
+                if request.paymentStatus == .paid {
+                    print("✅ FIXED LIST: \(request.userHandle) has PAID status!")
+                }
+            }
             
         } catch {
             print("🔴 FIXED LIST: Error refreshing data: \(error)")

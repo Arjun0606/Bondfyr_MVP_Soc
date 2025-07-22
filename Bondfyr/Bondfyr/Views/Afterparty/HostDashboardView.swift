@@ -231,8 +231,7 @@ struct QuickActionsSection: View {
     private var hasActiveParty: Bool {
         let now = Date()
         return parties.contains { party in
-            let nineHoursFromCreation = Calendar.current.date(byAdding: .hour, value: 9, to: party.createdAt) ?? party.createdAt
-            return now < nineHoursFromCreation || now < party.endTime
+                    return now < party.endTime  // Only check actual end time, not creation time
         }
     }
     

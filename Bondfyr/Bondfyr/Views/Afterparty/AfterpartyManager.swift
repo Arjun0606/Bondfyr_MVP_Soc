@@ -111,24 +111,20 @@ class AfterpartyManager: NSObject, ObservableObject {
             )
         }
         
-        // Set creation time and calculate end time (9 hours from creation)
-        let creationTime = Date()
-        let nineHoursFromNow = Calendar.current.date(byAdding: .hour, value: 9, to: creationTime) ?? Date()
-        
         let afterparty = Afterparty(
             userId: userId,
             hostHandle: hostHandle,
             coordinate: coordinate,
             radius: radius,
             startTime: startTime,
-            endTime: nineHoursFromNow,
+            endTime: endTime,
             city: city,
             locationName: locationName,
             description: description,
             address: address,
             googleMapsLink: googleMapsLink,
             vibeTag: vibeTag,
-            createdAt: creationTime,
+            createdAt: Date(),
             
             // New marketplace fields
             title: title,
@@ -588,13 +584,13 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         // Filter out expired parties (older than 9 hours from creation) and sort in memory
         let now = Date()
-        let activeParties = afterparties.filter { afterparty in
+        let filteredParties = afterparties.filter { afterparty in
             let nineHoursAfterCreation = Calendar.current.date(byAdding: .hour, value: 9, to: afterparty.createdAt) ?? Date()
             return nineHoursAfterCreation > now
         }
         
         // Sort by creation date in memory (most recent first)
-        return activeParties.sorted { $0.createdAt > $1.createdAt }
+        return filteredParties.sorted { $0.createdAt > $1.createdAt }
     }
     
     /// Filter afterparties for marketplace discovery
@@ -901,18 +897,33 @@ class AfterpartyManager: NSObject, ObservableObject {
     /// Complete party membership after payment (NEW FLOW)
     func completePartyMembershipAfterPayment(afterpartyId: String, userId: String, paymentIntentId: String) async throws {
         print("🟢 PAYMENT: completePartyMembershipAfterPayment() called")
-        print("🟢 PAYMENT: Adding user \(userId) to activeUsers after successful payment")
+        print("🟢 PAYMENT: Party ID: \(afterpartyId)")
+        print("🟢 PAYMENT: User ID: \(userId)")
+        print("🟢 PAYMENT: Payment Intent: \(paymentIntentId)")
         
-        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
-        guard let data = doc.data(),
-              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
-            print("🔴 PAYMENT: Party not found")
-            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
-        }
+        do {
+            print("🚨 PAYMENT: About to fetch party document...")
+            let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+            print("🚨 PAYMENT: Document fetched successfully")
         
-        // Find the guest request and update payment status
-        var updatedRequests = afterparty.guestRequests
-        var guestRequest: GuestRequest?
+            guard let data = doc.data() else {
+                print("🔴 PAYMENT: No data in document")
+                throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty document has no data"])
+            }
+            
+            print("🚨 PAYMENT: Document data found, decoding...")
+            guard let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+                print("🔴 PAYMENT: Failed to decode afterparty")
+                throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Failed to decode afterparty"])
+            }
+            
+            print("🟢 PAYMENT: Found party: \(afterparty.title)")
+            print("🟢 PAYMENT: Current activeUsers: \(afterparty.activeUsers)")
+            print("🟢 PAYMENT: Current guestRequests: \(afterparty.guestRequests.count)")
+        
+            // Find the guest request and update payment status
+            var updatedRequests = afterparty.guestRequests
+            var guestRequest: GuestRequest?
         
         for (index, request) in updatedRequests.enumerated() {
             if request.userId == userId {
@@ -950,11 +961,42 @@ class AfterpartyManager: NSObject, ObservableObject {
             print("🟢 PAYMENT: Added user \(request.userHandle) to activeUsers after payment")
         }
         
-        // Update Firestore with payment completion and membership
-        try await db.collection("afterparties").document(afterpartyId).updateData([
-            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
-            "activeUsers": updatedActiveUsers
-        ])
+            // Update Firestore with payment completion and membership
+            print("🔵 PAYMENT: About to update Firestore...")
+            print("🔵 PAYMENT: Updated requests count: \(updatedRequests.count)")
+            print("🔵 PAYMENT: Updated activeUsers: \(updatedActiveUsers)")
+            
+            try await db.collection("afterparties").document(afterpartyId).updateData([
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+                "activeUsers": updatedActiveUsers
+                // Removed lastUpdated field to match Firestore rules
+            ])
+            
+            print("🚨 PAYMENT: Firestore update completed successfully!")
+        
+        print("🟢 PAYMENT: Successfully updated Firestore:")
+        print("  - Updated guest request paymentStatus to: .paid")
+        print("  - Added user to activeUsers array")
+        print("  - activeUsers now contains: \(updatedActiveUsers)")
+        
+        // CRITICAL: Verify the update by re-reading from Firestore
+        print("🔍 PAYMENT: Verifying Firestore update...")
+        let verifyDoc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        if let verifyData = verifyDoc.data(),
+           let verifyParty = try? Firestore.Decoder().decode(Afterparty.self, from: verifyData) {
+            print("🔍 PAYMENT: Verified activeUsers: \(verifyParty.activeUsers)")
+            print("🔍 PAYMENT: User \(userId) in verified activeUsers: \(verifyParty.activeUsers.contains(userId))")
+            if let verifyRequest = verifyParty.guestRequests.first(where: { $0.userId == userId }) {
+                print("🔍 PAYMENT: Verified payment status: \(verifyRequest.paymentStatus)")
+            }
+        } else {
+            print("🔴 PAYMENT: Failed to verify Firestore update!")
+        }
+        
+        // Force refresh the local data to ensure UI updates
+        await fetchNearbyAfterparties()
+        
+        print("🟢 PAYMENT: Refreshed local party data after payment completion")
         
         // Send all the follow-up notifications now that they're officially in
         
@@ -995,7 +1037,65 @@ class AfterpartyManager: NSObject, ObservableObject {
             )
         }
         
-        print("✅ NEW FLOW: Payment completed - \(request.userHandle) is now officially attending \(afterparty.title)")
+            print("✅ NEW FLOW: Payment completed - \(request.userHandle) is now officially attending \(afterparty.title)")
+            
+            // 5. CRITICAL: Send notifications to both host and guest
+            await sendPaymentCompletionNotifications(
+                hostId: afterparty.userId,
+                guestId: userId,
+                guestName: request.userHandle,
+                partyTitle: afterparty.title,
+                amount: afterparty.ticketPrice
+            )
+            
+            // 6. Force real-time update by posting notification
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: Notification.Name("PaymentCompleted"),
+                    object: afterpartyId, // Pass party ID as object for consistent listening
+                    userInfo: [
+                        "guestId": userId,
+                        "partyTitle": afterparty.title
+                    ]
+                )
+                print("🔔 PAYMENT: Posted completion notification")
+            }
+            
+        } catch {
+            print("🚨🚨🚨 PAYMENT ERROR: \(error)")
+            print("🚨🚨🚨 PAYMENT ERROR TYPE: \(type(of: error))")
+            print("🚨🚨🚨 PAYMENT ERROR DESCRIPTION: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// Send notifications to both host and guest after payment completion
+    private func sendPaymentCompletionNotifications(
+        hostId: String,
+        guestId: String, 
+        guestName: String,
+        partyTitle: String,
+        amount: Double
+    ) async {
+        print("🔔 PAYMENT: Sending completion notifications...")
+        
+        // Notify host of payment received
+        await FixedNotificationManager.shared.notifyHostOfPaymentReceived(
+            partyId: "",
+            partyTitle: partyTitle,
+            guestName: guestName,
+            hostUserId: hostId,
+            amount: "$\(Int(amount))"
+        )
+        
+        // Notify guest of successful payment and party access
+        await FixedNotificationManager.shared.notifyGuestOfPaymentSuccess(
+            partyId: "",
+            partyTitle: partyTitle,
+            guestUserId: guestId
+        )
+        
+        print("✅ PAYMENT: Completion notifications sent to both host and guest")
     }
 }
 

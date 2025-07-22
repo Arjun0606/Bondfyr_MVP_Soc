@@ -184,10 +184,14 @@ class FixedNotificationManager: ObservableObject {
         guestUserId: String
     ) async {
         print("🔔 FIXED: notifyGuestOfPaymentSuccess called")
+        print("🔔 FIXED: Target guest: \(guestUserId)")
+        print("🔔 FIXED: Current user: \(Auth.auth().currentUser?.uid ?? "none")")
         
+        // FIXED LOGIC: Only show GUEST notifications to the actual GUEST
         guard let currentUserId = Auth.auth().currentUser?.uid,
-              currentUserId != guestUserId else {
-            print("🚨 FIXED: BLOCKED payment success notification - same user")
+              currentUserId == guestUserId else {
+            print("🚨 FIXED: BLOCKED guest notification - current user is not the guest")
+            print("🚨 FIXED: This prevents hosts from seeing guest notifications")
             return
         }
         
@@ -214,9 +218,9 @@ class FixedNotificationManager: ObservableObject {
         
         do {
             try await notificationCenter.add(request)
-            print("🟢 FIXED: Payment success notification scheduled")
+            print("🟢 FIXED: Guest payment success notification scheduled successfully")
         } catch {
-            print("🔴 FIXED: Failed to schedule payment success notification: \(error)")
+            print("🔴 FIXED: Failed to schedule guest payment success notification: \(error)")
         }
     }
     
@@ -228,10 +232,14 @@ class FixedNotificationManager: ObservableObject {
         amount: String
     ) async {
         print("🔔 FIXED: notifyHostOfPaymentReceived called")
+        print("🔔 FIXED: Target host: \(hostUserId)")
+        print("🔔 FIXED: Current user: \(Auth.auth().currentUser?.uid ?? "none")")
         
+        // FIXED LOGIC: Only show HOST notifications to the actual HOST
         guard let currentUserId = Auth.auth().currentUser?.uid,
-              currentUserId != hostUserId else {
-            print("🚨 FIXED: BLOCKED payment received notification - same user")
+              currentUserId == hostUserId else {
+            print("🚨 FIXED: BLOCKED host notification - current user is not the host")
+            print("🚨 FIXED: This prevents guests from seeing host notifications")
             return
         }
         
@@ -260,9 +268,9 @@ class FixedNotificationManager: ObservableObject {
         
         do {
             try await notificationCenter.add(request)
-            print("🟢 FIXED: Payment received notification scheduled")
+            print("🟢 FIXED: Host payment notification scheduled successfully")
         } catch {
-            print("🔴 FIXED: Failed to schedule payment received notification: \(error)")
+            print("🔴 FIXED: Failed to schedule host payment notification: \(error)")
         }
     }
     

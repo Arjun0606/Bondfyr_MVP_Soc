@@ -247,6 +247,6 @@ class ReputationManager {
                 }
                 
                 completion(achievements)
-            }
+        }
     }
 } 

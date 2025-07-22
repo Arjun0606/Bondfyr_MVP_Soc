@@ -126,6 +126,13 @@ struct Afterparty: Identifiable, Codable {
     let statsProcessed: Bool?        // Whether user stats have been updated
     let statsProcessedAt: Date?      // When stats were processed
     
+    // MARK: - Rating and Party Completion System
+    let completionStatus: PartyCompletionStatus?  // How the party ended
+    let endedAt: Date?                            // When party was marked as ended
+    let endedBy: String?                          // User ID who ended the party
+    let ratedBy: [String: Bool]?                  // Track which guests have rated
+    let lastRatedAt: Date?                        // When last rating was submitted
+    
     // MARK: - Computed properties
     var isExpired: Bool {
         return Date() > endTime
@@ -239,6 +246,9 @@ struct Afterparty: Identifiable, Codable {
         
         // Stats Processing (Realistic Metrics System)
         case statsProcessed, statsProcessedAt
+        
+        // Rating and Party Completion System
+        case completionStatus, endedAt, endedBy, ratedBy, lastRatedAt
     }
     
     // MARK: - Initializer
@@ -282,7 +292,14 @@ struct Afterparty: Identifiable, Codable {
          
          // Stats Processing (Realistic Metrics System)
          statsProcessed: Bool? = nil,
-         statsProcessedAt: Date? = nil) {
+         statsProcessedAt: Date? = nil,
+         
+         // Rating and Party Completion System
+         completionStatus: PartyCompletionStatus? = nil,
+         endedAt: Date? = nil,
+         endedBy: String? = nil,
+         ratedBy: [String: Bool]? = nil,
+         lastRatedAt: Date? = nil) {
         
         self.id = id
         self.userId = userId
@@ -325,6 +342,13 @@ struct Afterparty: Identifiable, Codable {
         // Stats Processing (Realistic Metrics System)
         self.statsProcessed = statsProcessed
         self.statsProcessedAt = statsProcessedAt
+        
+        // Rating and Party Completion System
+        self.completionStatus = completionStatus
+        self.endedAt = endedAt
+        self.endedBy = endedBy
+        self.ratedBy = ratedBy
+        self.lastRatedAt = lastRatedAt
     }
     
     // Helper to convert GeoPoint to CLLocationCoordinate2D
@@ -395,6 +419,21 @@ struct Afterparty: Identifiable, Codable {
             statsProcessedAt = statsProcessedTimestamp.dateValue()
         } else {
             statsProcessedAt = try? container.decode(Date.self, forKey: .statsProcessedAt)
+        }
+        
+        // Rating and Party Completion System
+        completionStatus = try? container.decode(PartyCompletionStatus.self, forKey: .completionStatus)
+        if let endedAtTimestamp = try? container.decode(Timestamp.self, forKey: .endedAt) {
+            endedAt = endedAtTimestamp.dateValue()
+        } else {
+            endedAt = try? container.decode(Date.self, forKey: .endedAt)
+        }
+        endedBy = try? container.decode(String.self, forKey: .endedBy)
+        ratedBy = (try? container.decode([String: Bool].self, forKey: .ratedBy)) ?? [:]
+        if let lastRatedAtTimestamp = try? container.decode(Timestamp.self, forKey: .lastRatedAt) {
+            lastRatedAt = lastRatedAtTimestamp.dateValue()
+        } else {
+            lastRatedAt = try? container.decode(Date.self, forKey: .lastRatedAt)
         }
         
         // Handle Timestamps
@@ -481,5 +520,55 @@ struct Afterparty: Identifiable, Codable {
         } else {
             try container.encodeNil(forKey: .statsProcessedAt)
         }
+        
+        // Rating and Party Completion System
+        try container.encode(completionStatus, forKey: .completionStatus)
+        if let endedAt = endedAt {
+            try container.encode(Timestamp(date: endedAt), forKey: .endedAt)
+        } else {
+            try container.encodeNil(forKey: .endedAt)
+        }
+        try container.encode(endedBy, forKey: .endedBy)
+        try container.encode(ratedBy, forKey: .ratedBy)
+        if let lastRatedAt = lastRatedAt {
+            try container.encode(Timestamp(date: lastRatedAt), forKey: .lastRatedAt)
+        } else {
+            try container.encodeNil(forKey: .lastRatedAt)
+        }
+    }
+} 
+
+// MARK: - Sample Data for Previews
+extension Afterparty {
+    static var sampleData: Afterparty {
+        Afterparty(
+            userId: "sample-host-id",
+            hostHandle: "@samplehost",
+            coordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            radius: 1000,
+            startTime: Date().addingTimeInterval(3600), // 1 hour from now
+            endTime: Date().addingTimeInterval(25200), // 7 hours from now
+            city: "San Francisco",
+            locationName: "Sample Venue",
+            description: "A sample party for previews and testing",
+            address: "123 Sample Street, San Francisco, CA",
+            googleMapsLink: "https://maps.google.com",
+            vibeTag: "House Party, BYOB",
+            activeUsers: ["user1", "user2", "user3", "user4", "user5"],
+            createdAt: Date(),
+            title: "Epic Sample Party",
+            ticketPrice: 15.0,
+            maxGuestCount: 25,
+            guestRequests: [
+                GuestRequest(
+                    userId: "guest1",
+                    userName: "Sample Guest",
+                    userHandle: "@sampleguest",
+                    introMessage: "Looking forward to the party!",
+                    paymentStatus: .paid,
+                    approvalStatus: .approved
+                )
+            ]
+        )
     }
 } 

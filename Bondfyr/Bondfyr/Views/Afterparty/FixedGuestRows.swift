@@ -224,7 +224,7 @@ struct FixedApprovedGuestRow: View {
     private var paymentStatusText: String {
         switch request.paymentStatus {
         case .pending: return "Payment Pending"
-        case .paid: return "Payment Complete"
+        case .paid: return "✅ PAID - Attending!"
         case .refunded: return "Refunded"
         }
     }

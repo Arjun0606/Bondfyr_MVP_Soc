@@ -118,6 +118,13 @@ struct DodoPaymentSheet: View {
                 }
                 .foregroundColor(.white)
             )
+            .onAppear {
+                print("🚨🚨🚨 PAYMENT SHEET: APPEARED for party \(afterparty.title)")
+                print("🚨🚨🚨 PAYMENT SHEET: This means the sheet binding is working!")
+            }
+            .onDisappear {
+                print("🚨🚨🚨 PAYMENT SHEET: DISAPPEARED for party \(afterparty.title)")
+            }
         }
         .sheet(isPresented: $showingWebView) {
             if let url = paymentURL {
@@ -144,62 +151,67 @@ struct DodoPaymentSheet: View {
     }
     
     private func initiatePayment() {
+        print("🚨🚨🚨 PAYMENT BUTTON CLICKED!")
+        print("🚨🚨🚨 INITIATING PAYMENT PROCESS!")
+        
         guard let currentUser = authViewModel.currentUser else {
+            print("🚨🚨🚨 ERROR: No current user found!")
             errorMessage = "User not found"
             showingError = true
             return
         }
         
-        print("🔵 PAYMENT SHEET: Starting payment for user \(currentUser.username ?? "unknown")")
-        print("🔵 PAYMENT SHEET: Party: \(afterparty.title), Price: $\(afterparty.ticketPrice)")
+        print("🚨🚨🚨 PAYMENT SHEET: Starting payment for user \(currentUser.username ?? "unknown")")
+        print("🚨🚨🚨 PAYMENT SHEET: Party: \(afterparty.title), Price: $\(afterparty.ticketPrice)")
         
         Task {
             isProcessingPayment = true
             defer { isProcessingPayment = false }
             
             do {
-                print("🔵 PAYMENT SHEET: Calling DodoPaymentService...")
+                print("🚨🚨🚨 ABOUT TO CALL DodoPaymentService...")
+                print("🚨🚨🚨 User ID: \(currentUser.uid)")
+                print("🚨🚨🚨 User Name: \(currentUser.name)")
+                print("🚨🚨🚨 Party ID: \(afterparty.id)")
+                print("🚨🚨🚨 DodoPaymentService.shared exists: \(DodoPaymentService.shared)")
                 
-                // Use DodoPaymentService to process payment
-                let success = try await DodoPaymentService.shared.requestAfterpartyAccess(
+                // Use clean Dodo payment service
+                print("🚨🚨🚨 CALLING processPayment NOW...")
+                let result = try await DodoPaymentService.shared.processPayment(
                     afterparty: afterparty,
                     userId: currentUser.uid,
                     userName: currentUser.name,
                     userHandle: currentUser.username ?? "@\(currentUser.name)"
                 )
                 
-                print("🔵 PAYMENT SHEET: DodoPaymentService returned: \(success)")
+                print("🚨🚨🚨 PAYMENT CALL RETURNED: \(result)")
+                print("🚨🚨🚨 Payment processing initiated successfully!")
+                print("🚨🚨🚨 Safari opened for payment, monitoring for completion...")
                 
-                if success {
-                    // Check if we have a payment URL (production mode)
-                    if let paymentURL = DodoPaymentService.shared.paymentURL {
-                        print("🔵 PAYMENT SHEET: Got payment URL: \(paymentURL)")
-                        await MainActor.run {
-                            errorMessage = "Opening payment page in Safari..."
-                            showingError = true
-                            
-                            // Dismiss after a short delay to show the message
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                presentationMode.wrappedValue.dismiss()
-                                onCompletion()
-                            }
-                        }
-                    } else {
-                        print("🔵 PAYMENT SHEET: No payment URL - using test mode")
-                        // Test mode - payment completed immediately
-                        await MainActor.run {
-                            presentationMode.wrappedValue.dismiss()
-                            onCompletion()
-                        }
+                await MainActor.run {
+                    errorMessage = "🌐 Payment opened in Safari. Complete payment and return to app."
+                    showingError = true
+                    
+                    // Dismiss after showing message - payment completion will be handled by monitoring
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        presentationMode.wrappedValue.dismiss()
+                        onCompletion()
                     }
-                } else {
-                    throw DodoPaymentError.intentCreationFailed
                 }
                 
             } catch {
+                print("🚨🚨🚨 PAYMENT ERROR CAUGHT!")
+                print("🚨🚨🚨 Error: \(error)")
+                print("🚨🚨🚨 Error type: \(type(of: error))")
+                print("🚨🚨🚨 Error description: \(error.localizedDescription)")
                 await MainActor.run {
                     print("🔴 PAYMENT SHEET: Error initiating payment: \(error)")
-                    errorMessage = "Payment initialization failed. Please try again."
+                    print("🔴 PAYMENT SHEET: Error type: \(type(of: error))")
+                    print("🔴 PAYMENT SHEET: Error description: \(error.localizedDescription)")
+                    if let dodoError = error as? DodoPaymentError {
+                        print("🔴 PAYMENT SHEET: Dodo error: \(dodoError)")
+                    }
+                    errorMessage = "Payment error: \(error.localizedDescription)"
                     showingError = true
                 }
             }

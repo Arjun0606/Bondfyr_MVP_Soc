@@ -413,6 +413,19 @@ struct ActivePartyCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
+            
+            // "I'm Done" button for live parties (guest can end their experience)
+            if partyInfo.status == .going && 
+               partyInfo.party.startTime <= Date() && 
+               partyInfo.party.endTime > Date() {
+                PartyEndButton(
+                    afterparty: partyInfo.party,
+                    onPartyEnd: {
+                        handleGuestEndParty()
+                    }
+                )
+                .padding(.top, 12)
+            }
         }
         .padding(20)
         .background(
@@ -429,6 +442,13 @@ struct ActivePartyCard: View {
         .sheet(isPresented: $showingDetails) {
             PartyDetailsPlaceholderView(party: partyInfo.party)
         }
+    }
+    
+    private func handleGuestEndParty() {
+        print("🎯 GUEST: Ending party experience for \(partyInfo.party.title)")
+        // TODO: Update guest status in Firestore
+        // TODO: Remove from active parties list
+        // The rating will be handled by the PartyEndButton component
     }
 }
 
@@ -763,6 +783,9 @@ struct PartyDetailsPlaceholderView: View {
                         if !party.description.isEmpty {
                             PartyInfoRow(icon: "text.alignleft", title: "Description", value: party.description)
                         }
+                        
+                        // Gender ratio display (when 70%+ full)
+                        PartyGenderRatioDisplay(afterparty: party)
                     }
                     .padding(.horizontal, 20)
                     

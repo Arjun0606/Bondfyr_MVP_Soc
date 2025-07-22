@@ -15,6 +15,8 @@ struct HostPartyControls: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingEditSheet = false
     @State private var isDeleting = false
+    @State private var showingAlert = false
+    @State private var alertMessage = ""
     
     var body: some View {
         VStack(spacing: 12) {
@@ -49,42 +51,49 @@ struct HostPartyControls: View {
                 Button(action: { showingEditSheet = true }) {
                     HStack {
                         Image(systemName: "pencil")
-                        Text("Edit Party")
+                        Text("Edit")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.2))
-                    .foregroundColor(.orange)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.orange.opacity(0.5), lineWidth: 1)
-                    )
+                    .padding()
+                    .background(Color.gray.opacity(0.6))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
                 }
                 
-                // Cancel Party Button
+                // End Party Button (triggers rating flow)
+                Button(action: { 
+                    Task {
+                        await RatingManager.shared.hostEndParty(afterparty)
+                        alertMessage = "Party ended! Guests will be asked to rate their experience."
+                        showingAlert = true
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "flag.checkered")
+                        Text("End Party")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green.opacity(0.8))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+            }
+            
+            // Delete/Cancel Row
+            HStack(spacing: 12) {
+                // Cancel Party Button (Danger)
                 Button(action: { showingDeleteConfirmation = true }) {
                     HStack {
-                        if isDeleting {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .foregroundColor(.red)
-                        } else {
-                            Image(systemName: "xmark.circle.fill")
-                        }
+                        Image(systemName: "trash.fill")
                         Text("Cancel Party")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.2))
-                    .foregroundColor(.red)
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.red.opacity(0.5), lineWidth: 1)
-                    )
+                    .padding()
+                    .background(Color.red.opacity(0.8))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
                 }
-                .disabled(isDeleting)
             }
         }
         .sheet(isPresented: $showingGuestList) {
@@ -105,6 +114,11 @@ struct HostPartyControls: View {
             }
         } message: {
             Text("This will cancel your party and refund all guests. This action cannot be undone.")
+        }
+        .alert("Party Status", isPresented: $showingAlert) {
+            Button("OK") { }
+        } message: {
+            Text(alertMessage)
         }
     }
     

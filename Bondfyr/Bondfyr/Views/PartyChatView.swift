@@ -45,7 +45,7 @@ struct PartyChatView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                 }
-                .onChange(of: partyChatManager.messages.count) { _ in
+                .onChange(of: partyChatManager.messages.count) {
                     if let lastMessage = partyChatManager.messages.last {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -63,6 +63,18 @@ struct PartyChatView: View {
             
             // Message input
             messageInputView
+            
+            // "I'm Done" button for guests (only show if party is live)
+            if afterparty.startTime <= Date() && afterparty.endTime > Date() {
+                PartyEndButton(
+                    afterparty: afterparty,
+                    onPartyEnd: {
+                        handleGuestEndParty()
+                    }
+                )
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .onAppear {
@@ -195,6 +207,11 @@ struct PartyChatView: View {
         // Clear reply state after sending
         replyingTo = nil
         messageText = ""
+    }
+    
+    private func handleGuestEndParty() {
+        partyChatManager.leavePartyChat()
+        // Optionally, navigate back to the main party view or show a confirmation
     }
 }
 

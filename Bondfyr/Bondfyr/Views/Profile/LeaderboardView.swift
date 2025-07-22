@@ -69,7 +69,7 @@ struct LeaderboardView: View {
         .padding(.horizontal)
         .background(Color.black.edgesIgnoringSafeArea(.all))
         .onAppear { fetchLeaderboard() }
-        .onChange(of: selectedType) { _ in fetchLeaderboard() }
+        .onChange(of: selectedType) { fetchLeaderboard() }
     }
 
     func fetchLeaderboard() {
