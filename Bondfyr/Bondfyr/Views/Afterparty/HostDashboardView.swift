@@ -507,7 +507,7 @@ struct PartyManagementSheet: View {
                 }
             }
         } message: {
-            Text("This will cancel your party and refund all guests.")
+            Text("This will immediately process refunds for all paid guests and permanently delete your party.")
         }
     }
     

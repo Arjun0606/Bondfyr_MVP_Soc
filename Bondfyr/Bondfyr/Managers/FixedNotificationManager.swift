@@ -274,6 +274,53 @@ class FixedNotificationManager: ObservableObject {
         }
     }
     
+    func notifyGuestOfRefund(
+        partyId: String,
+        partyTitle: String,
+        guestUserId: String,
+        amount: Double
+    ) async {
+        print("🔔 FIXED: notifyGuestOfRefund called")
+        print("🔔 FIXED: Target guest: \(guestUserId)")
+        print("🔔 FIXED: Amount: $\(amount)")
+        
+        // FIXED LOGIC: Only show REFUND notifications to the actual GUEST
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              currentUserId == guestUserId else {
+            print("🚨 FIXED: BLOCKED refund notification - current user is not the guest")
+            return
+        }
+        
+        guard await checkPermissions() else { return }
+        
+        let content = UNMutableNotificationContent()
+        content.title = "💸 Refund Processed"
+        content.body = "Your $\(Int(amount)) payment for '\(partyTitle)' has been refunded. The party was cancelled by the host."
+        content.sound = .default
+        content.badge = 1
+        
+        content.userInfo = [
+            "type": "refund_processed",
+            "partyId": partyId,
+            "partyTitle": partyTitle,
+            "amount": amount,
+            "targetUserId": guestUserId
+        ]
+        
+        let request = UNNotificationRequest(
+            identifier: "refund_processed_\(partyId)_\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        
+        do {
+            try await notificationCenter.add(request)
+            print("🟢 FIXED: Refund notification scheduled successfully")
+        } catch {
+            print("🔴 FIXED: Failed to schedule refund notification: \(error)")
+        }
+    }
+    
     // MARK: - Setup
     private func setupNotificationCategories() {
         let guestCategory = UNNotificationCategory(

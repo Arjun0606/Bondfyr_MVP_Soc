@@ -695,9 +695,79 @@ class AfterpartyManager: NSObject, ObservableObject {
         ])
     }
     
+    // MARK: - Race Condition Protection
+    private var currentlyDeletingParties: Set<String> = []
+    private let deletionLock = NSLock()
+    
     func deleteAfterparty(_ afterparty: Afterparty) async throws {
         guard let userId = Auth.auth().currentUser?.uid,
               afterparty.userId == userId else { return }
+        
+        // CRITICAL: Prevent race conditions - only allow one deletion per party
+        deletionLock.lock()
+        if currentlyDeletingParties.contains(afterparty.id) {
+            deletionLock.unlock()
+            print("🚨 DELETION: Party \(afterparty.id) is already being deleted - aborting")
+            throw NSError(domain: "AfterpartyError", code: 409, userInfo: [NSLocalizedDescriptionKey: "Party is already being cancelled"])
+        }
+        currentlyDeletingParties.insert(afterparty.id)
+        deletionLock.unlock()
+        
+        // Ensure cleanup happens even if deletion fails
+        defer {
+            deletionLock.lock()
+            currentlyDeletingParties.remove(afterparty.id)
+            deletionLock.unlock()
+        }
+        
+        print("🗑️ DELETION: Starting party cancellation process...")
+        print("🗑️ DELETION: Party: \(afterparty.title)")
+        print("🗑️ DELETION: Active users: \(afterparty.activeUsers.count)")
+        print("🗑️ DELETION: Paid guests: \(afterparty.guestRequests.filter { $0.paymentStatus == .paid }.count)")
+        
+        // CRITICAL: Add timeout protection for the entire deletion process
+        try await withTimeout(seconds: 120) {
+            try await performDeletionProcess(afterparty)
+        }
+    }
+    
+    /// Perform the actual deletion process with timeout protection
+    private func performDeletionProcess(_ afterparty: Afterparty) async throws {
+        // CRITICAL: Process refunds BEFORE deleting the party
+        let paidGuests = afterparty.guestRequests.filter { $0.paymentStatus == .paid }
+        var refundResults: [DodoPaymentService.RefundResult] = []
+        
+        if !paidGuests.isEmpty {
+            print("💸 DELETION: Processing refunds for \(paidGuests.count) paid guests...")
+            
+            do {
+                refundResults = try await DodoPaymentService.shared.processPartyRefunds(afterparty: afterparty)
+                
+                let successCount = refundResults.filter { $0.success }.count
+                let failureCount = refundResults.count - successCount
+                
+                if failureCount == 0 {
+                    print("✅ DELETION: All \(successCount) refunds processed successfully")
+                } else {
+                    print("⚠️ DELETION: \(successCount) refunds succeeded, \(failureCount) failed")
+                    print("🚨 DELETION: MANUAL INTERVENTION REQUIRED for failed refunds")
+                }
+                
+            } catch {
+                print("🔴 DELETION: Critical refund processing error: \(error)")
+                print("🚨 DELETION: MANUAL INTERVENTION REQUIRED - Failed to process refunds for party \(afterparty.id)")
+                // Continue with deletion but log the critical issue
+            }
+            
+            // Update Firestore with ACTUAL refund results (not assumed success)
+            try await updateGuestRequestsWithRefundResults(
+                afterpartyId: afterparty.id, 
+                paidGuests: paidGuests,
+                refundResults: refundResults
+            )
+        } else {
+            print("💸 DELETION: No paid guests to refund")
+        }
         
         // CRITICAL: Process party stats if it had attendees before deletion
         if !afterparty.activeUsers.isEmpty && afterparty.endTime <= Date() {
@@ -718,10 +788,92 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         // Delete the afterparty
         try await db.collection("afterparties").document(afterparty.id).delete()
+        print("🗑️ DELETION: Party document deleted from Firestore")
         
         // Update the UI by removing the deleted afterparty
         await MainActor.run {
             self.nearbyAfterparties.removeAll { $0.id == afterparty.id }
+        }
+        
+        print("✅ DELETION: Party cancellation completed successfully")
+    }
+    
+    /// Update guest requests with ACTUAL refund results (BULLETPROOF VERSION)
+    private func updateGuestRequestsWithRefundResults(
+        afterpartyId: String, 
+        paidGuests: [GuestRequest],
+        refundResults: [DodoPaymentService.RefundResult]
+    ) async throws {
+        print("📝 DELETION: Updating guest requests with ACTUAL refund results...")
+        
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let currentAfterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            print("🔴 DELETION: Could not fetch party for refund status update")
+            return
+        }
+        
+        var updatedRequests = currentAfterparty.guestRequests
+        
+        // Create lookup for refund results
+        let refundResultLookup = Dictionary(uniqueKeysWithValues: refundResults.map { ($0.guestId, $0) })
+        
+        // Update payment status ONLY for guests whose refunds actually succeeded
+        for index in updatedRequests.indices {
+            let request = updatedRequests[index]
+            
+            if let refundResult = refundResultLookup[request.userId] {
+                if refundResult.success {
+                    // Only mark as refunded if the API call actually succeeded
+                    updatedRequests[index] = GuestRequest(
+                        id: request.id,
+                        userId: request.userId,
+                        userName: request.userName,
+                        userHandle: request.userHandle,
+                        introMessage: request.introMessage,
+                        requestedAt: request.requestedAt,
+                        paymentStatus: .refunded,
+                        approvalStatus: request.approvalStatus,
+                        paypalOrderId: request.paypalOrderId,
+                        dodoPaymentIntentId: request.dodoPaymentIntentId,
+                        paidAt: request.paidAt,
+                        refundedAt: Date(),
+                        approvedAt: request.approvedAt
+                    )
+                    print("✅ DELETION: Marked \(request.userHandle) as refunded (API success)")
+                } else {
+                    // Keep as .paid if refund failed - requires manual intervention
+                    print("🔴 DELETION: Keeping \(request.userHandle) as PAID - refund failed: \(refundResult.error ?? "Unknown")")
+                }
+            }
+        }
+        
+        // Count successful refunds
+        let successfulRefunds = refundResults.filter { $0.success }
+        let failedRefunds = refundResults.filter { !$0.success }
+        
+        // Only remove from activeUsers those who were successfully refunded
+        var updatedActiveUsers = currentAfterparty.activeUsers
+        for refund in successfulRefunds {
+            updatedActiveUsers.removeAll { $0 == refund.guestId }
+        }
+        
+        // Update Firestore with accurate data
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+            "activeUsers": updatedActiveUsers
+        ])
+        
+        print("✅ DELETION: Database updated with accurate refund statuses:")
+        print("  - Successfully refunded: \(successfulRefunds.count)")
+        print("  - Failed refunds (still marked as paid): \(failedRefunds.count)")
+        
+        if !failedRefunds.isEmpty {
+            print("🚨 DELETION: CRITICAL - \(failedRefunds.count) guests still marked as PAID due to failed refunds")
+            print("🚨 DELETION: Manual refund processing required for:")
+            for failed in failedRefunds {
+                print("  - \(failed.guestHandle) (\(failed.guestId)): \(failed.error ?? "Unknown error")")
+            }
         }
     }
     
@@ -1096,6 +1248,26 @@ class AfterpartyManager: NSObject, ObservableObject {
         )
         
         print("✅ PAYMENT: Completion notifications sent to both host and guest")
+    }
+    
+    // MARK: - Timeout Helper
+    
+    /// Execute async operation with timeout protection
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                return try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw NSError(domain: "TimeoutError", code: 408, userInfo: [NSLocalizedDescriptionKey: "Operation timed out after \(seconds) seconds"])
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 }
 

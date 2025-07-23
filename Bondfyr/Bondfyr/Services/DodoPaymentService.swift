@@ -142,6 +142,199 @@ class DodoPaymentService: ObservableObject {
         }
     }
     
+    // MARK: - Robust Refund Processing
+    
+    struct RefundResult {
+        let guestId: String
+        let guestHandle: String
+        let paymentId: String
+        let amount: Double
+        let success: Bool
+        let error: String?
+        let retryAttempts: Int
+    }
+    
+    /// Process refunds for all paid guests when party is cancelled (BULLETPROOF VERSION)
+    func processPartyRefunds(afterparty: Afterparty) async throws -> [RefundResult] {
+        print("💸 REFUND: Processing refunds for cancelled party: \(afterparty.title)")
+        
+        let paidGuests = afterparty.guestRequests.filter { $0.paymentStatus == .paid }
+        print("💸 REFUND: Found \(paidGuests.count) paid guests to refund")
+        
+        var results: [RefundResult] = []
+        
+        // Process refunds with retry logic and proper tracking
+        for guest in paidGuests {
+            guard let paymentIntentId = guest.dodoPaymentIntentId else {
+                print("🔴 REFUND: No payment ID for guest \(guest.userHandle)")
+                results.append(RefundResult(
+                    guestId: guest.userId,
+                    guestHandle: guest.userHandle,
+                    paymentId: "",
+                    amount: afterparty.ticketPrice,
+                    success: false,
+                    error: "Missing payment ID",
+                    retryAttempts: 0
+                ))
+                continue
+            }
+            
+            let result = await processRefundWithRetry(
+                guestId: guest.userId,
+                guestHandle: guest.userHandle,
+                paymentId: paymentIntentId,
+                amount: afterparty.ticketPrice,
+                partyTitle: afterparty.title,
+                maxRetries: 3
+            )
+            
+            results.append(result)
+            
+            // Send notification only if refund succeeded
+            if result.success {
+                await sendRefundNotification(
+                    guestId: guest.userId,
+                    guestName: guest.userHandle,
+                    partyTitle: afterparty.title,
+                    amount: afterparty.ticketPrice
+                )
+            }
+        }
+        
+        // Log summary
+        let successCount = results.filter { $0.success }.count
+        let failureCount = results.count - successCount
+        
+        print("💸 REFUND SUMMARY:")
+        print("  ✅ Successful: \(successCount)")
+        print("  ❌ Failed: \(failureCount)")
+        
+        if failureCount > 0 {
+            print("🚨 REFUND: \(failureCount) refunds failed - manual intervention may be required")
+            for failure in results.filter({ !$0.success }) {
+                print("  - \(failure.guestHandle): \(failure.error ?? "Unknown error")")
+            }
+        }
+        
+        return results
+    }
+    
+    /// Process individual refund with retry logic
+    private func processRefundWithRetry(
+        guestId: String,
+        guestHandle: String,
+        paymentId: String,
+        amount: Double,
+        partyTitle: String,
+        maxRetries: Int = 3
+    ) async -> RefundResult {
+        
+        var lastError: String?
+        
+        for attempt in 1...maxRetries {
+            do {
+                print("💸 REFUND: Attempt \(attempt)/\(maxRetries) for \(guestHandle)")
+                
+                try await processRefund(
+                    paymentId: paymentId,
+                    amount: amount,
+                    reason: "Party '\(partyTitle)' cancelled by host"
+                )
+                
+                print("✅ REFUND: Successfully refunded \(guestHandle) - $\(amount) (attempt \(attempt))")
+                
+                return RefundResult(
+                    guestId: guestId,
+                    guestHandle: guestHandle,
+                    paymentId: paymentId,
+                    amount: amount,
+                    success: true,
+                    error: nil,
+                    retryAttempts: attempt
+                )
+                
+            } catch {
+                lastError = error.localizedDescription
+                print("🔴 REFUND: Attempt \(attempt) failed for \(guestHandle): \(error)")
+                
+                // Don't retry on certain errors (like invalid payment ID)
+                if let dodoError = error as? DodoPaymentError,
+                   case .apiError(let message) = dodoError,
+                   message.contains("not found") || message.contains("invalid") {
+                    print("🚨 REFUND: Non-retryable error for \(guestHandle) - stopping retries")
+                    break
+                }
+                
+                // Wait before retry (exponential backoff)
+                if attempt < maxRetries {
+                    let delay = Double(attempt * attempt) // 1s, 4s, 9s...
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        
+        print("🔴 REFUND: All attempts failed for \(guestHandle)")
+        
+        return RefundResult(
+            guestId: guestId,
+            guestHandle: guestHandle,
+            paymentId: paymentId,
+            amount: amount,
+            success: false,
+            error: lastError,
+            retryAttempts: maxRetries
+        )
+    }
+    
+    /// Process refund for cancelled party
+    private func processRefund(paymentId: String, amount: Double, reason: String = "Party cancelled by host") async throws {
+        print("💸 REFUND: Processing refund for payment \(paymentId), amount: $\(amount)")
+        
+        let refundData: [String: Any] = [
+            "payment_id": paymentId,
+            "amount": amount,
+            "reason": reason,
+            "metadata": [
+                "refund_reason": reason,
+                "processed_by": "app",
+                "processed_at": Date().iso8601String
+            ]
+        ]
+        
+        var request = URLRequest(url: URL(string: "\(baseURL)/refunds")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(dodoAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: refundData)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+            print("🔴 REFUND: Failed with status: \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+            throw DodoPaymentError.refundFailed
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        print("✅ REFUND: Successfully processed refund: \(json?["id"] as? String ?? "unknown")")
+    }
+    
+    /// Send refund notification to guest
+    private func sendRefundNotification(
+        guestId: String,
+        guestName: String,
+        partyTitle: String,
+        amount: Double
+    ) async {
+        // Use the fixed notification manager to send refund notification
+        await FixedNotificationManager.shared.notifyGuestOfRefund(
+            partyId: "",
+            partyTitle: partyTitle,
+            guestUserId: guestId,
+            amount: amount
+        )
+    }
+    
     // MARK: - Dodo API Integration
     
     private func createDodoPaymentIntent(
@@ -254,5 +447,15 @@ enum DodoPaymentError: LocalizedError {
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .apiError(let message): return "API error: \(message)"
         }
+    }
+} 
+
+// MARK: - Extensions
+
+extension Date {
+    var iso8601String: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: self)
     }
 } 

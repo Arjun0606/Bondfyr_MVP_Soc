@@ -10,13 +10,35 @@ struct HostPartyControls: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
     @StateObject private var afterpartyManager = AfterpartyManager.shared
     
+    // MARK: - Computed Properties for State Management
+    
+    private var isPartyAlreadyEnded: Bool {
+        // Check if party has a completion status (already ended)
+        return afterparty.completionStatus != nil
+    }
+    
+    private var canEndParty: Bool {
+        let now = Date()
+        // Can end party if it's started OR already ended (but not formally ended by host)
+        return now >= afterparty.startTime && !isPartyAlreadyEnded && !partyActionInProgress
+    }
+    
+    private var canCancelParty: Bool {
+        let now = Date()
+        // Can only cancel within first 2 hours of party starting
+        let twoHoursAfterStart = afterparty.startTime.addingTimeInterval(2 * 60 * 60)
+        return now < twoHoursAfterStart && !isPartyAlreadyEnded && !partyActionInProgress
+    }
+    
     @State private var showingGuestList = false
     @State private var showingShareSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var showingEditSheet = false
-    @State private var isDeleting = false
+    @State private var isDeleting = false // NEW: Track deletion state
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    @State private var isEndingParty = false // NEW: Track party ending state
+    @State private var partyActionInProgress = false // NEW: Prevent multiple actions
     
     var body: some View {
         VStack(spacing: 12) {
@@ -62,38 +84,78 @@ struct HostPartyControls: View {
                 
                 // End Party Button (triggers rating flow)
                 Button(action: { 
+                    // PROTECTION: Prevent conflicts with cancel party
+                    guard canEndParty else { return }
+                    
+                    partyActionInProgress = true
+                    isEndingParty = true
+                    
                     Task {
+                        defer {
+                            partyActionInProgress = false
+                            isEndingParty = false
+                        }
+                        
                         await RatingManager.shared.hostEndParty(afterparty)
-                        alertMessage = "Party ended! Guests will be asked to rate their experience."
-                        showingAlert = true
+                        
+                        await MainActor.run {
+                            alertMessage = "🏁 Party ended! Guests will be asked to rate their experience. No refunds processed - everyone keeps access!"
+                            showingAlert = true
+                        }
                     }
                 }) {
                     HStack {
-                        Image(systemName: "flag.checkered")
-                        Text("End Party")
+                        if isEndingParty {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                            Text("Ending...")
+                        } else if isPartyAlreadyEnded {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Party Ended")
+                        } else {
+                            Image(systemName: "flag.checkered")
+                            Text("End Party")
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.green.opacity(0.8))
+                    .background(Color.green.opacity(canEndParty ? 0.8 : 0.5))
                     .foregroundColor(.white)
                     .cornerRadius(12)
                 }
+                .disabled(!canEndParty)
             }
             
             // Delete/Cancel Row
             HStack(spacing: 12) {
                 // Cancel Party Button (Danger)
-                Button(action: { showingDeleteConfirmation = true }) {
+                Button(action: { 
+                    // PROTECTION: Prevent conflicts with end party
+                    guard canCancelParty else { return }
+                    showingDeleteConfirmation = true 
+                }) {
                     HStack {
-                        Image(systemName: "trash.fill")
-                        Text("Cancel Party")
+                        if isDeleting {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                            Text("Canceling...")
+                        } else if isPartyAlreadyEnded {
+                            Image(systemName: "lock.fill")
+                            Text("Already Ended")
+                        } else {
+                            Image(systemName: "trash.fill")
+                            Text("Cancel Party")
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.red.opacity(0.8))
+                    .background(Color.red.opacity(canCancelParty ? 0.8 : 0.5))
                     .foregroundColor(.white)
                     .cornerRadius(12)
                 }
+                .disabled(!canCancelParty)
             }
         }
         .sheet(isPresented: $showingGuestList) {
@@ -113,7 +175,7 @@ struct HostPartyControls: View {
                 }
             }
         } message: {
-            Text("This will cancel your party and refund all guests. This action cannot be undone.")
+            Text("⚠️ CANCELLATION: This will immediately process refunds for all paid guests and permanently delete your party. This action cannot be undone.\n\n💡 TIP: Use 'End Party' instead if the party happened successfully.")
         }
         .alert("Party Status", isPresented: $showingAlert) {
             Button("OK") { }
@@ -131,7 +193,22 @@ struct HostPartyControls: View {
     // MARK: - Actions
     
     private func cancelParty() async {
+        // PROTECTION: Prevent conflicts and invalid states
+        guard canCancelParty else { 
+            await MainActor.run {
+                alertMessage = "⚠️ Cannot cancel: Party has already been ended or action in progress"
+                showingAlert = true
+            }
+            return 
+        }
+        
+        partyActionInProgress = true
         isDeleting = true
+        
+        defer {
+            partyActionInProgress = false
+            isDeleting = false
+        }
         
         do {
             try await afterpartyManager.deleteAfterparty(afterparty)
@@ -140,13 +217,13 @@ struct HostPartyControls: View {
             await notifyGuestsOfCancellation()
             
             await MainActor.run {
-                isDeleting = false
                 // The view should dismiss or navigate back automatically when party is deleted
             }
         } catch {
             await MainActor.run {
-                isDeleting = false
                 print("❌ Error canceling party: \(error)")
+                alertMessage = "❌ Failed to cancel party: \(error.localizedDescription)"
+                showingAlert = true
             }
         }
     }
