@@ -142,10 +142,11 @@ struct P2PPaymentSheet: View {
     
     private var contactInfoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Host Contact Info")
+            Text("Host Contact & Payment Info")
                 .font(.headline)
                 .fontWeight(.bold)
             
+            // Contact Info
             if let phoneNumber = afterparty.phoneNumber {
                 ContactInfoRow(
                     icon: "phone.fill",
@@ -169,6 +170,51 @@ struct P2PPaymentSheet: View {
                     icon: "message.fill",
                     label: "Snapchat",
                     value: snapchat,
+                    copyable: true
+                )
+            }
+            
+            // Payment Methods (Critical!)
+            Divider()
+                .background(Color.gray.opacity(0.3))
+            
+            Text("💳 Send Payment To:")
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundColor(.green)
+            
+            if let venmo = afterparty.venmoHandle, !venmo.isEmpty {
+                ContactInfoRow(
+                    icon: "creditcard.fill",
+                    label: "Venmo",
+                    value: venmo,
+                    copyable: true
+                )
+            }
+            
+            if let zelle = afterparty.zelleInfo, !zelle.isEmpty {
+                ContactInfoRow(
+                    icon: "building.2.fill",
+                    label: "Zelle",
+                    value: zelle,
+                    copyable: true
+                )
+            }
+            
+            if let cashApp = afterparty.cashAppHandle, !cashApp.isEmpty {
+                ContactInfoRow(
+                    icon: "dollarsign.circle.fill",
+                    label: "Cash App",
+                    value: cashApp,
+                    copyable: true
+                )
+            }
+            
+            if let acceptsApplePay = afterparty.acceptsApplePay, acceptsApplePay, let phone = afterparty.phoneNumber {
+                ContactInfoRow(
+                    icon: "applelogo",
+                    label: "Apple Pay",
+                    value: phone,
                     copyable: true
                 )
             }

@@ -98,7 +98,13 @@ class AfterpartyManager: NSObject, ObservableObject {
         // NEW: Host Profile Parameters
         phoneNumber: String? = nil,
         instagramHandle: String? = nil,
-        snapchatHandle: String? = nil
+        snapchatHandle: String? = nil,
+        
+        // NEW: Payment Method Parameters (Critical for P2P)
+        venmoHandle: String? = nil,
+        zelleInfo: String? = nil,
+        cashAppHandle: String? = nil,
+        acceptsApplePay: Bool? = nil
     ) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
@@ -143,6 +149,12 @@ class AfterpartyManager: NSObject, ObservableObject {
             phoneNumber: phoneNumber,
             instagramHandle: instagramHandle,
             snapchatHandle: snapchatHandle,
+            
+            // Payment Methods (Critical for P2P payments)
+            venmoHandle: venmoHandle,
+            zelleInfo: zelleInfo,
+            cashAppHandle: cashAppHandle,
+            acceptsApplePay: acceptsApplePay,
             
             // Stats processing (Realistic Metrics System)
             statsProcessed: false  // New parties haven't processed stats yet

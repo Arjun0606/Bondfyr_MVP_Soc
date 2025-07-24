@@ -132,6 +132,12 @@ struct Afterparty: Identifiable, Codable {
     let instagramHandle: String? // Host's Instagram handle
     let snapchatHandle: String? // Host's Snapchat handle
     
+    // MARK: - Payment Methods (Critical for P2P payments)
+    let venmoHandle: String? // Host's Venmo handle (@username)
+    let zelleInfo: String? // Host's Zelle phone/email
+    let cashAppHandle: String? // Host's Cash App handle ($username)
+    let acceptsApplePay: Bool? // Whether host accepts Apple Pay via phone
+    
     // MARK: - Party Chat fields
     let chatEnded: Bool?
     let chatEndedAt: Date?
@@ -255,6 +261,9 @@ struct Afterparty: Identifiable, Codable {
         // Host Profile Information
         case phoneNumber, instagramHandle, snapchatHandle
         
+        // Payment Methods (Critical for P2P payments)
+        case venmoHandle, zelleInfo, cashAppHandle, acceptsApplePay
+        
         // Party Chat fields
         case chatEnded, chatEndedAt
         
@@ -301,6 +310,12 @@ struct Afterparty: Identifiable, Codable {
          phoneNumber: String? = nil,
          instagramHandle: String? = nil,
          snapchatHandle: String? = nil,
+         
+         // Payment Methods (Critical for P2P payments)
+         venmoHandle: String? = nil,
+         zelleInfo: String? = nil,
+         cashAppHandle: String? = nil,
+         acceptsApplePay: Bool? = nil,
          
          // Party Chat fields
          chatEnded: Bool? = nil,
@@ -352,6 +367,12 @@ struct Afterparty: Identifiable, Codable {
         self.phoneNumber = phoneNumber
         self.instagramHandle = instagramHandle
         self.snapchatHandle = snapchatHandle
+        
+        // Payment Methods (Critical for P2P payments)
+        self.venmoHandle = venmoHandle
+        self.zelleInfo = zelleInfo
+        self.cashAppHandle = cashAppHandle
+        self.acceptsApplePay = acceptsApplePay
         
         // Party Chat fields
         self.chatEnded = chatEnded
@@ -487,6 +508,12 @@ struct Afterparty: Identifiable, Codable {
                                                   in: container,
                                                   debugDescription: "Missing or invalid location data")
         }
+        
+        // Payment Methods (Critical for P2P payments) - with defaults for backward compatibility
+        venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)
+        zelleInfo = try? container.decode(String.self, forKey: .zelleInfo)
+        cashAppHandle = try? container.decode(String.self, forKey: .cashAppHandle)
+        acceptsApplePay = try? container.decode(Bool.self, forKey: .acceptsApplePay)
     }
     
     // MARK: - Encodable implementation

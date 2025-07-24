@@ -1937,6 +1937,12 @@ struct CreateAfterpartyView: View {
     @State private var idVerificationImage: UIImage?
     @State private var showingIdPicker = false
     
+    // MARK: - NEW: Payment Method Requirements (Critical for P2P)
+    @State private var venmoHandle = ""
+    @State private var zelleInfo = ""
+    @State private var cashAppHandle = ""
+    @State private var acceptsApplePay = false
+    
     // MARK: - NEW: Listing Fee Payment Flow
     @State private var showingListingFeePayment = false
     @State private var listingFeePaid = false
@@ -2010,10 +2016,13 @@ struct CreateAfterpartyView: View {
     
     // MARK: - Form Validation
     private var isFormValid: Bool {
+        let hasPaymentMethod = !venmoHandle.isEmpty || !zelleInfo.isEmpty || !cashAppHandle.isEmpty || acceptsApplePay
+        
         return !title.isEmpty &&
                !selectedVibes.isEmpty &&
                !address.isEmpty &&
                !phoneNumber.isEmpty && // NEW: Phone required
+               hasPaymentMethod && // NEW: At least one payment method required
                idVerificationImage != nil && // NEW: ID verification required
                ticketPrice >= 5.0 && // Minimum $5
                maxGuestCount >= 5 && // Minimum 5 guests
@@ -2089,6 +2098,10 @@ struct CreateAfterpartyView: View {
                             phoneNumber: $phoneNumber,
                             instagramHandle: $instagramHandle,
                             snapchatHandle: $snapchatHandle,
+                            venmoHandle: $venmoHandle,
+                            zelleInfo: $zelleInfo,
+                            cashAppHandle: $cashAppHandle,
+                            acceptsApplePay: $acceptsApplePay,
                             idVerificationImage: $idVerificationImage,
                             showingIdPicker: $showingIdPicker
                         )
@@ -3796,6 +3809,10 @@ struct HostProfileSection: View {
     @Binding var phoneNumber: String
     @Binding var instagramHandle: String
     @Binding var snapchatHandle: String
+    @Binding var venmoHandle: String
+    @Binding var zelleInfo: String
+    @Binding var cashAppHandle: String
+    @Binding var acceptsApplePay: Bool
     @Binding var idVerificationImage: UIImage?
     @Binding var showingIdPicker: Bool
     
@@ -3841,6 +3858,79 @@ struct HostProfileSection: View {
                     .padding()
                     .background(Color(.systemGray6).opacity(0.1))
                     .cornerRadius(12)
+            }
+            
+            // Payment Methods (Required for P2P)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Payment Methods")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("*")
+                        .foregroundColor(.red)
+                        .font(.headline)
+                }
+                
+                Text("Guests need to know where to send P2P payments")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                TextField("@venmo-handle", text: $venmoHandle)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+                    .overlay(
+                        HStack {
+                            Spacer()
+                            Text("Venmo")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .padding(.trailing, 12)
+                        }
+                    )
+                
+                TextField("Phone or email for Zelle", text: $zelleInfo)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+                    .overlay(
+                        HStack {
+                            Spacer()
+                            Text("Zelle")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .padding(.trailing, 12)
+                        }
+                    )
+                
+                TextField("$cash-app-handle", text: $cashAppHandle)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+                    .overlay(
+                        HStack {
+                            Spacer()
+                            Text("Cash App")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                                .padding(.trailing, 12)
+                        }
+                    )
+                
+                Toggle(isOn: $acceptsApplePay) {
+                    Text("Accept Apple Pay (via phone)")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .green))
+                
+                Text("⚠️ At least one payment method is required")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .fontWeight(.medium)
             }
             
             // ID Verification (Required)
