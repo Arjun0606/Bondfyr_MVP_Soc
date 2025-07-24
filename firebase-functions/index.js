@@ -3,7 +3,29 @@ const admin = require('firebase-admin');
 const axios = require('axios');
 const crypto = require('crypto');
 
+// Initialize Firebase Admin
 admin.initializeApp();
+
+// Export existing chat functions
+const { initializeChatData, addChatMessage, endPartyChat } = require('./chatFunctions');
+exports.initializeChatData = initializeChatData;
+exports.addChatMessage = addChatMessage;
+exports.endPartyChat = endPartyChat;
+
+// Export existing Dodo webhook
+const { dodoWebhook } = require('./dodoWebhook');
+exports.dodoWebhook = dodoWebhook;
+
+// Export NEW FCM notification functions
+const { 
+    sendPushNotification, 
+    sendPushNotificationHTTP, 
+    testFCMNotification 
+} = require('./fcmNotifications');
+
+exports.sendPushNotification = sendPushNotification;
+exports.sendPushNotificationHTTP = sendPushNotificationHTTP;
+exports.testFCMNotification = testFCMNotification;
 
 const GOOGLE_PLACES_API_KEY = functions.config().google.places_key; // Set this in Firebase env
 const LEMONSQUEEZY_WEBHOOK_SECRET = functions.config().lemonsqueezy?.webhook_secret; // Set webhook secret
@@ -279,6 +301,24 @@ async function handleDodoRefundSucceeded(data) {
         activeUsers: updatedActiveUsers,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
+
+      // CRITICAL: Reverse host earnings for this refund
+      console.log(`💰 WEBHOOK: Reversing host earnings for refund...`);
+      console.log(`Host: ${afterpartyData.userId}, Party: ${transactionData.afterpartyId}, Guest: ${transactionData.userId}`);
+      
+      try {
+        await reverseHostEarningsForRefund(
+          afterpartyData.userId, // hostId
+          transactionData.afterpartyId, // partyId
+          transactionData.userId, // guestId
+          refundAmount,
+          paymentId
+        );
+        console.log(`✅ WEBHOOK: Successfully reversed host earnings for refund`);
+      } catch (earningsError) {
+        console.error(`🔴 WEBHOOK: Failed to reverse host earnings:`, earningsError);
+        // Continue processing but log the error for manual intervention
+      }
     }
 
     // Send refund notification
@@ -287,7 +327,66 @@ async function handleDodoRefundSucceeded(data) {
     console.log(`✅ Successfully processed Dodo refund for payment ${paymentId}`);
   } catch (error) {
     console.error('Error handling Dodo refund:', error);
+    throw error;
   }
+}
+
+// CRITICAL: Helper function to reverse host earnings
+async function reverseHostEarningsForRefund(hostId, partyId, guestId, refundAmount, paymentId) {
+  const db = admin.firestore();
+  const hostEarningsRef = db.collection('hostEarnings').doc(hostId);
+  
+  await db.runTransaction(async (transaction) => {
+    const hostDoc = await transaction.get(hostEarningsRef);
+    
+    if (!hostDoc.exists) {
+      console.log(`🔴 REVERSAL: No earnings record found for host ${hostId}`);
+      return;
+    }
+    
+    const hostEarnings = hostDoc.data();
+    const transactions = hostEarnings.transactions || [];
+    
+    // Find the original transaction to reverse
+    let reversalAmount = 0;
+    const updatedTransactions = transactions.map(hostTransaction => {
+      // Match by partyId and guestId
+      if (hostTransaction.partyId === partyId && hostTransaction.guestId === guestId) {
+        console.log(`💸 REVERSAL: Found transaction to reverse - Host earning: $${hostTransaction.hostEarning}`);
+        reversalAmount = hostTransaction.hostEarning;
+        
+        // Mark transaction as refunded
+        return {
+          ...hostTransaction,
+          status: 'refunded',
+          refundedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+      }
+      return hostTransaction;
+    });
+    
+    if (reversalAmount === 0) {
+      console.log(`🔴 REVERSAL: No matching transaction found to reverse`);
+      return;
+    }
+    
+    // Calculate new earnings (reverse the host earning)
+    const newPendingEarnings = Math.max(0, hostEarnings.pendingEarnings - reversalAmount);
+    const newTotalEarnings = Math.max(0, hostEarnings.totalEarnings - reversalAmount);
+    
+    console.log(`💸 REVERSAL: Reducing pending earnings by $${reversalAmount}`);
+    console.log(`💸 REVERSAL: Old pending: $${hostEarnings.pendingEarnings} → New pending: $${newPendingEarnings}`);
+    
+    // Update the host earnings
+    transaction.update(hostEarningsRef, {
+      totalEarnings: newTotalEarnings,
+      pendingEarnings: newPendingEarnings,
+      transactions: updatedTransactions,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✅ EARNINGS REVERSAL: Successfully reversed $${reversalAmount} for host ${hostId}`);
+  });
 }
 
 // MARK: - PayPal Webhook Handler (Legacy)

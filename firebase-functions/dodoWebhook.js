@@ -8,6 +8,9 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Dodo webhook configuration
+const DODO_WEBHOOK_SECRET = 'whsec_Y5nFJYOkWXIggi6afYnFSbcryFHthX1E';
+
 // Dodo webhook handler
 exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
     console.log('🔵 Dodo webhook received:', req.method);
@@ -29,6 +32,15 @@ exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
             signature: webhookSignature,
             timestamp: webhookTimestamp
         });
+        
+        // Verify webhook signature for security
+        if (!verifyWebhookSignature(req.body, webhookSignature, DODO_WEBHOOK_SECRET)) {
+            console.error('❌ Invalid webhook signature');
+            res.status(401).send('Unauthorized');
+            return;
+        }
+        
+        console.log('✅ Webhook signature verified');
         
         // Parse the webhook payload
         const event = req.body;
@@ -207,6 +219,33 @@ async function handleRefundSucceeded(event) {
     } catch (error) {
         console.error('❌ Error processing refund:', error);
         throw error;
+    }
+}
+
+// Webhook signature verification function
+function verifyWebhookSignature(payload, signature, secret) {
+    const crypto = require('crypto');
+    
+    try {
+        // Convert payload to string if it's an object
+        const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        
+        // Create expected signature
+        const expectedSignature = crypto
+            .createHmac('sha256', secret)
+            .update(payloadString, 'utf8')
+            .digest('hex');
+        
+        // Compare signatures securely
+        const providedSignature = signature.replace('sha256=', '');
+        
+        return crypto.timingSafeEqual(
+            Buffer.from(expectedSignature, 'hex'),
+            Buffer.from(providedSignature, 'hex')
+        );
+    } catch (error) {
+        console.error('❌ Error verifying webhook signature:', error);
+        return false;
     }
 }
 
