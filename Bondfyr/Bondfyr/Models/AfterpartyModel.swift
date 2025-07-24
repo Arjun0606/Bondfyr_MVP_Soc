@@ -27,6 +27,7 @@ enum ApprovalType: String, CaseIterable, Codable {
 
 enum PaymentStatus: String, Codable {
     case pending = "pending"
+    case proofSubmitted = "proof_submitted" // NEW: Guest uploaded proof, awaiting host verification
     case paid = "paid"
     case refunded = "refunded"
 }
@@ -47,6 +48,11 @@ struct GuestRequest: Identifiable, Codable, Equatable {
     let refundedAt: Date?
     let approvedAt: Date?
     
+    // NEW: P2P Payment Proof Fields
+    let paymentProofImageURL: String? // URL to uploaded payment screenshot
+    let proofSubmittedAt: Date? // When guest submitted proof
+    let verificationImageURL: String? // URL to guest's ID/verification photo
+    
     init(id: String = UUID().uuidString,
          userId: String,
          userName: String,
@@ -59,7 +65,10 @@ struct GuestRequest: Identifiable, Codable, Equatable {
          dodoPaymentIntentId: String? = nil,
          paidAt: Date? = nil,
          refundedAt: Date? = nil,
-         approvedAt: Date? = nil) {
+         approvedAt: Date? = nil,
+         paymentProofImageURL: String? = nil,
+         proofSubmittedAt: Date? = nil,
+         verificationImageURL: String? = nil) {
         self.id = id
         self.userId = userId
         self.userName = userName
@@ -73,6 +82,9 @@ struct GuestRequest: Identifiable, Codable, Equatable {
         self.paidAt = paidAt
         self.refundedAt = refundedAt
         self.approvedAt = approvedAt
+        self.paymentProofImageURL = paymentProofImageURL
+        self.proofSubmittedAt = proofSubmittedAt
+        self.verificationImageURL = verificationImageURL
     }
 }
 
@@ -115,8 +127,10 @@ struct Afterparty: Identifiable, Codable {
     let earnings: Double // Host earnings (price * confirmed guests * 0.80)
     let bondfyrFee: Double // 20% fee
     
-    // MARK: - TESTFLIGHT: Payment details
-    let venmoHandle: String? // Host's Venmo handle for direct payments
+    // MARK: - Host Profile Information
+    let phoneNumber: String? // Host's phone number for guest contact
+    let instagramHandle: String? // Host's Instagram handle
+    let snapchatHandle: String? // Host's Snapchat handle
     
     // MARK: - Party Chat fields
     let chatEnded: Bool?
@@ -238,8 +252,8 @@ struct Afterparty: Identifiable, Codable {
         case visibility, approvalType, ageRestriction, maxMaleRatio
         case legalDisclaimerAccepted, guestRequests, earnings, bondfyrFee
         
-        // TESTFLIGHT: Payment details
-        case venmoHandle
+        // Host Profile Information
+        case phoneNumber, instagramHandle, snapchatHandle
         
         // Party Chat fields
         case chatEnded, chatEndedAt
@@ -283,8 +297,10 @@ struct Afterparty: Identifiable, Codable {
          earnings: Double = 0.0,
          bondfyrFee: Double = 0.20,
          
-         // TESTFLIGHT: Payment details
-         venmoHandle: String? = nil,
+         // Host Profile Information
+         phoneNumber: String? = nil,
+         instagramHandle: String? = nil,
+         snapchatHandle: String? = nil,
          
          // Party Chat fields
          chatEnded: Bool? = nil,
@@ -332,8 +348,10 @@ struct Afterparty: Identifiable, Codable {
         self.earnings = earnings
         self.bondfyrFee = bondfyrFee
         
-        // TESTFLIGHT: Payment details
-        self.venmoHandle = venmoHandle
+        // Host Profile Information
+        self.phoneNumber = phoneNumber
+        self.instagramHandle = instagramHandle
+        self.snapchatHandle = snapchatHandle
         
         // Party Chat fields
         self.chatEnded = chatEnded
@@ -402,8 +420,12 @@ struct Afterparty: Identifiable, Codable {
         earnings = (try? container.decode(Double.self, forKey: .earnings)) ?? 0.0
         bondfyrFee = (try? container.decode(Double.self, forKey: .bondfyrFee)) ?? 0.20
         
-        // TESTFLIGHT: Payment details
-        venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)
+        // Host Profile Information
+        phoneNumber = try? container.decode(String.self, forKey: .phoneNumber)
+        instagramHandle = try? container.decode(String.self, forKey: .instagramHandle)
+        snapchatHandle = try? container.decode(String.self, forKey: .snapchatHandle)
+        
+        // TESTFLIGHT: Payment details - removed venmoHandle as we use P2P payments
         
         // Party Chat fields
         chatEnded = try? container.decode(Bool.self, forKey: .chatEnded)
@@ -502,8 +524,7 @@ struct Afterparty: Identifiable, Codable {
         try container.encode(earnings, forKey: .earnings)
         try container.encode(bondfyrFee, forKey: .bondfyrFee)
         
-        // TESTFLIGHT: Payment details
-        try container.encode(venmoHandle, forKey: .venmoHandle)
+        // TESTFLIGHT: Payment details - removed venmoHandle as we use P2P payments
         
         // Party Chat fields
         try container.encode(chatEnded, forKey: .chatEnded)

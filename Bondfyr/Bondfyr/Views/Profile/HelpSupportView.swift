@@ -133,21 +133,21 @@ struct HelpSupportView: View {
                 .foregroundColor(.white)
             
             VStack(spacing: 12) {
-                ContactInfoRow(
+                HelpContactInfoRow(
                     icon: "envelope.fill",
                     title: "Email Support",
                     subtitle: "karjunvarma2001@gmail.com",
                     action: contactSupport
                 )
                 
-                ContactInfoRow(
+                HelpContactInfoRow(
                     icon: "phone.fill",
                     title: "Phone Support",
                     subtitle: "+91 9403783265",
                     action: callEmergencySupport
                 )
                 
-                ContactInfoRow(
+                HelpContactInfoRow(
                     icon: "globe",
                     title: "Follow Us",
                     subtitle: "@https://x.com/Arjun06061",
@@ -300,7 +300,7 @@ struct SupportActionButton: View {
     }
 }
 
-struct ContactInfoRow: View {
+struct HelpContactInfoRow: View {
     let icon: String
     let title: String
     let subtitle: String

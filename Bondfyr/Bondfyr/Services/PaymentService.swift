@@ -468,16 +468,7 @@ struct Transaction: Identifiable, Codable {
 
 // MARK: - Earnings Dashboard Models
 
-struct HostEarnings: Codable {
-    let totalEarnings: Double
-    let totalAfterparties: Int
-    let totalGuests: Int
-    let averagePartySize: Double
-    let thisMonth: Double
-    let lastMonth: Double
-    let pendingPayouts: Double
-    let transactions: [Transaction]
-}
+// HostEarnings moved to Models/HostEarnings.swift to avoid duplication
 
 // MARK: - Notification Extensions
 
@@ -488,11 +479,4 @@ extension Notification.Name {
 }
 
 // MARK: - Extensions
-
-extension Date {
-    var iso8601String: String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: self)
-    }
-} 
+// Note: Date.iso8601String extension is defined in DodoPaymentService.swift 

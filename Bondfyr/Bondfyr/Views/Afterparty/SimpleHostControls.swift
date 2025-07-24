@@ -109,7 +109,6 @@ struct SimpleHostControls_Previews: PreviewProvider {
             guestRequests: [],
             earnings: 0,
             bondfyrFee: 0,
-            venmoHandle: nil,
             chatEnded: false,
             chatEndedAt: nil,
             statsProcessed: false,

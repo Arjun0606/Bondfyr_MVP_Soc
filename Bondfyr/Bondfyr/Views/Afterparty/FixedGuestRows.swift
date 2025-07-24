@@ -208,6 +208,7 @@ struct FixedApprovedGuestRow: View {
     private var paymentStatusIcon: String {
         switch request.paymentStatus {
         case .pending: return "clock.fill"
+        case .proofSubmitted: return "hourglass.tophalf.filled"
         case .paid: return "checkmark.circle.fill"
         case .refunded: return "arrow.counterclockwise.circle.fill"
         }
@@ -216,6 +217,7 @@ struct FixedApprovedGuestRow: View {
     private var paymentStatusColor: Color {
         switch request.paymentStatus {
         case .pending: return .orange
+        case .proofSubmitted: return .yellow
         case .paid: return .green
         case .refunded: return .red
         }
@@ -224,6 +226,7 @@ struct FixedApprovedGuestRow: View {
     private var paymentStatusText: String {
         switch request.paymentStatus {
         case .pending: return "Payment Pending"
+        case .proofSubmitted: return "⏳ Payment Proof Submitted"
         case .paid: return "✅ PAID - Attending!"
         case .refunded: return "Refunded"
         }

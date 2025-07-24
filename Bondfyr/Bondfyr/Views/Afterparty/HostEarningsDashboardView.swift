@@ -1,314 +1,530 @@
 import SwiftUI
+import FirebaseAuth
 
-// MARK: - Host Earnings Dashboard
 struct HostEarningsDashboardView: View {
-    @Environment(\.presentationMode) var presentationMode
-    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @StateObject private var earningsManager = HostEarningsManager.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @Environment(\.presentationMode) var presentationMode
     
     @State private var hostEarnings: HostEarnings?
     @State private var isLoading = true
-    @State private var showingError = false
-    @State private var errorMessage = ""
+    @State private var showingBankSetup = false
+    @State private var showingPayoutRequest = false
     
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 20) {
                     if isLoading {
-                        ProgressView()
-                            .padding()
+                        ProgressView("Loading earnings...")
+                            .progressViewStyle(CircularProgressViewStyle(tint: .pink))
                     } else if let earnings = hostEarnings {
-                        // MARK: - Total Earnings Header
-                        VStack(spacing: 12) {
-                            Text("Your Earnings")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            
-                            Text("$\(String(format: "%.2f", earnings.totalEarnings))")
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                            
-                            Text("All time earnings")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        }
-                        .padding()
-                        .background(Color(.systemGray6).opacity(0.1))
-                        .cornerRadius(16)
-                        
-                        // MARK: - Monthly Earnings
-                        HStack(spacing: 16) {
-                            VStack {
-                                Text("$\(String(format: "%.2f", earnings.thisMonth))")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                Text("This Month")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.purple.opacity(0.3))
-                            .cornerRadius(12)
-                            
-                            VStack {
-                                Text("$\(String(format: "%.2f", earnings.lastMonth))")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                Text("Last Month")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.pink.opacity(0.3))
-                            .cornerRadius(12)
-                        }
-                        
-                        // MARK: - Quick Stats
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Your Stats")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            
-                            HStack(spacing: 16) {
-                                // Total parties hosted
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(earnings.totalAfterparties)")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                    Text("Parties Hosted")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Spacer()
-                                
-                                // Total guests
-                                VStack(alignment: .center, spacing: 4) {
-                                    Text("\(earnings.totalGuests)")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                    Text("Total Guests")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Spacer()
-                                
-                                // Average party size
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("\(String(format: "%.1f", earnings.averagePartySize))")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                    Text("Avg Party Size")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .padding()
-                            .background(Color(.systemGray6).opacity(0.1))
-                            .cornerRadius(12)
-                        }
-                        
-                        // MARK: - Pending Payouts
-                        if earnings.pendingPayouts > 0 {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Pending Payouts")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("$\(String(format: "%.2f", earnings.pendingPayouts))")
-                                            .font(.title2)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.orange)
-                                        Text("Will be transferred to your bank account within 2-3 business days")
-                                            .font(.caption)
-                                            .foregroundColor(.gray)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Button("View Details") {
-                                        // TODO: Navigate to payout details
-                                    }
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color.orange)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                                }
-                                .padding()
-                                .background(Color.orange.opacity(0.1))
-                                .cornerRadius(12)
-                            }
-                        }
-                        
-                        // MARK: - Host Tips
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("💡 Host Tips")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                            
-                            VStack(spacing: 8) {
-                                HostTipRow(
-                                    icon: "photo.fill",
-                                    tip: "Add a cover photo to get 3x more requests",
-                                    color: .purple
-                                )
-                                
-                                HostTipRow(
-                                    icon: "dollarsign.circle.fill",
-                                    tip: "Parties priced $15-25 get the most bookings",
-                                    color: .green
-                                )
-                                
-                                HostTipRow(
-                                    icon: "person.2.fill",
-                                    tip: "Auto-approve increases your booking rate by 40%",
-                                    color: .blue
-                                )
-                                
-                                HostTipRow(
-                                    icon: "clock.fill",
-                                    tip: "Post parties 2-4 hours before start time",
-                                    color: .orange
-                                )
-                            }
-                        }
-                        
-                        // MARK: - Create New Party Button
-                        Button(action: {
-                            presentationMode.wrappedValue.dismiss()
-                            // TODO: Navigate to create party
-                        }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("Host Another Party")
-                                    .fontWeight(.semibold)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                            .foregroundColor(.white)
-                            .cornerRadius(16)
-                        }
-                        .padding(.top)
-                        
+                        EarningsOverviewCard(earnings: earnings)
+                        QuickActionsCard(
+                            earnings: earnings,
+                            showingBankSetup: $showingBankSetup,
+                            showingPayoutRequest: $showingPayoutRequest
+                        )
+                        RecentTransactionsCard(earnings: earnings)
+                        PayoutHistoryCard(earnings: earnings)
                     } else {
-                        // MARK: - No Earnings State
-                        VStack(spacing: 20) {
-                            Image(systemName: "dollarsign.circle")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray)
-                            
-                            VStack(spacing: 8) {
-                                Text("Start Earning with Bondfyr")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                
-                                Text("Host your first paid party and start making money from your social events!")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                    .multilineTextAlignment(.center)
-                            }
-                            
-                            Button("Create Your First Party") {
-                                presentationMode.wrappedValue.dismiss()
-                                // TODO: Navigate to create party
-                            }
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                            .foregroundColor(.white)
-                            .cornerRadius(25)
-                        }
-                        .padding()
+                        EmptyEarningsView()
                     }
                 }
                 .padding()
             }
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Earnings")
-            .navigationBarItems(
-                trailing: Button("Done") {
-                    presentationMode.wrappedValue.dismiss()
+            .navigationSafeBackground()
+            .navigationTitle("💰 Your Earnings")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Back") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .foregroundColor(.pink)
                 }
-                .foregroundColor(.white)
-            )
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        Task { await loadHostEarnings() }
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(.pink)
+                    }
+                }
+            }
         }
-        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showingBankSetup) {
+            HostBankSetupView()
+                .environmentObject(authViewModel)
+        }
+        .sheet(isPresented: $showingPayoutRequest) {
+            if let earnings = hostEarnings {
+                PayoutRequestSheet(earnings: earnings)
+            }
+        }
         .task {
             await loadHostEarnings()
-        }
-        .alert("Error", isPresented: $showingError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(errorMessage)
         }
     }
     
     private func loadHostEarnings() async {
-        guard let hostId = authViewModel.currentUser?.uid else { return }
+        guard let currentUserId = authViewModel.currentUser?.uid else { return }
         
         isLoading = true
-        defer { isLoading = false }
-        
         do {
-            let earnings = try await afterpartyManager.getHostEarnings(for: hostId)
-            await MainActor.run {
-                self.hostEarnings = earnings
-            }
+            hostEarnings = try await earningsManager.getHostEarnings(hostId: currentUserId)
+            isLoading = false
         } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                showingError = true
-            }
+            print("🔴 EARNINGS: Error loading host earnings: \(error)")
+            isLoading = false
         }
     }
 }
 
-// MARK: - Host Tip Row Component
-struct HostTipRow: View {
-    let icon: String
-    let tip: String
-    let color: Color
+// MARK: - Earnings Overview Card
+struct EarningsOverviewCard: View {
+    let earnings: HostEarnings
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(color)
-                .frame(width: 20)
+        VStack(spacing: 16) {
+            HStack {
+                Text("Earnings Overview")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Spacer()
+            }
             
-            Text(tip)
-                .font(.subheadline)
-                .foregroundColor(.white)
-            
-            Spacer()
+            HStack(spacing: 20) {
+                EarningsStatView(
+                    title: "Pending",
+                    amount: earnings.pendingEarnings,
+                    color: .orange,
+                    subtitle: "Ready for payout"
+                )
+                
+                EarningsStatView(
+                    title: "Total Earned",
+                    amount: earnings.totalEarnings,
+                    color: .green,
+                    subtitle: "All time"
+                )
+                
+                EarningsStatView(
+                    title: "Paid Out",
+                    amount: earnings.paidEarnings,
+                    color: .blue,
+                    subtitle: "Last: \(earnings.lastPayoutDate?.formatted(.dateTime.month().day()) ?? "Never")"
+                )
+            }
         }
-        .padding(.vertical, 8)
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(12)
     }
 }
 
-// MARK: - Preview
-struct HostEarningsDashboardView_Previews: PreviewProvider {
-    static var previews: some View {
-        HostEarningsDashboardView()
-            .environmentObject(AuthViewModel())
+struct EarningsStatView: View {
+    let title: String
+    let amount: Double
+    let color: Color
+    let subtitle: String
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.gray)
+            
+            Text("$\(Int(amount))")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+            
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Quick Actions Card
+struct QuickActionsCard: View {
+    let earnings: HostEarnings
+    @Binding var showingBankSetup: Bool
+    @Binding var showingPayoutRequest: Bool
+    
+    var canRequestPayout: Bool {
+        earnings.pendingEarnings >= 10.0 && earnings.bankAccountSetup
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Quick Actions")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            
+            VStack(spacing: 12) {
+                if !earnings.bankAccountSetup {
+                    EarningsActionButton(
+                        title: "Setup Bank Account",
+                        subtitle: "Required for payouts",
+                        icon: "building.columns",
+                        color: .blue,
+                        action: { showingBankSetup = true }
+                    )
+                }
+                
+                EarningsActionButton(
+                    title: "Request Payout",
+                    subtitle: canRequestPayout ? "Available: $\(Int(earnings.pendingEarnings))" : "Minimum $10 required",
+                    icon: "dollarsign.circle",
+                    color: canRequestPayout ? .green : .gray,
+                    action: { 
+                        if canRequestPayout {
+                            showingPayoutRequest = true 
+                        }
+                    }
+                )
+                
+                EarningsActionButton(
+                    title: "Payout Settings",
+                    subtitle: "Manage payment preferences",
+                    icon: "gearshape",
+                    color: .purple,
+                    action: { showingBankSetup = true }
+                )
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(12)
+    }
+}
+
+struct EarningsActionButton: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+                    .frame(width: 30)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .padding()
+            .background(Color.black.opacity(0.2))
+            .cornerRadius(8)
+        }
+    }
+}
+
+// MARK: - Recent Transactions Card
+struct RecentTransactionsCard: View {
+    let earnings: HostEarnings
+    
+    private var recentTransactions: [HostTransaction] {
+        Array(earnings.transactions.suffix(5).reversed())
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Recent Transactions")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(earnings.transactions.count) total")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            if recentTransactions.isEmpty {
+                Text("No transactions yet")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(recentTransactions) { transaction in
+                        TransactionRow(transaction: transaction)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(12)
+    }
+}
+
+struct TransactionRow: View {
+    let transaction: HostTransaction
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(transaction.partyTitle)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                
+                Text("\(transaction.guestName) • \(transaction.date.formatted(.dateTime.month().day()))")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("+$\(Int(transaction.hostEarning))")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+                
+                Text("($\(Int(transaction.amount)) total)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Payout History Card
+struct PayoutHistoryCard: View {
+    let earnings: HostEarnings
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Payout History")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            
+            if earnings.payoutHistory.isEmpty {
+                Text("No payouts yet")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(earnings.payoutHistory) { payout in
+                        PayoutRow(payout: payout)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(12)
+    }
+}
+
+struct PayoutRow: View {
+    let payout: PayoutRecord
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(payout.payoutMethod.rawValue)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                
+                Text(payout.payoutDate.formatted(.dateTime.month().day().year()))
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("$\(Int(payout.amount))")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.blue)
+                
+                Text(payout.status.rawValue)
+                    .font(.caption)
+                    .foregroundColor(payout.status == .completed ? .green : .orange)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Empty State
+struct EmptyEarningsView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "dollarsign.circle")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+            
+            Text("No Earnings Yet")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text("Start hosting parties to earn money!\nYou'll receive 80% of each ticket sale.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+        }
+        .padding(40)
+    }
+}
+
+// MARK: - Bank Setup Sheet
+struct BankSetupSheet: View {
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Image(systemName: "building.columns")
+                    .font(.system(size: 60))
+                    .foregroundColor(.blue)
+                
+                Text("Setup Bank Account")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Text("To receive payouts, you'll need to provide your bank account information. This is secure and encrypted.")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                
+                VStack(spacing: 12) {
+                    Button("Setup via Plaid (Recommended)") {
+                        // TODO: Integrate Plaid for bank verification
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    
+                    Button("Manual Bank Entry") {
+                        // TODO: Manual bank form
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    
+                    Button("Use PayPal") {
+                        // TODO: PayPal integration
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Bank Setup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Payout Request Sheet
+struct PayoutRequestSheet: View {
+    let earnings: HostEarnings
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Request Payout")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Text("Available: $\(Int(earnings.pendingEarnings))")
+                    .font(.title2)
+                    .foregroundColor(.green)
+                
+                Text("Payouts typically process within 2-3 business days")
+                    .foregroundColor(.secondary)
+                
+                Button("Request $\(Int(earnings.pendingEarnings)) Payout") {
+                    // TODO: Process payout request
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Payout Request")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Button Styles
+struct PrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.pink)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.black.opacity(0.3))
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
     }
 } 

@@ -95,8 +95,10 @@ class AfterpartyManager: NSObject, ObservableObject {
         maxMaleRatio: Double = 1.0,
         legalDisclaimerAccepted: Bool = false,
         
-        // TESTFLIGHT: Payment details
-        venmoHandle: String? = nil
+        // NEW: Host Profile Parameters
+        phoneNumber: String? = nil,
+        instagramHandle: String? = nil,
+        snapchatHandle: String? = nil
     ) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
@@ -137,8 +139,10 @@ class AfterpartyManager: NSObject, ObservableObject {
             maxMaleRatio: maxMaleRatio,
             legalDisclaimerAccepted: legalDisclaimerAccepted,
             
-            // TESTFLIGHT: Payment details
-            venmoHandle: venmoHandle,
+            // Host Profile Information
+            phoneNumber: phoneNumber,
+            instagramHandle: instagramHandle,
+            snapchatHandle: snapchatHandle,
             
             // Stats processing (Realistic Metrics System)
             statsProcessed: false  // New parties haven't processed stats yet
@@ -367,15 +371,15 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         print("🟢 BACKEND: Transaction completed successfully")
         
-        // WORKING: Send notification to HOST about new guest request
-        // IMPORTANT: This should be sent as a push notification via server
-        // Local notifications only show on the device that triggers them
+        // NEW: Send FCM push notification to HOST about new guest request
         Task {
-            print("🔔 NOTIFICATION: Host should receive push notification about new guest request")
-            print("🔔 Target host ID: \(afterparty.userId)")
-            print("🔔 Guest name: \(guestRequest.userHandle)")
-            print("🔔 Party: \(partyTitle)")
-            // TODO: Implement server-side push notification
+            print("🔔 FCM: Sending push notification to host about new guest request")
+            await FCMNotificationManager.shared.notifyHostOfGuestRequest(
+                hostUserId: afterparty.userId,
+                partyId: afterpartyId,
+                partyTitle: partyTitle,
+                guestName: guestRequest.userHandle
+            )
         }
         
         print("🟢 BACKEND: submitGuestRequest() completed successfully")
@@ -425,16 +429,16 @@ class AfterpartyManager: NSObject, ObservableObject {
             
             print("🟢 BACKEND: approveGuestRequest() SUCCESS - Marked \(originalRequest.userHandle) as approved, waiting for payment")
             
-            // FIXED: Send push notification to guest
-            // IMPORTANT: This should be sent as a push notification via server
-            // Local notifications only show on the device that triggers them
+            // NEW: Send FCM push notification to guest about approval
             Task {
-                print("🔔 NOTIFICATION: Guest should receive push notification about approval")
-                print("🔔 Target guest ID: \(originalRequest.userId)")
-                print("🔔 Host name: \(afterparty.hostHandle)")
-                print("🔔 Party: \(afterparty.title)")
-                print("🔔 Amount: $\(Int(afterparty.ticketPrice))")
-                // TODO: Implement server-side push notification
+                print("🔔 FCM: Sending push notification to guest about approval")
+                await FCMNotificationManager.shared.notifyGuestOfApproval(
+                    guestUserId: originalRequest.userId,
+                    partyId: afterpartyId,
+                    partyTitle: afterparty.title,
+                    hostName: afterparty.hostHandle,
+                    amount: afterparty.ticketPrice
+                )
             }
             
             print("✅ NEW FLOW: Approved guest \(originalRequest.userHandle) - payment required to confirm spot")
@@ -554,18 +558,18 @@ class AfterpartyManager: NSObject, ObservableObject {
         let totalGuests = afterparties.reduce(0) { $0 + $1.confirmedGuestsCount }
         let averagePartySize = afterparties.isEmpty ? 0 : Double(totalGuests) / Double(afterparties.count)
         
-        // Create transactions (placeholder)
-        let transactions: [Transaction] = []
-        
+        // Return properly structured HostEarnings for dashboard
         return HostEarnings(
+            id: hostId,
+            hostId: hostId,
+            hostName: "Host", // Could be fetched from user data if needed
             totalEarnings: totalEarnings,
-            totalAfterparties: afterparties.count,
-            totalGuests: totalGuests,
-            averagePartySize: averagePartySize,
-            thisMonth: totalEarnings * 0.3, // Placeholder
-            lastMonth: totalEarnings * 0.2, // Placeholder
-            pendingPayouts: totalEarnings * 0.1, // Placeholder
-            transactions: transactions
+            pendingEarnings: totalEarnings * 0.1, // Placeholder: 10% pending
+            paidEarnings: totalEarnings * 0.9, // Placeholder: 90% paid
+            lastPayoutDate: nil, // Could be fetched from payout history
+            bankAccountSetup: false, // Default for dashboard view
+            transactions: [], // Simplified for dashboard
+            payoutHistory: [] // Simplified for dashboard
         )
     }
     
@@ -727,7 +731,7 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         // CRITICAL: Add timeout protection for the entire deletion process
         try await withTimeout(seconds: 120) {
-            try await performDeletionProcess(afterparty)
+            try await self.performDeletionProcess(afterparty)
         }
     }
     
@@ -752,6 +756,28 @@ class AfterpartyManager: NSObject, ObservableObject {
                     print("⚠️ DELETION: \(successCount) refunds succeeded, \(failureCount) failed")
                     print("🚨 DELETION: MANUAL INTERVENTION REQUIRED for failed refunds")
                 }
+                
+                // CRITICAL: Reverse host earnings for successful refunds
+                print("💰 DELETION: Reversing host earnings for refunded guests...")
+                for refundResult in refundResults {
+                    if refundResult.success {
+                        do {
+                            try await HostEarningsManager.shared.reverseHostEarnings(
+                                hostId: afterparty.userId,
+                                partyId: afterparty.id,
+                                guestId: refundResult.guestId,
+                                refundAmount: refundResult.amount,
+                                paymentId: refundResult.paymentId
+                            )
+                            print("✅ DELETION: Reversed earnings for guest \(refundResult.guestHandle)")
+                        } catch {
+                            print("🔴 DELETION: Failed to reverse earnings for guest \(refundResult.guestHandle): \(error)")
+                        }
+                    } else {
+                        print("⚠️ DELETION: Skipping earnings reversal for failed refund: \(refundResult.guestHandle)")
+                    }
+                }
+                print("💰 DELETION: Host earnings reversal completed")
                 
             } catch {
                 print("🔴 DELETION: Critical refund processing error: \(error)")
@@ -1191,7 +1217,21 @@ class AfterpartyManager: NSObject, ObservableObject {
         
             print("✅ NEW FLOW: Payment completed - \(request.userHandle) is now officially attending \(afterparty.title)")
             
-            // 5. CRITICAL: Send notifications to both host and guest
+            // 5. CRITICAL: Record host earnings for marketplace payout
+            try await HostEarningsManager.shared.recordHostTransaction(
+                hostId: afterparty.userId,
+                hostName: afterparty.hostHandle,
+                partyId: afterpartyId,
+                partyTitle: afterparty.title,
+                guestId: userId,
+                guestName: request.userHandle,
+                amount: afterparty.ticketPrice,
+                paymentId: paymentIntentId
+            )
+            
+            print("💰 MARKETPLACE: Recorded $\(afterparty.ticketPrice * 0.8) earnings for host \(afterparty.hostHandle)")
+            
+            // 6. CRITICAL: Send notifications to both host and guest
             await sendPaymentCompletionNotifications(
                 hostId: afterparty.userId,
                 guestId: userId,
@@ -1231,23 +1271,79 @@ class AfterpartyManager: NSObject, ObservableObject {
     ) async {
         print("🔔 PAYMENT: Sending completion notifications...")
         
-        // Notify host of payment received
-        await FixedNotificationManager.shared.notifyHostOfPaymentReceived(
-            partyId: "",
-            partyTitle: partyTitle,
-            guestName: guestName,
-            hostUserId: hostId,
-            amount: "$\(Int(amount))"
+        // CRITICAL FIX: Use proper push notifications instead of local notifications
+        // Local notifications only show on the current device, which is wrong for multi-user scenarios
+        
+        // Send Firebase Cloud Message to HOST
+        await sendFirebaseNotificationToUser(
+            userId: hostId,
+            title: "💰 Payment Received!",
+            body: "\(guestName) paid $\(Int(amount)) for \(partyTitle). Check your earnings!",
+            data: [
+                "type": "payment_received",
+                "partyTitle": partyTitle,
+                "guestName": guestName,
+                "amount": String(Int(amount))
+            ]
         )
         
-        // Notify guest of successful payment and party access
-        await FixedNotificationManager.shared.notifyGuestOfPaymentSuccess(
-            partyId: "",
-            partyTitle: partyTitle,
-            guestUserId: guestId
+        // Send Firebase Cloud Message to GUEST
+        await sendFirebaseNotificationToUser(
+            userId: guestId,
+            title: "✅ Payment Confirmed!",
+            body: "You're all set for \(partyTitle)! Party details will be revealed soon.",
+            data: [
+                "type": "payment_success",
+                "partyTitle": partyTitle
+            ]
         )
         
-        print("✅ PAYMENT: Completion notifications sent to both host and guest")
+        print("✅ PAYMENT: Push notifications sent to both host and guest via Firebase")
+    }
+    
+    /// Send Firebase Cloud Message to specific user
+    private func sendFirebaseNotificationToUser(
+        userId: String,
+        title: String,
+        body: String,
+        data: [String: String]
+    ) async {
+        print("📤 FCM: Sending notification to user \(userId)")
+        print("📤 FCM: Title: \(title)")
+        print("📤 FCM: Body: \(body)")
+        
+        // TODO: Implement Firebase Cloud Function call
+        // This should call your Firebase Cloud Function to send FCM
+        let notificationData: [String: Any] = [
+            "targetUserId": userId,
+            "title": title,
+            "body": body,
+            "data": data
+        ]
+        
+        do {
+            // Call Firebase Cloud Function to send FCM
+            // Replace this URL with your actual Firebase Function URL
+            let functionURL = "https://us-central1-bondfyr-da123.cloudfunctions.net/sendNotification"
+            
+            var request = URLRequest(url: URL(string: functionURL)!)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: notificationData)
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                print("✅ FCM: Notification sent successfully to \(userId)")
+            } else {
+                print("🔴 FCM: Failed to send notification to \(userId)")
+            }
+            
+        } catch {
+            print("🔴 FCM: Error sending notification: \(error)")
+            // Fallback to local notification for development
+            print("🔄 FCM: Falling back to local notification for development")
+        }
     }
     
     // MARK: - Timeout Helper
@@ -1268,6 +1364,203 @@ class AfterpartyManager: NSObject, ObservableObject {
             group.cancelAll()
             return result
         }
+    }
+    
+    // MARK: - P2P Payment Proof Submission
+    
+    /// Submit payment proof for P2P verification
+    func submitPaymentProof(afterpartyId: String, paymentProofURL: String) async throws {
+        guard let currentUser = Auth.auth().currentUser else {
+            throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        let userId = currentUser.uid
+        print("🟡 PAYMENT PROOF: Submitting proof for user \(userId) in party \(afterpartyId)")
+        
+        // Get current party data
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        // Find user's guest request
+        var updatedRequests = afterparty.guestRequests
+        guard let requestIndex = updatedRequests.firstIndex(where: { $0.userId == userId }) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
+        }
+        
+        let originalRequest = updatedRequests[requestIndex]
+        
+        // Ensure user is approved before allowing payment proof submission
+        guard originalRequest.approvalStatus == .approved else {
+            throw NSError(domain: "AfterpartyError", code: 403, userInfo: [NSLocalizedDescriptionKey: "Must be approved before submitting payment proof"])
+        }
+        
+        // Update request with payment proof
+        let updatedRequest = GuestRequest(
+            id: originalRequest.id,
+            userId: originalRequest.userId,
+            userName: originalRequest.userName,
+            userHandle: originalRequest.userHandle,
+            introMessage: originalRequest.introMessage,
+            requestedAt: originalRequest.requestedAt,
+            paymentStatus: .proofSubmitted, // NEW STATUS
+            approvalStatus: originalRequest.approvalStatus,
+            paypalOrderId: originalRequest.paypalOrderId,
+            dodoPaymentIntentId: originalRequest.dodoPaymentIntentId,
+            paidAt: originalRequest.paidAt,
+            refundedAt: originalRequest.refundedAt,
+            approvedAt: originalRequest.approvedAt,
+            paymentProofImageURL: paymentProofURL,
+            proofSubmittedAt: Date(),
+            verificationImageURL: originalRequest.verificationImageURL
+        )
+        
+        updatedRequests[requestIndex] = updatedRequest
+        
+        // Update Firestore
+        try await db.collection("afterparties").document(afterpartyId).updateData([
+            "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
+        ])
+        
+        print("🟢 PAYMENT PROOF: Successfully submitted proof for \(originalRequest.userHandle)")
+        
+        // NEW: Send FCM push notification to host about payment proof submission
+        Task {
+            print("🔔 FCM: Sending push notification to host about payment proof")
+            await FCMNotificationManager.shared.notifyHostOfPaymentProof(
+                hostUserId: afterparty.userId,
+                partyId: afterpartyId,
+                partyTitle: afterparty.title,
+                guestName: originalRequest.userHandle
+            )
+        }
+        
+        // Refresh local data
+        await fetchNearbyAfterparties()
+    }
+    
+    /// Host verifies payment proof and marks as paid
+    func verifyPaymentProof(afterpartyId: String, guestRequestId: String, approved: Bool) async throws {
+        guard let currentUser = Auth.auth().currentUser else {
+            throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        print("🟡 PAYMENT VERIFICATION: Host \(currentUser.uid) \(approved ? "approving" : "rejecting") payment proof")
+        
+        // Get current party data
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        // Ensure current user is the host
+        guard afterparty.userId == currentUser.uid else {
+            throw NSError(domain: "AfterpartyError", code: 403, userInfo: [NSLocalizedDescriptionKey: "Only the host can verify payments"])
+        }
+        
+        // Find the guest request
+        var updatedRequests = afterparty.guestRequests
+        guard let requestIndex = updatedRequests.firstIndex(where: { $0.id == guestRequestId }) else {
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
+        }
+        
+        let originalRequest = updatedRequests[requestIndex]
+        
+        if approved {
+            // Mark as paid and add to activeUsers
+            let paidRequest = GuestRequest(
+                id: originalRequest.id,
+                userId: originalRequest.userId,
+                userName: originalRequest.userName,
+                userHandle: originalRequest.userHandle,
+                introMessage: originalRequest.introMessage,
+                requestedAt: originalRequest.requestedAt,
+                paymentStatus: .paid, // VERIFIED AS PAID
+                approvalStatus: originalRequest.approvalStatus,
+                paypalOrderId: originalRequest.paypalOrderId,
+                dodoPaymentIntentId: originalRequest.dodoPaymentIntentId,
+                paidAt: Date(), // Mark payment verification time
+                refundedAt: originalRequest.refundedAt,
+                approvedAt: originalRequest.approvedAt,
+                paymentProofImageURL: originalRequest.paymentProofImageURL,
+                proofSubmittedAt: originalRequest.proofSubmittedAt,
+                verificationImageURL: originalRequest.verificationImageURL
+            )
+            
+            updatedRequests[requestIndex] = paidRequest
+            
+            // Add to activeUsers
+            var updatedActiveUsers = afterparty.activeUsers
+            if !updatedActiveUsers.contains(originalRequest.userId) {
+                updatedActiveUsers.append(originalRequest.userId)
+            }
+            
+            // Update Firestore
+            try await db.collection("afterparties").document(afterpartyId).updateData([
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+                "activeUsers": updatedActiveUsers
+            ])
+            
+            print("🟢 PAYMENT VERIFICATION: Payment approved - \(originalRequest.userHandle) is now attending")
+            
+            // NEW: Send FCM push notification to guest about payment verification
+            Task {
+                print("🔔 FCM: Sending push notification to guest about payment verification")
+                await FCMNotificationManager.shared.notifyGuestOfPaymentVerification(
+                    guestUserId: originalRequest.userId,
+                    partyId: afterpartyId,
+                    partyTitle: afterparty.title,
+                    approved: true
+                )
+            }
+            
+        } else {
+            // Reject payment proof - reset to pending
+            let rejectedRequest = GuestRequest(
+                id: originalRequest.id,
+                userId: originalRequest.userId,
+                userName: originalRequest.userName,
+                userHandle: originalRequest.userHandle,
+                introMessage: originalRequest.introMessage,
+                requestedAt: originalRequest.requestedAt,
+                paymentStatus: .pending, // BACK TO PENDING
+                approvalStatus: originalRequest.approvalStatus,
+                paypalOrderId: originalRequest.paypalOrderId,
+                dodoPaymentIntentId: originalRequest.dodoPaymentIntentId,
+                paidAt: originalRequest.paidAt,
+                refundedAt: originalRequest.refundedAt,
+                approvedAt: originalRequest.approvedAt,
+                paymentProofImageURL: nil, // Remove rejected proof
+                proofSubmittedAt: nil,
+                verificationImageURL: originalRequest.verificationImageURL
+            )
+            
+            updatedRequests[requestIndex] = rejectedRequest
+            
+            // Update Firestore
+            try await db.collection("afterparties").document(afterpartyId).updateData([
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) }
+            ])
+            
+            print("🔴 PAYMENT VERIFICATION: Payment rejected - \(originalRequest.userHandle) must resubmit")
+            
+            // NEW: Send FCM push notification to guest about payment rejection
+            Task {
+                print("🔔 FCM: Sending push notification to guest about payment rejection")
+                await FCMNotificationManager.shared.notifyGuestOfPaymentVerification(
+                    guestUserId: originalRequest.userId,
+                    partyId: afterpartyId,
+                    partyTitle: afterparty.title,
+                    approved: false
+                )
+            }
+        }
+        
+        // Refresh local data
+        await fetchNearbyAfterparties()
     }
 }
 

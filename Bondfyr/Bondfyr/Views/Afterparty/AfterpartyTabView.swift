@@ -646,9 +646,15 @@ struct ActionButtonsView: View {
         } else if let request = userRequest {
             switch request.approvalStatus {
             case .approved:
-                buttonState = .approved
-                print("🎯 PAYMENT DEBUG: User is APPROVED! Should show payment button")
-                print("🎯 PAYMENT DEBUG: Request payment status: \(request.paymentStatus)")
+                // Check payment status to determine exact state
+                if request.paymentStatus == .proofSubmitted {
+                    buttonState = .proofSubmitted
+                    print("🎯 PAYMENT DEBUG: User has submitted proof, awaiting verification")
+                } else {
+                    buttonState = .approved
+                    print("🎯 PAYMENT DEBUG: User is APPROVED! Should show payment button")
+                    print("🎯 PAYMENT DEBUG: Request payment status: \(request.paymentStatus)")
+                }
             case .pending:
                 buttonState = .pending
             case .denied:
@@ -687,6 +693,7 @@ struct ActionButtonsView: View {
     private enum GuestButtonState {
         case going
         case approved
+        case proofSubmitted // NEW: Payment proof submitted, awaiting verification
         case pending
         case denied
         case soldOut
@@ -702,6 +709,9 @@ struct ActionButtonsView: View {
         case .approved:
             Image(systemName: "creditcard.fill")
             Text("Complete Payment ($\(Int(afterparty.ticketPrice)))")
+        case .proofSubmitted:
+            Image(systemName: "hourglass")
+            Text("Payment Pending Verification...")
         case .pending:
             Image(systemName: "clock.fill")
             Text("Pending")
@@ -713,7 +723,7 @@ struct ActionButtonsView: View {
             Text("Sold Out")
         case .requestToJoin:
             Image(systemName: "person.badge.plus")
-            Text("Request to Join ($\(Int(afterparty.ticketPrice)))")
+            Text("Request to Join")
         }
     }
     
@@ -723,6 +733,8 @@ struct ActionButtonsView: View {
             return AnyView(Color.green)
         case .approved:
             return AnyView(Color.blue)
+        case .proofSubmitted:
+            return AnyView(Color.yellow)
         case .pending:
             return AnyView(Color.orange)
         case .denied, .soldOut:
@@ -1167,7 +1179,7 @@ struct AfterpartyCard: View {
             UserInfoView(userId: afterparty.userId)
         }
         .sheet(isPresented: $showingPaymentSheet) {
-            DodoPaymentSheet(afterparty: afterparty) {
+            P2PPaymentSheet(afterparty: afterparty) {
                 // Refresh party data after payment completion
                 refreshAfterpartyData()
             }
@@ -1470,99 +1482,7 @@ struct SummaryStatsView: View {
     }
 }
 
-struct VenmoPaymentInfoSheet: View {
-    let afterparty: Afterparty
-    let guestName: String
-    @Environment(\.presentationMode) var presentationMode
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Header
-                    VStack(spacing: 16) {
-                        Image(systemName: "dollarsign.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.green)
-                        
-                        Text("Payment Details")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text("Guest: \(guestName)")
-                            .font(.headline)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    // Venmo info
-                    VStack(spacing: 16) {
-                        Text("Venmo Details")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        VStack(spacing: 12) {
-                            HStack {
-                                Text("Handle:")
-                                    .foregroundColor(.gray)
-                                Spacer()
-                                Text("@\(afterparty.venmoHandle ?? "Not set")")
-                                    .foregroundColor(.white)
-                                    .fontWeight(.semibold)
-                            }
-                            
-                            HStack {
-                                Text("Amount:")
-                                    .foregroundColor(.gray)
-                                Spacer()
-                                Text("$\(Int(afterparty.ticketPrice))")
-                                    .foregroundColor(.green)
-                                    .fontWeight(.bold)
-                            }
-                            
-                            HStack {
-                                Text("Required Note:")
-                                    .foregroundColor(.gray)
-                                Spacer()
-                                Text("\(afterparty.title)")
-                                    .foregroundColor(.white)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .padding()
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(12)
-                    }
-                    
-                    // Instructions
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Manual Door Verification")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        Text("1. Guest sends Venmo payment with party title as note")
-                        Text("2. When guest arrives, check your Venmo app")
-                        Text("3. If payment confirmed, let them in!")
-                        Text("4. No app tracking needed - keep it simple")
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                }
-                .padding()
-            }
-            .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Payment Info")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(
-                trailing: Button("Done") {
-                    presentationMode.wrappedValue.dismiss()
-                }
-                .foregroundColor(.white)
-            )
-        }
-        .preferredColorScheme(.dark)
-    }
-}
+// Removed obsolete VenmoPaymentInfoSheet - replaced with P2P payment system
 
 
 
@@ -1761,7 +1681,6 @@ struct GuestListView: View {
                     guestRequests: updatedRequests,
                     earnings: afterparty.earnings,
                     bondfyrFee: afterparty.bondfyrFee,
-                    venmoHandle: afterparty.venmoHandle,
                     chatEnded: afterparty.chatEnded,
                     chatEndedAt: afterparty.chatEndedAt
                 )
@@ -1843,7 +1762,6 @@ struct GuestListView: View {
                 guestRequests: updatedRequests,
                 earnings: afterparty.earnings,
                 bondfyrFee: afterparty.bondfyrFee,
-                venmoHandle: afterparty.venmoHandle,
                 chatEnded: afterparty.chatEnded,
                 chatEndedAt: afterparty.chatEndedAt
             )
@@ -2003,6 +1921,7 @@ struct CreateAfterpartyView: View {
     @State private var ageRestriction: Int? = nil
     @State private var maxMaleRatio: Double = 1.0
     @State private var legalDisclaimerAccepted = false
+    @State private var paypalSetupCompleted = false
     @State private var showImagePicker = false
     @State private var isUploadingImage = false
     
@@ -2010,8 +1929,19 @@ struct CreateAfterpartyView: View {
     @State private var selectedDate = Date()
     @State private var customStartTime = Date().addingTimeInterval(3600)
     @State private var customEndTime = Date().addingTimeInterval(3600 * 5)
-    // MARK: - TESTFLIGHT: Payment Details
-    @State private var venmoHandle = ""
+    
+    // MARK: - NEW: Host Profile Requirements
+    @State private var phoneNumber = ""
+    @State private var instagramHandle = ""
+    @State private var snapchatHandle = ""
+    @State private var idVerificationImage: UIImage?
+    @State private var showingIdPicker = false
+    
+    // MARK: - NEW: Listing Fee Payment Flow
+    @State private var showingListingFeePayment = false
+    @State private var listingFeePaid = false
+    @State private var listingFeeAmount: Double = 0.0
+    @State private var pendingPartyData: [String: Any]?
     
     init(currentLocation: CLLocationCoordinate2D?, currentCity: String) {
         self.currentLocation = currentLocation
@@ -2083,9 +2013,17 @@ struct CreateAfterpartyView: View {
         return !title.isEmpty &&
                !selectedVibes.isEmpty &&
                !address.isEmpty &&
+               !phoneNumber.isEmpty && // NEW: Phone required
+               idVerificationImage != nil && // NEW: ID verification required
                ticketPrice >= 5.0 && // Minimum $5
                maxGuestCount >= 5 && // Minimum 5 guests
                legalDisclaimerAccepted // Must accept legal responsibility
+    }
+    
+    // MARK: - NEW: Calculate Listing Fee
+    private var calculatedListingFee: Double {
+        let halfCapacity = Double(maxGuestCount) / 2.0
+        return halfCapacity * ticketPrice * 0.20 // 20% of (half capacity * price)
     }
     
     // MARK: - Computed Properties
@@ -2146,16 +2084,22 @@ struct CreateAfterpartyView: View {
                             maxMaleRatio: $maxMaleRatio
                         )
                         
-                        // MARK: - TestFlight Notice
-                        TestFlightDisclaimerSection()
+                        // MARK: - NEW: Host Profile Section (Required)
+                        HostProfileSection(
+                            phoneNumber: $phoneNumber,
+                            instagramHandle: $instagramHandle,
+                            snapchatHandle: $snapchatHandle,
+                            idVerificationImage: $idVerificationImage,
+                            showingIdPicker: $showingIdPicker
+                        )
                         
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
                         
-                    // Create Button
-                    Button(action: createAfterparty) {
-                        CreateButtonContent(
-                            ticketPrice: ticketPrice,
+                    // Create Button (NEW: Shows listing fee)
+                    Button(action: initiateListingFeePayment) {
+                        CreateButtonContentNew(
+                            listingFee: calculatedListingFee,
                             isCreating: isCreating,
                             isUploadingImage: isUploadingImage
                         )
@@ -2194,6 +2138,23 @@ struct CreateAfterpartyView: View {
                             uploadCoverPhoto(image)
                         }
                     }
+            }
+            .sheet(isPresented: $showingIdPicker) {
+                ImagePicker(source: .photoLibrary) { image in
+                    idVerificationImage = image
+                }
+            }
+            .sheet(isPresented: $showingListingFeePayment) {
+                ListingFeePaymentSheet(
+                    listingFee: calculatedListingFee,
+                    partyTitle: title,
+                    onPaymentComplete: {
+                        listingFeePaid = true
+                        showingListingFeePayment = false
+                        // Now create the party after payment
+                        createAfterpartyAfterPayment()
+                    }
+                )
             }
         }
     }
@@ -2303,6 +2264,106 @@ struct CreateAfterpartyView: View {
                     presentationMode.wrappedValue.dismiss()
             }
         } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
+            isCreating = false
+        }
+    }
+    
+    // MARK: - NEW: Listing Fee Payment Flow
+    
+    private func initiateListingFeePayment() {
+        guard let location = currentLocation else { return }
+        
+        // Calculate listing fee
+        listingFeeAmount = calculatedListingFee
+        
+        // Store party data for after payment
+        storePendingPartyData(location: location)
+        
+        // Show listing fee payment sheet
+        showingListingFeePayment = true
+    }
+    
+    private func storePendingPartyData(location: CLLocationCoordinate2D) {
+        let finalStartTime = Calendar.current.date(
+            bySettingHour: Calendar.current.component(.hour, from: customStartTime),
+            minute: Calendar.current.component(.minute, from: customStartTime),
+            second: 0,
+            of: selectedDate
+        ) ?? customStartTime
+        
+        let distantFuture = Calendar.current.date(byAdding: .year, value: 1, to: finalStartTime) ?? finalStartTime
+        
+        pendingPartyData = [
+            "hostHandle": authViewModel.currentUser?.name ?? "",
+            "coordinate": location,
+            "radius": 5000,
+            "startTime": finalStartTime,
+            "endTime": distantFuture,
+            "city": currentCity,
+            "locationName": address,
+            "description": description,
+            "address": address,
+            "googleMapsLink": googleMapsLink,
+            "vibeTag": Array(selectedVibes).joined(separator: ", "),
+            "title": title,
+            "ticketPrice": ticketPrice,
+            "coverPhotoURL": coverPhotoURL.isEmpty ? nil : coverPhotoURL,
+            "maxGuestCount": maxGuestCount,
+            "visibility": visibility.rawValue,
+            "approvalType": approvalType.rawValue,
+            "ageRestriction": ageRestriction,
+            "maxMaleRatio": maxMaleRatio,
+            "legalDisclaimerAccepted": legalDisclaimerAccepted,
+            "phoneNumber": phoneNumber,
+            "instagramHandle": instagramHandle,
+            "snapchatHandle": snapchatHandle
+        ]
+    }
+    
+    private func createAfterpartyAfterPayment() {
+        guard let partyData = pendingPartyData,
+              let coordinate = partyData["coordinate"] as? CLLocationCoordinate2D else {
+            return
+        }
+        
+        isCreating = true
+        Task {
+            do {
+                try await afterpartyManager.createAfterparty(
+                    hostHandle: partyData["hostHandle"] as? String ?? "",
+                    coordinate: coordinate,
+                    radius: partyData["radius"] as? Double ?? 5000,
+                    startTime: partyData["startTime"] as? Date ?? Date(),
+                    endTime: partyData["endTime"] as? Date ?? Date(),
+                    city: partyData["city"] as? String ?? "",
+                    locationName: partyData["locationName"] as? String ?? "",
+                    description: partyData["description"] as? String ?? "",
+                    address: partyData["address"] as? String ?? "",
+                    googleMapsLink: partyData["googleMapsLink"] as? String ?? "",
+                    vibeTag: partyData["vibeTag"] as? String ?? "",
+                    title: partyData["title"] as? String ?? "",
+                    ticketPrice: partyData["ticketPrice"] as? Double ?? 0.0,
+                    coverPhotoURL: partyData["coverPhotoURL"] as? String,
+                    maxGuestCount: partyData["maxGuestCount"] as? Int ?? 25,
+                    visibility: PartyVisibility(rawValue: partyData["visibility"] as? String ?? "public") ?? .publicFeed,
+                    approvalType: ApprovalType(rawValue: partyData["approvalType"] as? String ?? "manual") ?? .manual,
+                    ageRestriction: partyData["ageRestriction"] as? Int,
+                    maxMaleRatio: partyData["maxMaleRatio"] as? Double ?? 1.0,
+                    legalDisclaimerAccepted: partyData["legalDisclaimerAccepted"] as? Bool ?? false,
+                    phoneNumber: partyData["phoneNumber"] as? String,
+                    instagramHandle: partyData["instagramHandle"] as? String,
+                    snapchatHandle: partyData["snapchatHandle"] as? String
+                )
+                
+                await MainActor.run {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true
@@ -2646,7 +2707,7 @@ struct DemoPartiesBanner: View {
         )
         .padding(.horizontal)
     }
-} 
+}
 
 struct PartyDetailsSection: View {
     @Binding var title: String
@@ -3213,6 +3274,11 @@ struct LocationDescriptionSection: View {
                     .font(.body)
                     .foregroundColor(.white)
                 
+                Text("💡 Tip: If you want guests to show ID for approval, mention it here!")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                    .padding(.bottom, 4)
+                
                 TextEditor(text: $description)
                     .frame(height: 100)
                     .padding(4)
@@ -3275,6 +3341,35 @@ struct EnhancedDateTimeSection: View {
                 Spacer()
             }
         }
+    }
+}
+
+// MARK: - PayPal Setup Section
+struct PayPalSetupSection: View {
+    @Binding var paypalSetupCompleted: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("💰 Get Paid")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            PayPalSetupCard(isCompleted: $paypalSetupCompleted)
+            
+            if !paypalSetupCompleted {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("PayPal setup required to receive earnings from your party")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+        }
+        .padding()
+        .background(Color.black.opacity(0.3))
+        .cornerRadius(12)
     }
 }
 
@@ -3694,5 +3789,242 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - NEW: Host Profile Section
+struct HostProfileSection: View {
+    @Binding var phoneNumber: String
+    @Binding var instagramHandle: String
+    @Binding var snapchatHandle: String
+    @Binding var idVerificationImage: UIImage?
+    @Binding var showingIdPicker: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Host Profile (Required)")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text("Your contact info helps guests verify you're legit")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            // Phone Number (Required)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Phone Number*")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                TextField("(555) 123-4567", text: $phoneNumber)
+                    .keyboardType(.phonePad)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+            }
+            
+            // Social Media (Optional)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Social Media (Optional)")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                TextField("@instagram", text: $instagramHandle)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+                
+                TextField("@snapchat", text: $snapchatHandle)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding()
+                    .background(Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+            }
+            
+            // ID Verification (Required)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("ID Verification")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("*")
+                        .foregroundColor(.red)
+                        .font(.headline)
+                }
+                
+                Text("Upload student ID or driver's license to verify you're a real host")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Button(action: { showingIdPicker = true }) {
+                    HStack {
+                        Image(systemName: idVerificationImage != nil ? "checkmark.circle.fill" : "camera")
+                        Text(idVerificationImage != nil ? "ID Uploaded" : "Upload ID")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(idVerificationImage != nil ? Color.green.opacity(0.3) : Color(.systemGray6).opacity(0.1))
+                    .cornerRadius(12)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6).opacity(0.05))
+        .cornerRadius(16)
+    }
+}
+
+// MARK: - NEW: Create Button Content (Shows Listing Fee)
+struct CreateButtonContentNew: View {
+    let listingFee: Double
+    let isCreating: Bool
+    let isUploadingImage: Bool
+    
+    var body: some View {
+        HStack {
+            if isUploadingImage {
+                Text("Uploading Image...")
+                    .fontWeight(.semibold)
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(0.8)
+            } else if isCreating {
+                Text("Creating Party...")
+                    .fontWeight(.semibold)
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(0.8)
+            } else {
+                Text("Pay Listing Fee • $\(String(format: "%.0f", listingFee))")
+                    .fontWeight(.semibold)
+            }
+        }
+    }
+}
+
+// MARK: - NEW: Listing Fee Payment Sheet
+struct ListingFeePaymentSheet: View {
+    let listingFee: Double
+    let partyTitle: String
+    let onPaymentComplete: () -> Void
+    
+    @Environment(\.presentationMode) var presentationMode
+    @State private var isProcessing = false
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 12) {
+                    Image(systemName: "creditcard.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.pink)
+                    
+                    Text("Listing Fee")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text("Pay to list your party on Bondfyr")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top)
+                
+                // Fee Breakdown
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Fee Breakdown")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                    
+                    HStack {
+                        Text("Party:")
+                        Spacer()
+                        Text(partyTitle)
+                            .fontWeight(.medium)
+                    }
+                    
+                    HStack {
+                        Text("Listing Fee:")
+                        Spacer()
+                        Text("$\(String(format: "%.0f", listingFee))")
+                            .fontWeight(.bold)
+                            .foregroundColor(.pink)
+                    }
+                    
+                    Text("This covers platform costs and ensures quality listings")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding()
+                .background(Color(.systemGray6).opacity(0.1))
+                .cornerRadius(12)
+                
+                Spacer()
+                
+                // Payment Button
+                Button(action: processPayment) {
+                    HStack {
+                        if isProcessing {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                            Text("Processing...")
+                        } else {
+                            Text("Pay $\(String(format: "%.0f", listingFee)) with Dodo")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .disabled(isProcessing)
+            }
+            .padding()
+            .navigationTitle("Complete Payment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func processPayment() {
+        isProcessing = true
+        
+        // TODO: Integrate with Dodo payments for listing fee
+        // Create a mock afterparty with listing fee amount for payment processing
+        let mockAfterparty = Afterparty(
+            userId: "host",
+            hostHandle: "Host",
+            coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            radius: 1000,
+            startTime: Date(),
+            endTime: Date(),
+            city: "City",
+            locationName: "Location",
+            description: "Listing Fee Payment",
+            address: "Address",
+            googleMapsLink: "",
+            vibeTag: "Listing",
+            title: "Listing Fee for \(partyTitle)",
+            ticketPrice: listingFee,
+            maxGuestCount: 1
+        )
+        
+        // For now, simulate payment processing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            isProcessing = false
+            onPaymentComplete()
+        }
+    }
 }
  

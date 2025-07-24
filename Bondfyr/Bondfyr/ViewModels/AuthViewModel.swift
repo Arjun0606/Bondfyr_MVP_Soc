@@ -330,8 +330,10 @@ class AuthViewModel: ObservableObject {
     
     // Save FCM token to Firestore after successful sign-in
     private func saveFCMTokenAfterSignIn() {
-        // Use the NotificationManager to handle FCM token saving
-        NotificationManager.shared.saveFCMTokenIfNeeded()
+        // Use the new FCM notification manager to handle token saving
+        Task {
+            await FCMNotificationManager.shared.updateUserFCMToken()
+        }
     }
     
     private func resetAppToInitialState() {

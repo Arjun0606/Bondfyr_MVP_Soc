@@ -20,6 +20,7 @@ struct BondfyrApp: App {
     @StateObject var tabSelection = TabSelection()
     @StateObject var eventViewModel = EventViewModel()
     @StateObject var cityManager = CityManager.shared
+    @StateObject var fcmManager = FCMNotificationManager.shared // NEW: FCM push notifications
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     
     // Add state variables to manage navigation

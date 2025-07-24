@@ -28,14 +28,16 @@ struct HostApprovalDashboard: View {
     
     private var filteredRequests: [GuestRequest] {
         let requests = currentParty.guestRequests.filter { request in
-            print("🔍 FILTER: Checking request from \(request.userHandle) with status \(request.approvalStatus)")
+            print("🔍 FILTER: Checking request from \(request.userHandle) with status \(request.approvalStatus), payment: \(request.paymentStatus)")
             switch filterOption {
             case .all:
                 return true
             case .pending:
                 return request.approvalStatus == .pending
             case .approved:
-                return request.approvalStatus == .approved
+                return request.approvalStatus == .approved && request.paymentStatus == .pending
+            case .paymentVerification:
+                return request.approvalStatus == .approved && request.paymentStatus == .proofSubmitted
             case .paid:
                 return request.paymentStatus == .paid
             }
@@ -58,6 +60,7 @@ struct HostApprovalDashboard: View {
         case all = "All"
         case pending = "Pending"
         case approved = "Approved"
+        case paymentVerification = "Payment Verification" // NEW: Payment proof verification
         case paid = "Paid"
         
         var icon: String {
@@ -65,6 +68,7 @@ struct HostApprovalDashboard: View {
             case .all: return "list.bullet"
             case .pending: return "clock.arrow.circlepath"
             case .approved: return "checkmark.circle"
+            case .paymentVerification: return "hourglass"
             case .paid: return "creditcard.fill"
             }
         }
@@ -103,7 +107,9 @@ struct HostApprovalDashboard: View {
                                     isSelected: selectedRequests.contains(request.id),
                                     onSelectionToggle: { toggleSelection(request.id) },
                                     onApprove: { approveRequest(request) },
-                                    onDeny: { denyRequest(request) }
+                                    onDeny: { denyRequest(request) },
+                                    onVerifyPayment: request.paymentStatus == .proofSubmitted ? { verifyPaymentProof(request) } : nil,
+                                    onRejectPayment: request.paymentStatus == .proofSubmitted ? { rejectPaymentProof(request) } : nil
                                 )
                             }
                         }
@@ -225,6 +231,56 @@ struct HostApprovalDashboard: View {
                 
             } catch {
                 print("🔴 HOST: Error denying request: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - NEW: Payment Verification Actions
+    
+    private func verifyPaymentProof(_ request: GuestRequest) {
+        Task {
+            do {
+                try await afterpartyManager.verifyPaymentProof(
+                    afterpartyId: currentParty.id,
+                    guestRequestId: request.id,
+                    approved: true
+                )
+                
+                // Remove from selection if it was selected
+                selectedRequests.remove(request.id)
+                
+                // Trigger success haptic
+                let impact = UIImpactFeedbackGenerator(style: .heavy)
+                impact.impactOccurred()
+                
+                print("🟢 HOST: Payment verified for \(request.userHandle)")
+                
+            } catch {
+                print("🔴 HOST: Error verifying payment: \(error)")
+            }
+        }
+    }
+    
+    private func rejectPaymentProof(_ request: GuestRequest) {
+        Task {
+            do {
+                try await afterpartyManager.verifyPaymentProof(
+                    afterpartyId: currentParty.id,
+                    guestRequestId: request.id,
+                    approved: false
+                )
+                
+                // Remove from selection if it was selected
+                selectedRequests.remove(request.id)
+                
+                // Trigger warning haptic
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+                
+                print("🔴 HOST: Payment proof rejected for \(request.userHandle)")
+                
+            } catch {
+                print("🔴 HOST: Error rejecting payment proof: \(error)")
             }
         }
     }
@@ -463,9 +519,12 @@ struct GuestRequestCard: View {
     let onSelectionToggle: () -> Void
     let onApprove: () -> Void
     let onDeny: () -> Void
+    let onVerifyPayment: (() -> Void)? // NEW: Verify payment proof
+    let onRejectPayment: (() -> Void)? // NEW: Reject payment proof
     
     @State private var isExpanded = false
     @State private var showingProfile = false
+    @State private var showingPaymentProof = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -487,11 +546,16 @@ struct GuestRequestCard: View {
                         
                         Spacer()
                         
-                                                    ApprovalStatusBadge(status: request.approvalStatus)
+                        ApprovalStatusBadge(status: request.approvalStatus)
                         
+                        // Payment Status Indicators
                         if request.paymentStatus == .paid {
                             Image(systemName: "creditcard.fill")
                                 .foregroundColor(.green)
+                                .font(.caption)
+                        } else if request.paymentStatus == .proofSubmitted {
+                            Image(systemName: "hourglass")
+                                .foregroundColor(.yellow)
                                 .font(.caption)
                         }
                     }
@@ -512,6 +576,37 @@ struct GuestRequestCard: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .padding(.top, 2)
+                    
+                    // Payment Proof Section (NEW)
+                    if request.paymentStatus == .proofSubmitted,
+                       let proofURL = request.paymentProofImageURL {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Payment Proof Submitted")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.blue)
+                                .padding(.top, 8)
+                            
+                            Button(action: { showingPaymentProof = true }) {
+                                HStack {
+                                    Image(systemName: "photo")
+                                    Text("View Payment Screenshot")
+                                }
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .cornerRadius(8)
+                            }
+                            
+                            if let submittedAt = request.proofSubmittedAt {
+                                Text("Submitted \(timeAgoString(from: submittedAt))")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                 }
                 
                 // Actions
@@ -537,6 +632,39 @@ struct GuestRequestCard: View {
                                 .clipShape(Circle())
                         }
                     }
+                } else if request.paymentStatus == .proofSubmitted,
+                          let verifyAction = onVerifyPayment,
+                          let rejectAction = onRejectPayment {
+                    // NEW: Payment Verification Actions
+                    VStack(spacing: 8) {
+                        Button(action: verifyAction) {
+                            VStack(spacing: 2) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.title3)
+                                Text("Verify")
+                                    .font(.caption2)
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(width: 50, height: 50)
+                            .background(.green)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        
+                        Button(action: rejectAction) {
+                            VStack(spacing: 2) {
+                                Image(systemName: "xmark.circle")
+                                    .font(.title3)
+                                Text("Reject")
+                                    .font(.caption2)
+                            }
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(width: 50, height: 50)
+                            .background(.red)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
                 }
             }
             .padding(16)
@@ -554,6 +682,11 @@ struct GuestRequestCard: View {
                         isExpanded.toggle()
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showingPaymentProof) {
+            if let proofURL = request.paymentProofImageURL {
+                PaymentProofSheet(imageURL: proofURL, guestHandle: request.userHandle)
             }
         }
     }
@@ -709,6 +842,7 @@ struct EmptyStateView: View {
         case .pending: return "clock.arrow.circlepath"
         case .approved: return "checkmark.circle"
         case .paid: return "creditcard"
+        case .paymentVerification: return "magnifyingglass.circle"
         }
     }
     
@@ -718,6 +852,7 @@ struct EmptyStateView: View {
         case .pending: return "No Pending Requests"
         case .approved: return "No Approved Guests"
         case .paid: return "No Paid Guests"
+        case .paymentVerification: return "No Payment Proofs"
         }
     }
     
@@ -727,6 +862,7 @@ struct EmptyStateView: View {
         case .pending: return "All caught up! No requests waiting for your approval."
         case .approved: return "No guests have been approved yet."
         case .paid: return "No guests have completed payment yet."
+        case .paymentVerification: return "No payment proofs waiting for verification."
         }
     }
 }
@@ -758,4 +894,43 @@ struct PartyAnalyticsSheet: View {
             )
         }
     }
-} 
+}
+
+// MARK: - Payment Proof Sheet
+struct PaymentProofSheet: View {
+    let imageURL: String
+    let guestHandle: String
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                AsyncImage(url: URL(string: imageURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                } placeholder: {
+                    VStack {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Loading payment proof...")
+                            .foregroundColor(.white)
+                            .padding(.top)
+                    }
+                }
+            }
+            .navigationTitle("\(guestHandle)'s Payment Proof")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(
+                leading: Button("Done") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            )
+            .preferredColorScheme(.dark)
+        }
+    }
+}

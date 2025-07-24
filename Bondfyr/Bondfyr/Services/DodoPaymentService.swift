@@ -15,8 +15,8 @@ class DodoPaymentService: ObservableObject {
     private init() {}
     
     // MARK: - Configuration
-    private let dodoAPIKey: String = "V5NKMaH4W8-DkX1A.oj-tjNdW2_L-CsM-xN2ItGSJFjWqPkqDbPuQ3usa9ykCEwNe"
-    private let dodoWebhookSecret: String = "whsec_SkxMTLLPZc7xMtkZJNckk2xa"
+    private let dodoAPIKey: String = "epFmjxZK0Ka34YDf.vI_rvcu9m-o5PcTau3rk3Q5VkxeKUVJRt8Diteu8WrCPUiB4"
+    private let dodoWebhookSecret: String = "whsec_Y5nFJYOkWXIggi6afYnFSbcryFHthX1E"
     private let dodoEnvironment: DodoEnvironment = .dev
     
     private var baseURL: String {
@@ -53,11 +53,11 @@ class DodoPaymentService: ObservableObject {
             
             // Store payment details
             await MainActor.run {
-                self.paymentURL = paymentIntent.url
+            self.paymentURL = paymentIntent.url
             }
             
             // Open Safari for payment
-            if let url = URL(string: paymentIntent.url) {
+                if let url = URL(string: paymentIntent.url) {
                 await UIApplication.shared.open(url)
             }
             
@@ -120,9 +120,9 @@ class DodoPaymentService: ObservableObject {
         do {
             // Complete party membership
             let afterpartyManager = AfterpartyManager.shared
-            try await afterpartyManager.completePartyMembershipAfterPayment(
-                afterpartyId: afterparty.id,
-                userId: userId,
+                try await afterpartyManager.completePartyMembershipAfterPayment(
+                    afterpartyId: afterparty.id,
+                    userId: userId,
                 paymentIntentId: paymentId
             )
             
@@ -354,7 +354,7 @@ class DodoPaymentService: ObservableObject {
             "billing": [
                 "city": "San Francisco",
                 "country": "US",
-                "state": "CA",
+                "state": "CA", 
                 "street": "123 Main St",
                 "zipcode": "94102"
             ],

@@ -16,6 +16,10 @@ struct RequestToJoinSheet: View {
     @State private var requestSubmitted = false
     @State private var refreshTimer: Timer?
     
+    // NEW: Image verification for guest requests
+    @State private var verificationImage: UIImage?
+    @State private var showingImagePicker = false
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -61,6 +65,11 @@ struct RequestToJoinSheet: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .sheet(isPresented: $showingImagePicker) {
+            ImagePicker(source: .photoLibrary) { image in
+                verificationImage = image
+            }
         }
         .onAppear {
             checkUserStatus()
@@ -201,6 +210,39 @@ struct RequestToJoinSheet: View {
                     .padding(.top, 4)
             }
             
+            // Image Verification Section (Host Dependent)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Verification Photo (Optional)")
+                    .foregroundColor(.white)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Text("If the host mentions ID requirement in the party description, upload your ID here")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Button(action: { showingImagePicker = true }) {
+                    HStack {
+                        Image(systemName: verificationImage != nil ? "checkmark.circle.fill" : "camera")
+                            .foregroundColor(verificationImage != nil ? .green : .blue)
+                        Text(verificationImage != nil ? "Photo Uploaded" : "Add Verification Photo")
+                            .foregroundColor(.white)
+                        Spacer()
+                        if verificationImage != nil {
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                }
+            }
+            
             // Flow Explanation
             VStack(spacing: 8) {
                 HStack {
@@ -215,10 +257,10 @@ struct RequestToJoinSheet: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     FlowStepView(number: "1", text: "Submit request to join party")
-                    FlowStepView(number: "2", text: "Host reviews your request")
-                    FlowStepView(number: "3", text: "If approved: pay via Dodo Payments")
-                    FlowStepView(number: "4", text: "Party details & address revealed")
-                    FlowStepView(number: "5", text: "Show up and party! 🎉")
+                    FlowStepView(number: "2", text: "Host reviews your request & profile")
+                    FlowStepView(number: "3", text: "If approved: pay host directly (Venmo/Zelle)")
+                    FlowStepView(number: "4", text: "Upload payment proof to confirm")
+                    FlowStepView(number: "5", text: "Get party details & join the fun! 🎉")
                 }
             }
             .padding()

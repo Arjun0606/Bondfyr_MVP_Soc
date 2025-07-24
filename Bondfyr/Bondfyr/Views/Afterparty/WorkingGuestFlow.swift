@@ -17,6 +17,7 @@ struct WorkingGuestFlow: View {
         case notRequested
         case pending
         case approved
+        case proofSubmitted // NEW: Payment proof uploaded, awaiting host verification
         case paid
         case denied
     }
@@ -51,7 +52,7 @@ struct WorkingGuestFlow: View {
             }
         }
         .sheet(isPresented: $showingPaymentSheet) {
-            DodoPaymentSheet(afterparty: afterparty) {
+            P2PPaymentSheet(afterparty: afterparty) {
                 checkGuestStatus()
                 sendHostPaymentNotification()
             }
@@ -71,13 +72,10 @@ struct WorkingGuestFlow: View {
                 guestStatus = .pending
             case (.approved, .pending):
                 guestStatus = .approved
-                // CRITICAL: Auto-show payment for approved guests
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    if !showingPaymentSheet {
-                        showingPaymentSheet = true
-                        sendGuestApprovalNotification()
-                    }
-                }
+                // Guest can choose when to pay - no auto-trigger
+            case (.approved, .proofSubmitted):
+                guestStatus = .proofSubmitted
+                // Payment proof submitted, waiting for host verification
             case (.approved, .paid):
                 guestStatus = .paid
             case (.denied, _):
@@ -111,6 +109,8 @@ struct WorkingGuestFlow: View {
             return "Request Pending..."
         case .approved:
             return "Complete Payment ($\(Int(afterparty.ticketPrice)))"
+        case .proofSubmitted:
+            return "Payment Pending Verification..."
         case .paid:
             return "You're Going! 🎉"
         case .denied:
@@ -126,6 +126,8 @@ struct WorkingGuestFlow: View {
             return "clock"
         case .approved:
             return "creditcard"
+        case .proofSubmitted:
+            return "hourglass"
         case .paid:
             return "checkmark.circle"
         case .denied:
@@ -141,6 +143,8 @@ struct WorkingGuestFlow: View {
             return .orange
         case .approved:
             return .green
+        case .proofSubmitted:
+            return .yellow
         case .paid:
             return .purple
         case .denied:

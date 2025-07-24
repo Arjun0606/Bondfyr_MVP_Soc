@@ -282,8 +282,7 @@ struct DodoPaymentWebView: UIViewControllerRepresentable {
             approvalType: .manual,
             ageRestriction: nil,
             maxMaleRatio: 1.0,
-            legalDisclaimerAccepted: true,
-            venmoHandle: nil
+            legalDisclaimerAccepted: true
         ),
         onCompletion: {}
     )

@@ -17,6 +17,7 @@ struct HostDashboardView: View {
     @State private var showingCreateSheet = false
     @State private var selectedParty: Afterparty? = nil
     @State private var showingPartyManagement = false
+    @State private var showingEarningsDashboard = false
     @State private var isLoading = false
     @State private var error: String? = nil
     
@@ -34,7 +35,7 @@ struct HostDashboardView: View {
                         }
                     } else {
                         HostStatsSection(parties: hostParties)
-                        QuickActionsSection(showingCreateSheet: $showingCreateSheet, parties: hostParties)
+                        QuickActionsSection(showingCreateSheet: $showingCreateSheet, showingEarningsDashboard: $showingEarningsDashboard, parties: hostParties)
                         PartiesListSection(
                             parties: hostParties,
                             onManageParty: { party in
@@ -75,6 +76,10 @@ struct HostDashboardView: View {
             if let party = selectedParty {
                 PartyManagementSheet(party: party)
             }
+        }
+        .sheet(isPresented: $showingEarningsDashboard) {
+            HostEarningsDashboardView()
+                .environmentObject(authViewModel)
         }
         .task {
             await loadHostParties()
@@ -226,6 +231,7 @@ struct StatItemView: View {
 // MARK: - Quick Actions Section
 struct QuickActionsSection: View {
     @Binding var showingCreateSheet: Bool
+    @Binding var showingEarningsDashboard: Bool
     let parties: [Afterparty]
     
     private var hasActiveParty: Bool {
@@ -275,10 +281,36 @@ struct QuickActionsSection: View {
                     ) {
                         // TODO: Show tips
                     }
+                    
+                    ActionCardView(
+                        title: "Bank Setup",
+                        subtitle: "Configure payouts",
+                        icon: "building.columns.fill",
+                        color: .blue,
+                        isDisabled: false
+                    ) {
+                        openDodoMerchantOnboarding()
+                    }
+                    
+                    ActionCardView(
+                        title: "Your Earnings",
+                        subtitle: "View payments & payouts",
+                        icon: "dollarsign.circle.fill",
+                        color: .green,
+                        isDisabled: false
+                    ) {
+                        showingEarningsDashboard = true
+                    }
                 }
                 .padding(.horizontal, 1)
             }
         }
+    }
+    
+    private func openDodoMerchantOnboarding() {
+        // Open Dodo's hosted merchant onboarding flow
+        guard let url = URL(string: "https://dashboard.dodopayments.com/onboarding") else { return }
+        UIApplication.shared.open(url)
     }
 }
 

@@ -100,6 +100,7 @@ struct FixedActionButtonsView: View {
         case requestToJoin
         case pending
         case approved // NEW: Approved but payment pending
+        case proofSubmitted // NEW: Payment proof submitted, awaiting verification
         case going
         case denied
         case soldOut
@@ -107,7 +108,7 @@ struct FixedActionButtonsView: View {
         var isEnabled: Bool {
             switch self {
             case .requestToJoin, .approved: return true
-            case .pending, .going, .denied, .soldOut: return false
+            case .pending, .proofSubmitted, .going, .denied, .soldOut: return false
             }
         }
     }
@@ -138,9 +139,15 @@ struct FixedActionButtonsView: View {
                 print("🔍 FIXED: Request pending - state: pending")
                 return .pending
             case .approved:
-                // CRITICAL FIX: Check if they're in activeUsers (paid) or not
-                if afterparty.activeUsers.contains(userId) {
+                // Check payment status to determine exact state
+                if request.paymentStatus == .paid {
                     print("🔍 FIXED: Approved and paid - state: going")
+                    return .going
+                } else if request.paymentStatus == .proofSubmitted {
+                    print("🔍 FIXED: Approved with proof submitted - state: proofSubmitted")
+                    return .proofSubmitted
+                } else if afterparty.activeUsers.contains(userId) {
+                    print("🔍 FIXED: Approved and in activeUsers - state: going")
                     return .going
                 } else {
                     print("🔍 FIXED: Approved but not paid - state: approved")
@@ -161,13 +168,16 @@ struct FixedActionButtonsView: View {
         switch state {
         case .requestToJoin:
             Image(systemName: "person.badge.plus")
-            Text("Request to Join ($\(Int(afterparty.ticketPrice)))")
+            Text("Request to Join")
         case .pending:
             Image(systemName: "clock.fill")
             Text("Pending")
         case .approved:
             Image(systemName: "creditcard.fill")
             Text("Complete Payment ($\(Int(afterparty.ticketPrice)))")
+        case .proofSubmitted:
+            Image(systemName: "hourglass")
+            Text("Payment Pending Verification...")
         case .going:
             Image(systemName: "checkmark.circle.fill")
             Text("Going")
@@ -188,6 +198,8 @@ struct FixedActionButtonsView: View {
             return AnyView(Color.orange)
         case .approved:
             return AnyView(Color.blue) // Blue for payment required
+        case .proofSubmitted:
+            return AnyView(Color.yellow) // Yellow for awaiting verification
         case .going:
             return AnyView(Color.green)
         case .denied, .soldOut:

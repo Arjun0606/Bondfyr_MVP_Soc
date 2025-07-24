@@ -518,8 +518,7 @@ struct PartyChatView_Previews: PreviewProvider {
             vibeTag: "chill",
             title: "Preview Party",
             ticketPrice: 10.0,
-            maxGuestCount: 50,
-            venmoHandle: "@preview"
+            maxGuestCount: 50
         ))
     }
 } 
