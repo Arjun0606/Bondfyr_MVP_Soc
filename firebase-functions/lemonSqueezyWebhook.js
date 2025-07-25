@@ -45,32 +45,41 @@ async function handleOrderCreated(webhookData) {
         const orderData = webhookData.data;
         const attributes = orderData.attributes;
         
-        // Debug: Log the entire attributes to see where custom data is stored
-        console.log('🔍 FULL ATTRIBUTES:', JSON.stringify(attributes, null, 2));
+        // Debug: Log the entire webhook payload to find custom data
+        console.log('🔍 FULL WEBHOOK BODY:', JSON.stringify(webhookData, null, 2));
         
         // Get order/checkout ID to look up mapping
         const orderId = orderData.id;
         console.log('🔍 ORDER ID:', orderId);
         
-        // Look up checkout mapping in Firebase
-        const db = admin.firestore();
-        const mappingDoc = await db.collection('checkoutMappings').doc(orderId).get();
+        // CRITICAL FIX: Use custom data from checkout_data first (most reliable)
+        const checkoutData = attributes.checkout_data || {};
+        const custom = checkoutData.custom || {};
         
-        let afterpartyId, userId;
+        let afterpartyId = custom.afterpartyId;
+        let userId = custom.userId;
         
-        if (mappingDoc.exists) {
-            const mappingData = mappingDoc.data();
-            console.log('✅ FOUND CHECKOUT MAPPING:', JSON.stringify(mappingData, null, 2));
-            
-            afterpartyId = mappingData.afterpartyId;
-            userId = mappingData.userId;
+        console.log('🔍 CUSTOM DATA FROM WEBHOOK:', JSON.stringify(custom, null, 2));
+        
+        // If custom data exists, use it directly (most reliable)
+        if (afterpartyId && userId) {
+            console.log('✅ FOUND PARTY DATA IN CUSTOM FIELDS');
         } else {
-            console.log('❌ NO CHECKOUT MAPPING FOUND FOR:', orderId);
-            // Fallback: try to extract from checkout_data (old method)
-            const checkoutData = attributes.checkout_data || {};
-            const custom = checkoutData.custom || {};
-            afterpartyId = custom.afterpartyId;
-            userId = custom.userId;
+            console.log('⚠️ No custom data, trying checkout mapping lookup...');
+            
+            // Fallback: Look up checkout mapping in Firebase
+            const db = admin.firestore();
+            const mappingDoc = await db.collection('checkoutMappings').doc(orderId).get();
+            
+            if (mappingDoc.exists) {
+                const mappingData = mappingDoc.data();
+                console.log('✅ FOUND CHECKOUT MAPPING:', JSON.stringify(mappingData, null, 2));
+                
+                afterpartyId = mappingData.afterpartyId;
+                userId = mappingData.userId;
+            } else {
+                console.log('❌ NO CHECKOUT MAPPING FOUND FOR:', orderId);
+            }
         }
         
         const checkoutId = orderId;

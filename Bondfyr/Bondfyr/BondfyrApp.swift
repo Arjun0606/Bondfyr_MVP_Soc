@@ -270,6 +270,55 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
     
+    // MARK: - URL Handling for Payment Success
+    
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        // Handle payment success URLs
+        if url.scheme == "bondfyr" && url.host == "payment-success" {
+            handlePaymentSuccess(url: url)
+            return true
+        }
+        return false
+    }
+    
+    private func handlePaymentSuccess(url: URL) {
+        print("🍋 PAYMENT SUCCESS URL RECEIVED: \(url)")
+        
+        // Extract parameters from URL
+                    if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let queryItems = components.queryItems {
+                
+                var afterpartyId: String?
+                var userId: String?
+                
+                for item in queryItems {
+                    switch item.name {
+                    case "afterpartyId":
+                        afterpartyId = item.value
+                    case "userId":
+                        userId = item.value
+                    default:
+                        break
+                    }
+                }
+                
+                print("🍋 PAYMENT SUCCESS - Party: \(afterpartyId ?? "unknown"), User: \(userId ?? "unknown")")
+                
+                // Show success message to user
+                DispatchQueue.main.async {
+                    // Post notification to show payment success
+                    NotificationCenter.default.post(
+                        name: Notification.Name("PaymentSuccessReceived"),
+                        object: nil,
+                        userInfo: [
+                            "afterpartyId": afterpartyId ?? "",
+                            "userId": userId ?? ""
+                        ]
+                    )
+                }
+        }
+    }
+    
     // Handle device token registration
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         // Set the APNS token in Firebase Messaging FIRST

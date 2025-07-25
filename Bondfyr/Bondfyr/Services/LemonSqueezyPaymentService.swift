@@ -100,9 +100,12 @@ class LemonSqueezyPaymentService: ObservableObject {
             "status": "pending"
         ]
         
+        // Store mapping with checkout ID as document ID
         try await db.collection("checkoutMappings").document(checkoutId).setData(mappingData)
         print("✅ LEMONSQUEEZY: Stored checkout mapping for \(checkoutId)")
     }
+    
+
     
     // MARK: - LemonSqueezy API Integration
     
@@ -149,7 +152,9 @@ class LemonSqueezyPaymentService: ObservableObject {
                                                                    "product_options": [
                         "name": "Bondfyr Listing Fee - \(afterparty.title)",
                         "description": "Listing fee for hosting party: \(afterparty.title)",
-                        "media": []
+                        "media": [],
+                        "receipt_button_text": "Open Bondfyr App",
+                        "receipt_thank_you_note": "🎉 Payment successful! Your party is being created. Open the Bondfyr app to see your live party!"
                     ],
                     "custom_price": amountInCents,
                     "checkout_options": [
