@@ -83,6 +83,7 @@ async function handlePaymentSucceeded(event) {
     // Extract metadata
     const afterpartyId = metadata.afterpartyId;
     const userId = metadata.userId;
+    const hostId = metadata.hostId;
     const paymentId = payment.payment_id;
     
     if (!afterpartyId || !userId) {
@@ -93,13 +94,25 @@ async function handlePaymentSucceeded(event) {
     console.log('💳 Payment details:', {
         afterpartyId,
         userId,
+        hostId,
         paymentId,
         amount: payment.amount,
         currency: payment.currency
     });
     
+    // Check if this is a listing fee payment (host creating party) or guest payment
+    const isListingFeePayment = userId === hostId;
+    
+    if (isListingFeePayment) {
+        console.log('🏗️ This is a listing fee payment - creating new party');
+        await handleListingFeePayment(metadata, paymentId, payment);
+        return;
+    }
+    
+    console.log('👥 This is a guest payment - updating existing party');
+    
     try {
-        // Get the afterparty document
+        // Get the afterparty document (for guest payments)
         const afterpartyRef = db.collection('afterparties').doc(afterpartyId);
         const afterpartyDoc = await afterpartyRef.get();
         
@@ -219,6 +232,100 @@ async function handleRefundSucceeded(event) {
     } catch (error) {
         console.error('❌ Error processing refund:', error);
         throw error;
+    }
+}
+
+// Handle listing fee payment (create new party)
+async function handleListingFeePayment(metadata, paymentId, payment) {
+    console.log('🏗️ Creating party after successful listing fee payment');
+    
+    try {
+        // Get pending party data from temporary storage
+        const pendingRef = db.collection('pendingParties').doc(metadata.afterpartyId);
+        const pendingDoc = await pendingRef.get();
+        
+        if (!pendingDoc.exists) {
+            console.error('❌ Pending party data not found:', metadata.afterpartyId);
+            return;
+        }
+        
+        const pendingData = pendingDoc.data();
+        console.log('📋 Retrieved pending party data:', pendingData);
+        
+        // Create the actual party document
+        const partyData = {
+            ...pendingData,
+            id: metadata.afterpartyId,
+            paymentId: paymentId,
+            listingFeePaid: true,
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'active',
+            activeUsers: [metadata.userId], // Host is automatically active
+            guestRequests: [],
+            // Add payment metadata
+            listingFeeAmount: payment.amount,
+            listingFeeCurrency: payment.currency
+        };
+        
+        // Create the party in the main collection
+        await db.collection('afterparties').doc(metadata.afterpartyId).set(partyData);
+        
+        // Clean up pending data
+        await pendingRef.delete();
+        
+        console.log('✅ Party created successfully:', metadata.afterpartyId);
+        
+        // Send notification to host
+        await sendPartyCreatedNotification(metadata.userId, pendingData.title);
+        
+    } catch (error) {
+        console.error('❌ Error creating party from listing fee payment:', error);
+        throw error;
+    }
+}
+
+// Send party created notification
+async function sendPartyCreatedNotification(userId, partyTitle) {
+    try {
+        console.log('🔔 Sending party created notification to:', userId);
+        
+        // Get user's FCM token
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
+        
+        if (!userDoc.exists) {
+            console.log('⚠️ User not found for notification:', userId);
+            return;
+        }
+        
+        const userData = userDoc.data();
+        const fcmToken = userData.fcmToken;
+        
+        if (!fcmToken) {
+            console.log('⚠️ No FCM token found for user:', userId);
+            return;
+        }
+        
+        // Send notification
+        const message = {
+            token: fcmToken,
+            notification: {
+                title: '🎉 Party Created!',
+                body: `Your party "${partyTitle}" is now live and accepting guests!`
+            },
+            data: {
+                type: 'party_created',
+                partyId: metadata.afterpartyId
+            }
+        };
+        
+        await admin.messaging().send(message);
+        console.log('✅ Party created notification sent successfully');
+        
+    } catch (error) {
+        console.error('❌ Error sending party created notification:', error);
     }
 }
 

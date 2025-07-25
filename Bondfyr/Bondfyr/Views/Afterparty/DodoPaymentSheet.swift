@@ -66,7 +66,7 @@ struct DodoPaymentSheet: View {
                         }
                         .foregroundColor(.white)
                         
-                        Text("Processed securely by Dodo Payments")
+                        Text("Processed securely by LemonSqueezy")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -150,6 +150,11 @@ struct DodoPaymentSheet: View {
         .preferredColorScheme(.dark)
     }
     
+    private func extractSessionId(from result: PaymentResult) -> String? {
+        // Extract session ID from payment result for tracking
+        return result.paymentId
+    }
+    
     private func initiatePayment() {
         print("🚨🚨🚨 PAYMENT BUTTON CLICKED!")
         print("🚨🚨🚨 INITIATING PAYMENT PROCESS!")
@@ -169,15 +174,15 @@ struct DodoPaymentSheet: View {
             defer { isProcessingPayment = false }
             
             do {
-                print("🚨🚨🚨 ABOUT TO CALL DodoPaymentService...")
-                print("🚨🚨🚨 User ID: \(currentUser.uid)")
-                print("🚨🚨🚨 User Name: \(currentUser.name)")
-                print("🚨🚨🚨 Party ID: \(afterparty.id)")
-                print("🚨🚨🚨 DodoPaymentService.shared exists: \(DodoPaymentService.shared)")
+                print("🍋 ABOUT TO CALL LemonSqueezyPaymentService...")
+                print("🍋 User ID: \(currentUser.uid)")
+                print("🍋 User Name: \(currentUser.name)")
+                print("🍋 Party ID: \(afterparty.id)")
+                print("🍋 LemonSqueezyPaymentService.shared exists: \(LemonSqueezyPaymentService.shared)")
                 
-                // Use clean Dodo payment service
-                print("🚨🚨🚨 CALLING processPayment NOW...")
-                let result = try await DodoPaymentService.shared.processPayment(
+                // Use clean LemonSqueezy payment service
+                print("🍋 CALLING processPayment NOW...")
+                let result = try await LemonSqueezyPaymentService.shared.processPayment(
                     afterparty: afterparty,
                     userId: currentUser.uid,
                     userName: currentUser.name,
@@ -189,14 +194,15 @@ struct DodoPaymentSheet: View {
                 print("🚨🚨🚨 Safari opened for payment, monitoring for completion...")
                 
                 await MainActor.run {
-                    errorMessage = "🌐 Payment opened in Safari. Complete payment and return to app."
-                    showingError = true
-                    
-                    // Dismiss after showing message - payment completion will be handled by monitoring
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        presentationMode.wrappedValue.dismiss()
-                        onCompletion()
+                    // Store the payment intent ID for webhook tracking
+                    if let sessionId = extractSessionId(from: result) {
+                        paymentIntentId = sessionId
+                        print("🎯 PAYMENT: Stored intent ID \(sessionId) for webhook tracking")
                     }
+                    
+                    // Just dismiss the sheet - party creation will happen via LemonSqueezy webhook
+                    presentationMode.wrappedValue.dismiss()
+                    print("💡 PAYMENT: Payment initiated - waiting for LemonSqueezy webhook confirmation")
                 }
                 
             } catch {
@@ -208,8 +214,8 @@ struct DodoPaymentSheet: View {
                     print("🔴 PAYMENT SHEET: Error initiating payment: \(error)")
                     print("🔴 PAYMENT SHEET: Error type: \(type(of: error))")
                     print("🔴 PAYMENT SHEET: Error description: \(error.localizedDescription)")
-                    if let dodoError = error as? DodoPaymentError {
-                        print("🔴 PAYMENT SHEET: Dodo error: \(dodoError)")
+                    if let lemonSqueezyError = error as? LemonSqueezyError {
+                        print("🔴 PAYMENT SHEET: LemonSqueezy error: \(lemonSqueezyError)")
                     }
                     errorMessage = "Payment error: \(error.localizedDescription)"
                     showingError = true

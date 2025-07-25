@@ -27,6 +27,10 @@ exports.sendPushNotification = sendPushNotification;
 exports.sendPushNotificationHTTP = sendPushNotificationHTTP;
 exports.testFCMNotification = testFCMNotification;
 
+// Export LemonSqueezy webhook function
+const { lemonSqueezyWebhook } = require('./lemonSqueezyWebhook');
+exports.lemonSqueezyWebhook = lemonSqueezyWebhook;
+
 const GOOGLE_PLACES_API_KEY = functions.config().google.places_key; // Set this in Firebase env
 const LEMONSQUEEZY_WEBHOOK_SECRET = functions.config().lemonsqueezy?.webhook_secret; // Set webhook secret
 

@@ -17,7 +17,7 @@ class DodoPaymentService: ObservableObject {
     // MARK: - Configuration
     private let dodoAPIKey: String = "epFmjxZK0Ka34YDf.vI_rvcu9m-o5PcTau3rk3Q5VkxeKUVJRt8Diteu8WrCPUiB4"
     private let dodoWebhookSecret: String = "whsec_Y5nFJYOkWXIggi6afYnFSbcryFHthX1E"
-    private let dodoEnvironment: DodoEnvironment = .dev
+    private let dodoEnvironment: DodoEnvironment = .production
     
     private var baseURL: String {
         return dodoEnvironment.baseURL
@@ -347,10 +347,13 @@ class DodoPaymentService: ObservableObject {
         let platformFee = afterparty.ticketPrice * 0.20
         let hostEarnings = afterparty.ticketPrice * 0.80
         
+        // Round up listing fee to avoid decimal issues (only affects small amounts)
+        let roundedAmount = ceil(afterparty.ticketPrice)
+        
         let paymentData: [String: Any] = [
             "payment_link": true,
-            "amount": afterparty.ticketPrice,
             "currency": "USD",
+            "description": "Listing Fee - \(afterparty.title)",
             "billing": [
                 "city": "San Francisco",
                 "country": "US",
@@ -363,8 +366,9 @@ class DodoPaymentService: ObservableObject {
                 "name": userName
             ],
             "product_cart": [[
-                "product_id": "pdt_mPFnouIRiaQerAPmYz1gY",
-                "quantity": 1
+                "product_id": "pdt_I3q25hrMAAf6yeKkKb1vD",
+                "quantity": 1,
+                "amount": Int(roundedAmount)
             ]],
             "return_url": "bondfyr://payment-success?afterpartyId=\(afterparty.id)&userId=\(userId)",
             "metadata": [
@@ -378,6 +382,10 @@ class DodoPaymentService: ObservableObject {
             ]
         ]
         
+        // Log request details for debugging
+        print("🔍 DODO API Request URL: \(baseURL)/payments")
+        print("🔍 DODO API Request Data: \(paymentData)")
+        
         var request = URLRequest(url: URL(string: "\(baseURL)/payments")!)
         request.httpMethod = "POST"
         request.setValue("Bearer \(dodoAPIKey)", forHTTPHeaderField: "Authorization")
@@ -386,9 +394,29 @@ class DodoPaymentService: ObservableObject {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-            throw DodoPaymentError.apiError("Failed to create payment intent")
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DodoPaymentError.apiError("Invalid HTTP response")
+        }
+        
+        // Log the actual response for debugging
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("🔍 DODO API Response (\(httpResponse.statusCode)): \(responseString)")
+        }
+        
+
+        
+        guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+            // Get the actual error message from Dodo
+            let errorMessage: String
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = json["message"] as? String ?? json["error"] as? String {
+                errorMessage = message
+            } else if let responseString = String(data: data, encoding: .utf8) {
+                errorMessage = "HTTP \(httpResponse.statusCode): \(responseString)"
+            } else {
+                errorMessage = "HTTP \(httpResponse.statusCode): Unknown error"
+            }
+            throw DodoPaymentError.apiError(errorMessage)
         }
         
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -399,6 +427,7 @@ class DodoPaymentService: ObservableObject {
         
         return DodoPaymentIntent(url: paymentLink, sessionId: paymentId)
     }
+
 }
 
 // MARK: - Models

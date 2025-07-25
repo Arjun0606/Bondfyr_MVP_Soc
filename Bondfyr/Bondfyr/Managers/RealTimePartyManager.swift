@@ -261,6 +261,7 @@ class RealTimePartyManager: ObservableObject {
         // For now, we'll rely on Firestore's built-in error handling
     }
     
+
     // MARK: - Utility Methods
     func getParty(_ partyId: String) -> Afterparty? {
         return parties[partyId]

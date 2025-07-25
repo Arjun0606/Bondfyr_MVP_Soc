@@ -117,6 +117,23 @@ class FCMNotificationManager: NSObject, ObservableObject {
         }
     }
     
+    // MARK: - General Notifications
+    
+    /// Send a push notification to any user
+    func sendPushNotification(
+        to userId: String,
+        title: String,
+        body: String,
+        data: [String: Any] = [:]
+    ) async {
+        await sendNotificationToUser(
+            userId: userId,
+            title: title,
+            body: body,
+            data: data
+        )
+    }
+    
     // MARK: - Host Notifications
     
     /// Notify HOST when guest submits a request

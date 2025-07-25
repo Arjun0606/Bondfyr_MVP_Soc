@@ -2157,17 +2157,16 @@ struct CreateAfterpartyView: View {
                     idVerificationImage = image
                 }
             }
-            .sheet(isPresented: $showingListingFeePayment) {
-                ListingFeePaymentSheet(
-                    listingFee: calculatedListingFee,
-                    partyTitle: title,
-                    onPaymentComplete: {
-                        listingFeePaid = true
-                        showingListingFeePayment = false
-                        // Now create the party after payment
-                        createAfterpartyAfterPayment()
-                    }
-                )
+                    .sheet(isPresented: $showingListingFeePayment) {
+            DodoPaymentSheet(
+                afterparty: createMockAfterpartyForListingFee(),
+                onCompletion: {
+                    listingFeePaid = true
+                    showingListingFeePayment = false
+                    // Now create the party after payment
+                    createAfterpartyAfterPayment()
+                }
+            )
             }
         }
     }
@@ -2301,6 +2300,59 @@ struct CreateAfterpartyView: View {
         showingListingFeePayment = true
     }
     
+    private func createMockAfterpartyForListingFee() -> Afterparty {
+        // Use the stored party ID from pending data to ensure webhook can find the data
+        let partyId = pendingPartyData?["partyId"] as? String ?? UUID().uuidString
+        
+        // Create a mock afterparty for Dodo payment processing (listing fee)
+        return Afterparty(
+            id: partyId, // Pass the party ID during initialization
+            userId: authViewModel.currentUser?.uid ?? "",
+            hostHandle: authViewModel.currentUser?.name ?? "Host",
+            coordinate: currentLocation ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            radius: 1000,
+            startTime: Date(),
+            endTime: Date().addingTimeInterval(3600),
+            city: currentCity,
+            locationName: "Listing Fee Payment",
+            description: "Listing fee for \(title)",
+            address: "Platform Fee",
+            googleMapsLink: "",
+            vibeTag: "Platform",
+            title: "Listing Fee - \(title)",
+            ticketPrice: calculatedListingFee,
+            maxGuestCount: 1,
+            phoneNumber: phoneNumber,
+            instagramHandle: instagramHandle,
+            snapchatHandle: snapchatHandle,
+            venmoHandle: venmoHandle,
+            zelleInfo: zelleInfo,
+            cashAppHandle: cashAppHandle,
+            acceptsApplePay: acceptsApplePay
+        )
+    }
+    
+    private func resetForm() {
+        title = ""
+        description = ""
+        address = ""
+        googleMapsLink = ""
+        selectedVibes.removeAll()
+        ticketPrice = 10.0
+        maxGuestCount = 25
+        phoneNumber = ""
+        instagramHandle = ""
+        snapchatHandle = ""
+        venmoHandle = ""
+        zelleInfo = ""
+        cashAppHandle = ""
+        acceptsApplePay = false
+        idVerificationImage = nil
+        legalDisclaimerAccepted = false
+        pendingPartyData = nil
+        listingFeePaid = false
+    }
+    
     private func storePendingPartyData(location: CLLocationCoordinate2D) {
         let finalStartTime = Calendar.current.date(
             bySettingHour: Calendar.current.component(.hour, from: customStartTime),
@@ -2310,6 +2362,8 @@ struct CreateAfterpartyView: View {
         ) ?? customStartTime
         
         let distantFuture = Calendar.current.date(byAdding: .year, value: 1, to: finalStartTime) ?? finalStartTime
+        
+        let partyId = UUID().uuidString
         
         pendingPartyData = [
             "hostHandle": authViewModel.currentUser?.name ?? "",
@@ -2334,8 +2388,49 @@ struct CreateAfterpartyView: View {
             "legalDisclaimerAccepted": legalDisclaimerAccepted,
             "phoneNumber": phoneNumber,
             "instagramHandle": instagramHandle,
-            "snapchatHandle": snapchatHandle
+            "snapchatHandle": snapchatHandle,
+            "venmoHandle": venmoHandle,
+            "zelleInfo": zelleInfo,
+            "cashAppHandle": cashAppHandle,
+            "acceptsApplePay": acceptsApplePay,
+            "partyId": partyId
         ]
+        
+        // Store in Firebase for webhook access
+        Task {
+            await storePendingPartyInFirebase(partyId: partyId, partyData: pendingPartyData!)
+        }
+    }
+    
+    private func storePendingPartyInFirebase(partyId: String, partyData: [String: Any]) async {
+        do {
+            print("💾 Storing pending party data in Firebase for webhook access")
+            
+            // Convert coordinate to a format Firebase can store
+            var firebaseData = partyData
+            if let coordinate = partyData["coordinate"] as? CLLocationCoordinate2D {
+                firebaseData["coordinate"] = [
+                    "latitude": coordinate.latitude,
+                    "longitude": coordinate.longitude
+                ]
+            }
+            
+            // Add additional metadata for webhook
+            firebaseData["userId"] = authViewModel.currentUser?.uid
+            firebaseData["hostId"] = authViewModel.currentUser?.uid
+            firebaseData["createdAt"] = Date()
+            
+            // Store in pendingParties collection
+            try await Firestore.firestore()
+                .collection("pendingParties")
+                .document(partyId)
+                .setData(firebaseData)
+            
+            print("✅ Pending party data stored successfully: \(partyId)")
+            
+        } catch {
+            print("❌ Error storing pending party data: \(error)")
+        }
     }
     
     private func createAfterpartyAfterPayment() {
@@ -2370,11 +2465,22 @@ struct CreateAfterpartyView: View {
                     legalDisclaimerAccepted: partyData["legalDisclaimerAccepted"] as? Bool ?? false,
                     phoneNumber: partyData["phoneNumber"] as? String,
                     instagramHandle: partyData["instagramHandle"] as? String,
-                    snapchatHandle: partyData["snapchatHandle"] as? String
+                    snapchatHandle: partyData["snapchatHandle"] as? String,
+                    venmoHandle: partyData["venmoHandle"] as? String,
+                    zelleInfo: partyData["zelleInfo"] as? String,
+                    cashAppHandle: partyData["cashAppHandle"] as? String,
+                    acceptsApplePay: partyData["acceptsApplePay"] as? Bool
                 )
                 
                 await MainActor.run {
+                    // Clear state and dismiss
+                    isCreating = false
+                    resetForm()
                     presentationMode.wrappedValue.dismiss()
+                    
+                    // TODO: Navigate to created party or show success message
+                    print("🎉 PARTY CREATED: Party created successfully!")
+                    print("💬 CHAT ACCESS: Host can now access party chat via the Live Chat button")
                 }
             } catch {
                 await MainActor.run {
@@ -3994,127 +4100,5 @@ struct CreateButtonContentNew: View {
     }
 }
 
-// MARK: - NEW: Listing Fee Payment Sheet
-struct ListingFeePaymentSheet: View {
-    let listingFee: Double
-    let partyTitle: String
-    let onPaymentComplete: () -> Void
-    
-    @Environment(\.presentationMode) var presentationMode
-    @State private var isProcessing = false
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 12) {
-                    Image(systemName: "creditcard.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.pink)
-                    
-                    Text("Listing Fee")
-                        .font(.title)
-                        .fontWeight(.bold)
-                    
-                    Text("Pay to list your party on Bondfyr")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top)
-                
-                // Fee Breakdown
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Fee Breakdown")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                    
-                    HStack {
-                        Text("Party:")
-                        Spacer()
-                        Text(partyTitle)
-                            .fontWeight(.medium)
-                    }
-                    
-                    HStack {
-                        Text("Listing Fee:")
-                        Spacer()
-                        Text("$\(String(format: "%.0f", listingFee))")
-                            .fontWeight(.bold)
-                            .foregroundColor(.pink)
-                    }
-                    
-                    Text("This covers platform costs and ensures quality listings")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .padding()
-                .background(Color(.systemGray6).opacity(0.1))
-                .cornerRadius(12)
-                
-                Spacer()
-                
-                // Payment Button
-                Button(action: processPayment) {
-                    HStack {
-                        if isProcessing {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                            Text("Processing...")
-                        } else {
-                            Text("Pay $\(String(format: "%.0f", listingFee)) with Dodo")
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-                .disabled(isProcessing)
-            }
-            .padding()
-            .navigationTitle("Complete Payment")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func processPayment() {
-        isProcessing = true
-        
-        // TODO: Integrate with Dodo payments for listing fee
-        // Create a mock afterparty with listing fee amount for payment processing
-        let mockAfterparty = Afterparty(
-            userId: "host",
-            hostHandle: "Host",
-            coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
-            radius: 1000,
-            startTime: Date(),
-            endTime: Date(),
-            city: "City",
-            locationName: "Location",
-            description: "Listing Fee Payment",
-            address: "Address",
-            googleMapsLink: "",
-            vibeTag: "Listing",
-            title: "Listing Fee for \(partyTitle)",
-            ticketPrice: listingFee,
-            maxGuestCount: 1
-        )
-        
-        // For now, simulate payment processing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isProcessing = false
-            onPaymentComplete()
-        }
-    }
-}
+// MARK: - Listing Fee Payment - Now uses real DodoPaymentSheet
  

@@ -118,6 +118,14 @@ struct GuestDashboard: View {
             realTimeManager.startMonitoringUserParties()
             realTimeManager.enableSmartNotifications()
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UserPartyStatusChanged"))) { notification in
+            print("🔄 GUEST DASHBOARD: Received status change notification")
+            // Force view refresh by accessing the computed properties
+            DispatchQueue.main.async {
+                // This will trigger a recomputation of activeParties and pendingRequests
+                print("🔄 GUEST DASHBOARD: Refreshing party status - Active: \(activeParties.count), Pending: \(pendingRequests.count)")
+            }
+        }
         .sheet(isPresented: $showingPartyBrowser) {
             PartyBrowserPlaceholderView()
         }

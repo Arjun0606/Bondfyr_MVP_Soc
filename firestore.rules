@@ -173,5 +173,26 @@ service cloud.firestore {
       // Allow system cleanup - any authenticated user can delete viewer records
       allow delete: if request.auth != null;
     }
+    
+    // Pending parties collection (for payment-first party creation)
+    match /pendingParties/{partyId} {
+      // Allow authenticated users to create pending parties
+      allow create: if request.auth != null && 
+                     request.resource.data.hostId == request.auth.uid;
+      // Allow reading pending parties (for webhook processing)
+      allow read: if true;
+      // Allow webhook to delete after party creation
+      allow delete: if true;
+    }
+    
+    // Checkout mappings collection (for linking LemonSqueezy payments to parties)
+    match /checkoutMappings/{checkoutId} {
+      // Allow authenticated users to create checkout mappings
+      allow create: if request.auth != null;
+      // Allow reading mappings (for webhook processing)
+      allow read: if true;
+      // Allow webhook to delete after payment processing
+      allow delete: if true;
+    }
   }
 } 
