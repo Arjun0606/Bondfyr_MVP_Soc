@@ -118,12 +118,11 @@ class DodoPaymentService: ObservableObject {
         print("🎉 PAYMENT: User: \(userId), Payment: \(paymentId)")
         
         do {
-            // Complete party membership
-            let afterpartyManager = AfterpartyManager.shared
-                try await afterpartyManager.completePartyMembershipAfterPayment(
-                    afterpartyId: afterparty.id,
-                    userId: userId,
-                paymentIntentId: paymentId
+            // Create party from pending data (like LemonSqueezy webhook)
+            try await createPartyFromPendingData(
+                afterpartyId: afterparty.id,
+                userId: userId,
+                paymentId: paymentId
             )
             
             print("✅ PAYMENT: Membership completed successfully")
@@ -139,6 +138,65 @@ class DodoPaymentService: ObservableObject {
             
         } catch {
             print("🔴 PAYMENT: Error completing membership: \(error)")
+        }
+    }
+    
+    // MARK: - Party Creation from Pending Data
+    
+    private func createPartyFromPendingData(
+        afterpartyId: String,
+        userId: String,
+        paymentId: String
+    ) async throws {
+        print("🎯 DODO: Creating party from pending data")
+        print("🎯 DODO: Party: \(afterpartyId), User: \(userId), Payment: \(paymentId)")
+        
+        let db = Firestore.firestore()
+        
+        // Get pending party data
+        let pendingDoc = try await db.collection("pendingParties").document(afterpartyId).getDocument()
+        
+        guard let pendingData = pendingDoc.data() else {
+            throw DodoPaymentError.apiError("Pending party data not found")
+        }
+        
+        print("📋 DODO: Found pending party data")
+        
+        // Create the actual party
+        var partyData = pendingData
+        partyData["listingFeePaid"] = true
+        partyData["paidAt"] = Timestamp()
+        partyData["createdAt"] = Timestamp()
+        partyData["updatedAt"] = Timestamp()
+        partyData["status"] = "active"
+        partyData["dodoPaymentId"] = paymentId
+        
+        // Add host to activeUsers
+        if let hostId = partyData["hostId"] as? String {
+            partyData["activeUsers"] = [hostId]
+        }
+        
+        // Create party document
+        try await db.collection("afterparties").document(afterpartyId).setData(partyData)
+        print("✅ DODO: Created party in afterparties collection")
+        
+        // Delete pending party data
+        try await db.collection("pendingParties").document(afterpartyId).delete()
+        print("🗑️ DODO: Deleted pending party data")
+        
+        // Send notification to host
+        if let hostId = partyData["hostId"] as? String,
+           let partyTitle = partyData["title"] as? String {
+            await FCMNotificationManager.shared.sendPushNotification(
+                to: hostId,
+                title: "🎉 Party Created!",
+                body: "Your party '\(partyTitle)' is now live and accepting guests!",
+                data: [
+                    "type": "party_created",
+                    "partyTitle": partyTitle
+                ]
+            )
+            print("🔔 DODO: Sent party created notification")
         }
     }
     
@@ -347,12 +405,15 @@ class DodoPaymentService: ObservableObject {
         let platformFee = afterparty.ticketPrice * 0.20
         let hostEarnings = afterparty.ticketPrice * 0.80
         
-        // Round up listing fee to avoid decimal issues (only affects small amounts)
+        // Convert to cents for Dodo API (like we had before)
         let roundedAmount = ceil(afterparty.ticketPrice)
+        let amountInCents = Int(roundedAmount * 100)
         
+        // DODO DYNAMIC PRICING: Apply same logic as LemonSqueezy success
         let paymentData: [String: Any] = [
             "payment_link": true,
             "currency": "USD",
+            "amount": amountInCents,  // Top-level amount override in cents
             "description": "Listing Fee - \(afterparty.title)",
             "billing": [
                 "city": "San Francisco",
@@ -363,12 +424,12 @@ class DodoPaymentService: ObservableObject {
             ],
             "customer": [
                 "email": "\(userHandle.replacingOccurrences(of: "@", with: ""))@bondfyr.com",
-                "name": userName
+                                "name": userName
             ],
             "product_cart": [[
                 "product_id": "pdt_I3q25hrMAAf6yeKkKb1vD",
                 "quantity": 1,
-                "amount": Int(roundedAmount)
+                "amount": amountInCents
             ]],
             "return_url": "bondfyr://payment-success?afterpartyId=\(afterparty.id)&userId=\(userId)",
             "metadata": [
