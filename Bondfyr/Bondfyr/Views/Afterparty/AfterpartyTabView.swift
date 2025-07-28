@@ -1176,7 +1176,7 @@ struct AfterpartyCard: View {
             refreshAfterpartyData()
         }
         .sheet(isPresented: $showingHostInfo) {
-            UserInfoView(userId: afterparty.userId)
+            HostDetailsSheet(afterparty: afterparty)
         }
         .sheet(isPresented: $showingPaymentSheet) {
             P2PPaymentSheet(afterparty: afterparty) {
@@ -1948,6 +1948,8 @@ struct CreateAfterpartyView: View {
     @State private var listingFeePaid = false
     @State private var listingFeeAmount: Double = 0.0
     @State private var pendingPartyData: [String: Any]?
+    @State private var isProcessingPayment = false
+    @State private var paymentSuccess = false
     
     init(currentLocation: CLLocationCoordinate2D?, currentCity: String) {
         self.currentLocation = currentLocation
@@ -2114,7 +2116,9 @@ struct CreateAfterpartyView: View {
                         CreateButtonContentNew(
                             listingFee: calculatedListingFee,
                             isCreating: isCreating,
-                            isUploadingImage: isUploadingImage
+                            isUploadingImage: isUploadingImage,
+                            isProcessingPayment: isProcessingPayment,
+                            paymentSuccess: paymentSuccess
                         )
                         }
                                 .frame(maxWidth: .infinity)
@@ -2122,7 +2126,7 @@ struct CreateAfterpartyView: View {
                     .background(createButtonBackground)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
-                    .disabled(isCreating || isUploadingImage || !isFormValid)
+                    .disabled(isCreating || isUploadingImage || isProcessingPayment || !isFormValid)
                     .padding(.top, 24)
                     }
                     .padding()
@@ -2167,6 +2171,24 @@ struct CreateAfterpartyView: View {
                     createAfterpartyAfterPayment()
                 }
             )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PaymentCompleted"))) { notification in
+                // Payment completed - reset form and show success
+                print("🎉 CREATE VIEW: Payment completed! Resetting form...")
+                isProcessingPayment = false
+                paymentSuccess = true
+                listingFeePaid = true
+                showingListingFeePayment = false
+                
+                // Show success message
+                errorMessage = "🎉 Party created successfully! Your listing is now live."
+                showingError = true
+                
+                // Reset form after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    resetForm()
+                    presentationMode.wrappedValue.dismiss()
+                }
             }
         }
     }
@@ -2290,6 +2312,10 @@ struct CreateAfterpartyView: View {
     private func initiateListingFeePayment() {
         guard let location = currentLocation else { return }
         
+        // Set processing state
+        isProcessingPayment = true
+        paymentSuccess = false
+        
         // Calculate listing fee
         listingFeeAmount = calculatedListingFee
         
@@ -2320,8 +2346,8 @@ struct CreateAfterpartyView: View {
             googleMapsLink: "",
             vibeTag: "Platform",
             title: "Listing Fee - \(title)",
-            ticketPrice: calculatedListingFee,
-            maxGuestCount: 1,
+            ticketPrice: ticketPrice,  // Use actual ticket price, not listing fee!
+            maxGuestCount: maxGuestCount,  // Use actual guest count!
             phoneNumber: phoneNumber,
             instagramHandle: instagramHandle,
             snapchatHandle: snapchatHandle,
@@ -2351,6 +2377,8 @@ struct CreateAfterpartyView: View {
         legalDisclaimerAccepted = false
         pendingPartyData = nil
         listingFeePaid = false
+        isProcessingPayment = false
+        paymentSuccess = false
     }
     
     private func storePendingPartyData(location: CLLocationCoordinate2D) {
@@ -4077,11 +4105,19 @@ struct CreateButtonContentNew: View {
     let listingFee: Double
     let isCreating: Bool
     let isUploadingImage: Bool
+    let isProcessingPayment: Bool
+    let paymentSuccess: Bool
     
     var body: some View {
         HStack {
             if isUploadingImage {
                 Text("Uploading Image...")
+                    .fontWeight(.semibold)
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(0.8)
+            } else if isProcessingPayment {
+                Text("Processing Payment...")
                     .fontWeight(.semibold)
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -4092,8 +4128,13 @@ struct CreateButtonContentNew: View {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(0.8)
+            } else if paymentSuccess {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Text("Party Created!")
+                    .fontWeight(.semibold)
             } else {
-                Text("Pay Listing Fee • $\(String(format: "%.0f", listingFee))")
+                Text("Pay Listing Fee • $\(String(format: "%.2f", listingFee))")
                     .fontWeight(.semibold)
             }
         }

@@ -59,14 +59,14 @@ struct DodoPaymentSheet: View {
                         HStack {
                             Text("Amount:")
                             Spacer()
-                            Text("$\(Int(afterparty.ticketPrice))")
+                            Text("$\(calculateListingFee())")
                                 .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundColor(.green)
                         }
                         .foregroundColor(.white)
                         
-                        Text("Processed securely by LemonSqueezy")
+                        Text("Processed securely by Dodo Payments")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -87,7 +87,7 @@ struct DodoPaymentSheet: View {
                             Text("Processing...")
                         } else {
                             Image(systemName: "lock.fill")
-                            Text("Pay Securely - $\(Int(afterparty.ticketPrice))")
+                            Text("Pay Securely - $\(calculateListingFee())")
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -150,6 +150,16 @@ struct DodoPaymentSheet: View {
         .preferredColorScheme(.dark)
     }
     
+    private func calculateListingFee() -> String {
+        // Calculate listing fee: 20% of (half capacity × ticket price)
+        let halfCapacity = Double(afterparty.maxGuestCount) / 2.0
+        let totalRevenue = halfCapacity * afterparty.ticketPrice
+        let platformFee = totalRevenue * 0.20
+        
+        // NO ROUNDING UP - use exact calculation
+        return String(format: "%.2f", platformFee)
+    }
+    
     private func extractSessionId(from result: PaymentResult) -> String? {
         // Extract session ID from payment result for tracking
         return result.paymentId
@@ -174,15 +184,15 @@ struct DodoPaymentSheet: View {
             defer { isProcessingPayment = false }
             
             do {
-                print("🍋 ABOUT TO CALL LemonSqueezyPaymentService...")
-                print("🍋 User ID: \(currentUser.uid)")
-                print("🍋 User Name: \(currentUser.name)")
-                print("🍋 Party ID: \(afterparty.id)")
-                print("🍋 LemonSqueezyPaymentService.shared exists: \(LemonSqueezyPaymentService.shared)")
+                print("🥥 ABOUT TO CALL DodoPaymentService...")
+                print("🥥 User ID: \(currentUser.uid)")
+                print("🥥 User Name: \(currentUser.name)")
+                print("🥥 Party ID: \(afterparty.id)")
+                print("🥥 DodoPaymentService.shared exists: \(DodoPaymentService.shared)")
                 
-                // Use clean LemonSqueezy payment service
-                print("🍋 CALLING processPayment NOW...")
-                let result = try await LemonSqueezyPaymentService.shared.processPayment(
+                // Use Dodo payment service
+                print("🥥 CALLING processPayment NOW...")
+                let result = try await DodoPaymentService.shared.processPayment(
                     afterparty: afterparty,
                     userId: currentUser.uid,
                     userName: currentUser.name,
@@ -200,9 +210,9 @@ struct DodoPaymentSheet: View {
                         print("🎯 PAYMENT: Stored intent ID \(sessionId) for webhook tracking")
                     }
                     
-                    // Just dismiss the sheet - party creation will happen via LemonSqueezy webhook
+                    // Just dismiss the sheet - party creation will happen via Dodo webhook
                     presentationMode.wrappedValue.dismiss()
-                    print("💡 PAYMENT: Payment initiated - waiting for LemonSqueezy webhook confirmation")
+                    print("💡 PAYMENT: Payment initiated - waiting for Dodo webhook confirmation")
                 }
                 
             } catch {
@@ -214,8 +224,8 @@ struct DodoPaymentSheet: View {
                     print("🔴 PAYMENT SHEET: Error initiating payment: \(error)")
                     print("🔴 PAYMENT SHEET: Error type: \(type(of: error))")
                     print("🔴 PAYMENT SHEET: Error description: \(error.localizedDescription)")
-                    if let lemonSqueezyError = error as? LemonSqueezyError {
-                        print("🔴 PAYMENT SHEET: LemonSqueezy error: \(lemonSqueezyError)")
+                    if let dodoError = error as? DodoPaymentError {
+                        print("🔴 PAYMENT SHEET: Dodo error: \(dodoError)")
                     }
                     errorMessage = "Payment error: \(error.localizedDescription)"
                     showingError = true

@@ -61,14 +61,11 @@ class DodoPaymentService: ObservableObject {
                 await UIApplication.shared.open(url)
             }
             
-            // Start monitoring for payment completion (in background)
-            Task {
-                await monitorPaymentCompletion(
-                    afterparty: afterparty,
-                    userId: userId,
-                    paymentId: paymentIntent.sessionId
-                )
-            }
+            // Store payment info for webhook tracking
+            print("🎯 PAYMENT: Stored intent ID \(paymentIntent.sessionId) for webhook tracking")
+            print("💡 PAYMENT: Payment initiated - waiting for Dodo webhook confirmation")
+            
+            // NO SIMULATION - webhook will handle party creation after successful payment
             
             return PaymentResult(
                 success: true,
@@ -84,28 +81,24 @@ class DodoPaymentService: ObservableObject {
     
     // MARK: - Payment Completion Monitoring
     
-    /// Monitor for payment completion (simulates webhook for dev)
+    /// Monitor for payment completion (DISABLED - webhook handles this now)
     private func monitorPaymentCompletion(
         afterparty: Afterparty,
         userId: String,
         paymentId: String
     ) async {
-        print("👀 PAYMENT: Starting payment monitoring for \(paymentId)")
-        print("👀 PAYMENT: Will complete in 10 seconds...")
+        print("👀 PAYMENT: Payment monitoring started for \(paymentId)")
+        print("⚠️ PAYMENT: Simulation DISABLED - relying on webhook for completion")
         
-        // In dev mode, simulate webhook after delay
-        // In production, this would be handled by actual Dodo webhook
+        // DISABLED: Auto-completion simulation
+        // This was creating parties even when users cancelled payment
+        // Real webhook now handles party creation after successful payment
         
-        // Wait for user to potentially complete payment in Safari
-        try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+        // Store payment ID for webhook lookup
+        print("🎯 PAYMENT: Stored intent ID \(paymentId) for webhook tracking")
+        print("💡 PAYMENT: Payment initiated - waiting for Dodo webhook confirmation")
         
-        // Simulate webhook completion (since real webhook isn't set up yet)
-        print("🔔 PAYMENT: 10 seconds elapsed - simulating webhook completion")
-        await handlePaymentSuccess(
-            afterparty: afterparty,
-            userId: userId,
-            paymentId: paymentId
-        )
+        // NO AUTO-COMPLETION - webhook will call handlePaymentSuccess when payment is actually successful
     }
     
     /// Handle successful payment (called by webhook or simulation)
@@ -402,12 +395,25 @@ class DodoPaymentService: ObservableObject {
         userHandle: String
     ) async throws -> DodoPaymentIntent {
         
-        let platformFee = afterparty.ticketPrice * 0.20
-        let hostEarnings = afterparty.ticketPrice * 0.80
+        // FIXED: Calculate listing fee as 20% of half capacity (per original spec)
+        let halfCapacity = Double(afterparty.maxGuestCount) / 2.0
+        let totalRevenue = halfCapacity * afterparty.ticketPrice
+        let platformFee = totalRevenue * 0.20
+        let hostEarnings = totalRevenue - platformFee
         
-        // Convert to cents for Dodo API (like we had before)
-        let roundedAmount = ceil(afterparty.ticketPrice)
-        let amountInCents = Int(roundedAmount * 100)
+        // DEBUG: Log the calculation steps
+        print("💰 PRICING DEBUG:")
+        print("💰 Guest count: \(afterparty.maxGuestCount)")
+        print("💰 Ticket price: $\(afterparty.ticketPrice)")
+        print("💰 Half capacity: \(halfCapacity)")
+        print("💰 Total revenue: $\(totalRevenue)")
+        print("💰 Platform fee (20%): $\(platformFee)")
+        
+        // Convert to cents for Dodo API - NO ROUNDING
+        let amountInCents = Int(platformFee * 100) // Direct conversion to cents
+        
+        print("💰 Amount in cents: \(amountInCents)")
+        print("💰 Expected browser price: $\(Double(amountInCents)/100.0)")
         
         // DODO DYNAMIC PRICING: Apply same logic as LemonSqueezy success
         let paymentData: [String: Any] = [
@@ -424,7 +430,7 @@ class DodoPaymentService: ObservableObject {
             ],
             "customer": [
                 "email": "\(userHandle.replacingOccurrences(of: "@", with: ""))@bondfyr.com",
-                                "name": userName
+                "name": userName
             ],
             "product_cart": [[
                 "product_id": "pdt_I3q25hrMAAf6yeKkKb1vD",
