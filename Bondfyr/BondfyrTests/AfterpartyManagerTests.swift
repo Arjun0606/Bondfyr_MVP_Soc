@@ -307,8 +307,7 @@ class AfterpartyManagerTests: XCTestCase {
             earnings: 0.0,
             bondfyrFee: 0.0,
             venmoHandle: "testvenmo",
-            chatEnded: nil,
-            chatEndedAt: nil
+
         )
     }
     

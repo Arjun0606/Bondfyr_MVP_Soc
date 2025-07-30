@@ -6,13 +6,14 @@ struct FixedGuestActionButton: View {
     let afterparty: Afterparty
     
     @EnvironmentObject private var authViewModel: AuthViewModel
-    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @ObservedObject private var afterpartyManager = AfterpartyManager.shared
     @State private var isLoading = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
     @State private var showingContactHost = false
     @State private var showingPaymentSheet = false
     @State private var showingShareSheet = false
+    @State private var refreshTrigger = UUID()
     
     var body: some View {
         HStack(spacing: 12) {
@@ -40,6 +41,7 @@ struct FixedGuestActionButton: View {
             ) { _ in
                 print("🔔 GUEST BUTTON: Received guest approval notification - refreshing")
                 refreshAfterpartyData()
+                refreshTrigger = UUID()
             }
             
             // Listen for payment completion notifications
@@ -48,15 +50,15 @@ struct FixedGuestActionButton: View {
                 object: nil,
                 queue: .main
             ) { notification in
-                print("🔔 GUEST BUTTON: Received payment completion notification - refreshing")
-                // Check if this notification is for our party
+                print("🔔 GUEST BUTTON: Received payment completion notification")
+                // Only refresh if this notification is for our party
                 let notificationPartyId = notification.object as? String ?? notification.userInfo?["partyId"] as? String
                 if let partyId = notificationPartyId, partyId == afterparty.id {
                     print("🔔 GUEST BUTTON: Notification is for our party - refreshing data")
                     refreshAfterpartyData()
+                    refreshTrigger = UUID()
                 } else {
-                    print("🔔 GUEST BUTTON: Notification is for different party or no party ID - refreshing anyway")
-                    refreshAfterpartyData()
+                    print("🔔 GUEST BUTTON: Notification is for different party - ignoring")
                 }
             }
         }
@@ -64,19 +66,19 @@ struct FixedGuestActionButton: View {
             NotificationCenter.default.removeObserver(self, name: Notification.Name("GuestApproved"), object: nil)
         }
         .onChange(of: afterparty.guestRequests.count) {
-            print("🔵 GUEST BUTTON: Guest requests changed - refreshing data")
-            refreshAfterpartyData()
+            print("🔵 GUEST BUTTON: Guest requests changed - count: \(afterparty.guestRequests.count)")
+            // Reduced: Only refresh if there's a significant change
         }
         .sheet(isPresented: $showingContactHost) {
             RequestToJoinSheet(afterparty: afterparty) {
-                // Refresh party data after request submission
-                refreshAfterpartyData()
+                // RequestToJoinSheet handles its own data updates
+                print("🔵 GUEST BUTTON: Request sheet dismissed")
             }
         }
         .sheet(isPresented: $showingPaymentSheet) {
             P2PPaymentSheet(afterparty: afterparty) {
-                // Refresh party data after payment completion
-                refreshAfterpartyData()
+                // P2PPaymentSheet handles its own data updates
+                print("🔵 GUEST BUTTON: Payment sheet dismissed")
             }
         }
         .sheet(isPresented: $showingShareSheet) {
@@ -94,13 +96,23 @@ struct FixedGuestActionButton: View {
     private var guestActionButton: some View {
         let currentUserId = authViewModel.currentUser?.uid ?? ""
         
-        // Get the latest party data from the observed manager
-        let latestParty = afterpartyManager.nearbyAfterparties.first { $0.id == afterparty.id } ?? afterparty
+        // 🚨 CRITICAL FIX: Always use the most up-to-date party data from all manager sources
+        // Force re-evaluation when refreshTrigger changes
+        let _ = refreshTrigger
+        let latestParty = afterpartyManager.nearbyAfterparties.first { $0.id == afterparty.id } ?? 
+                         afterparty
         let buttonState = determineGuestButtonState(userId: currentUserId, party: latestParty)
+        
+
         
         print("🔵 GUEST BUTTON: Rendering with state: \(buttonState)")
         
+        let _ = print("🔥 GUEST BUTTON: Final state = \(buttonState)")
+        let _ = print("🔥 GUEST BUTTON: Party ID = \(afterparty.id)")
+        let _ = print("🔥 GUEST BUTTON: User ID = \(currentUserId)")
+        
         return Button(action: {
+            print("🔥 GUEST BUTTON: 🚨 BUTTON TAPPED! State: \(buttonState)")
             handleGuestAction(state: buttonState, userId: currentUserId)
         }) {
             HStack {
@@ -109,6 +121,7 @@ struct FixedGuestActionButton: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.8)
                 } else {
+                    let _ = print("🔥 GUEST BUTTON: Showing content for state: \(buttonState)")
                     buttonContent(for: buttonState)
                 }
             }
@@ -144,18 +157,54 @@ struct FixedGuestActionButton: View {
         print("🔍 FIXED BUTTON: Determining button state for user \(userId)")
         print("🔍 FIXED BUTTON: Party ID: \(party.id)")
         
-        // CRITICAL: Always get the freshest data from the manager
+        // CRITICAL: Force absolute latest data - don't trust cached objects
         let freshParty = afterpartyManager.nearbyAfterparties.first { $0.id == party.id } ?? party
+        
+        // 🚨 FORCE IMMEDIATE REFRESH if we suspect stale data
+        if freshParty.guestRequests.isEmpty && party.guestRequests.isEmpty {
+            print("🚨 FIXED BUTTON: FORCING immediate data refresh - no guest requests found in any cached data")
+            Task {
+                await afterpartyManager.fetchNearbyAfterparties()
+            }
+        }
         
         print("🔍 FIXED BUTTON: Original party activeUsers: \(party.activeUsers)")
         print("🔍 FIXED BUTTON: Fresh party activeUsers: \(freshParty.activeUsers)")
+        print("🔍 FIXED BUTTON: Current user ID: \(userId)")
+        print("🔍 FIXED BUTTON: User in activeUsers? \(freshParty.activeUsers.contains(userId))")
+        
+        // Debug activeUsers contents
+        print("🔍 FIXED BUTTON: ActiveUsers detailed:")
+        for (index, activeUserId) in freshParty.activeUsers.enumerated() {
+            print("  [\(index)]: \(activeUserId)")
+        }
         print("🔍 FIXED BUTTON: Original guestRequests count: \(party.guestRequests.count)")
         print("🔍 FIXED BUTTON: Fresh guestRequests count: \(freshParty.guestRequests.count)")
         
-        // PRIORITY CHECK: If user is in activeUsers in either version, they're going
-        if freshParty.activeUsers.contains(userId) || party.activeUsers.contains(userId) {
-            print("🔍 FIXED BUTTON: User found in activeUsers - state: going")
+        // BULLETPROOF CHECK: User must be BOTH in activeUsers AND have paid/free status
+        let inActiveUsers = freshParty.activeUsers.contains(userId) || party.activeUsers.contains(userId)
+        let userRequest = freshParty.guestRequests.first(where: { $0.userId == userId })
+        let hasPaidOrFreeStatus = userRequest?.paymentStatus == .paid || userRequest?.paymentStatus == .free
+        
+        if inActiveUsers && hasPaidOrFreeStatus {
+            let statusText = userRequest?.paymentStatus == .free ? "VIP/FREE" : "PAID"
+            print("🔍 FIXED BUTTON: ✅ User in activeUsers with \(statusText) status - state: going")
             return .going
+        } else if inActiveUsers && !hasPaidOrFreeStatus {
+            print("🚨 FIXED BUTTON: ⚠️ DATA INCONSISTENCY! User in activeUsers but payment status: \(userRequest?.paymentStatus.rawValue ?? "unknown")")
+            print("🚨 FIXED BUTTON: ⚠️ This user should NOT be in activeUsers yet! Forcing correct state based on payment status.")
+            
+            // FORCE the correct state based on payment status, ignoring activeUsers
+            if let request = userRequest {
+                if request.paymentStatus == PaymentStatus.proofSubmitted {
+                    print("🚨 FIXED BUTTON: ✅ FORCING proofSubmitted state (ignoring activeUsers)")
+                    return .proofSubmitted
+                } else if request.approvalStatus == ApprovalStatus.approved {
+                    print("🚨 FIXED BUTTON: ✅ FORCING approved state (ignoring activeUsers)")
+                    return .approved
+                }
+            }
+            // If no request found, continue with normal logic
         }
         
         // Debug guest requests in detail from fresh data
@@ -177,28 +226,28 @@ struct FixedGuestActionButton: View {
             print("🔍 FIXED BUTTON: Found request - approval: \(request.approvalStatus), payment: \(request.paymentStatus)")
             
             switch request.approvalStatus {
-            case .pending:
+            case ApprovalStatus.pending:
                 print("🔍 FIXED BUTTON: Request pending - state: pending")
                 return .pending
-            case .approved:
+            case ApprovalStatus.approved:
                 // Check payment status first
-                if request.paymentStatus == .paid {
-                    print("🔍 FIXED BUTTON: Approved and PAID - state: going (waiting for activeUsers update)")
+                if request.paymentStatus == PaymentStatus.paid || request.paymentStatus == PaymentStatus.free {
+                    let statusText = request.paymentStatus == .free ? "VIP/FREE" : "PAID"
+                    print("🔍 FIXED BUTTON: Approved and \(statusText) - state: going (waiting for activeUsers update)")
                     return .going
                 }
-                else if request.paymentStatus == .proofSubmitted {
+                else if request.paymentStatus == PaymentStatus.proofSubmitted {
                     print("🔍 FIXED BUTTON: Approved with proof submitted - state: proofSubmitted")
                     return .proofSubmitted
                 }
-                // If they're in activeUsers, they're going (this should have been caught above)
-                else if freshParty.activeUsers.contains(userId) || party.activeUsers.contains(userId) {
-                    print("🔍 FIXED BUTTON: Approved and in activeUsers - state: going")
-                    return .going
-                } else {
-                    print("🔍 FIXED BUTTON: Approved but not in activeUsers - state: approved (need to pay)")
+                // REMOVED: Don't trust activeUsers alone - payment status must be .paid
+                // This logic was causing premature "going" state
+                else {
+                    print("🔥 FIXED BUTTON: ✅ APPROVED USER NEEDS TO PAY! Payment status: \(request.paymentStatus)")
+                    print("🔥 FIXED BUTTON: ✅ Setting state to .approved - should show Complete Payment button")
                     return .approved // Need to pay!
                 }
-            case .denied:
+            case ApprovalStatus.denied:
                 print("🔍 FIXED BUTTON: Request denied - state: denied")
                 return .denied
             }
@@ -218,6 +267,7 @@ struct FixedGuestActionButton: View {
             Image(systemName: "clock.fill")
             Text("Pending")
         case .approved:
+            let _ = print("🔥 BUTTON CONTENT: ✅ RENDERING APPROVED STATE - Complete Payment button")
             Image(systemName: "creditcard.fill")
             Text("Complete Payment ($\(Int(afterparty.ticketPrice)))")
         case .proofSubmitted:
@@ -305,8 +355,9 @@ struct FixedGuestActionButton: View {
                         print("🔄 FIXED BUTTON: Old activeUsers: \(oldParty.activeUsers)")
                         print("🔄 FIXED BUTTON: New activeUsers: \(updatedParty.activeUsers)")
                         
-                        // Force UI refresh by triggering objectWillChange
+                        // Force UI refresh by triggering objectWillChange AND updating refresh trigger
                         afterpartyManager.objectWillChange.send()
+                        refreshTrigger = UUID()
                     }
                 }
             } catch {

@@ -203,7 +203,7 @@ struct DodoPaymentSheet: View {
                 print("🚨🚨🚨 Payment processing initiated successfully!")
                 print("🚨🚨🚨 Safari opened for payment, monitoring for completion...")
                 
-                await MainActor.run {
+                        await MainActor.run {
                     // Store the payment intent ID for webhook tracking
                     if let sessionId = extractSessionId(from: result) {
                         paymentIntentId = sessionId

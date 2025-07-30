@@ -48,7 +48,7 @@ struct BondfyrApp: App {
         }
         
         // Initialize the party chat manager
-        _ = PartyChatManager.shared
+
         
         // Initialize new managers
         _ = OfflineDataManager.shared
@@ -72,6 +72,9 @@ struct BondfyrApp: App {
         
         // Listen for event navigation
         setupEventNavigationListener()
+        
+        // Listen for party navigation after payment
+        setupPartiesNavigationListener()
     }
     
     func setupContestPhotoNotificationListener() {
@@ -106,6 +109,21 @@ struct BondfyrApp: App {
                 DispatchQueue.main.async {
                     self.tabSelection.selectedTab = .partyFeed
                 }
+            }
+        }
+    }
+    
+    func setupPartiesNavigationListener() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("NavigateToPartiesList"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            print("🎉 NAVIGATION: Received party navigation request")
+            // Switch to the parties tab after payment success
+            DispatchQueue.main.async {
+                self.tabSelection.selectedTab = .partyFeed // Navigate to party feed to see the new party
+                print("🎉 NAVIGATION: Switched to parties tab")
             }
         }
     }
@@ -157,6 +175,12 @@ struct BondfyrApp: App {
             .onAppear {
                 // Trigger events to load when app appears
                 eventViewModel.fetchEvents()
+            }
+            .onOpenURL { url in
+                // Handle payment success URLs
+                if url.scheme == "bondfyr" && url.host == "payment-success" {
+                    appDelegate.handlePaymentSuccess(url: url)
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToContestPhotoCapture"))) { notification in
                 if let userInfo = notification.userInfo,
@@ -281,8 +305,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return false
     }
     
-    private func handlePaymentSuccess(url: URL) {
-        print("🍋 PAYMENT SUCCESS URL RECEIVED: \(url)")
+    func handlePaymentSuccess(url: URL) {
+        print("🥥 PAYMENT SUCCESS URL RECEIVED: \(url)")
         
         // Extract parameters from URL
                     if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -302,19 +326,29 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                     }
                 }
                 
-                print("🍋 PAYMENT SUCCESS - Party: \(afterpartyId ?? "unknown"), User: \(userId ?? "unknown")")
+                print("🥥 PAYMENT SUCCESS - Party: \(afterpartyId ?? "unknown"), User: \(userId ?? "unknown")")
                 
-                // Show success message to user
+                // Payment completed - notify UI to reset and navigate
                 DispatchQueue.main.async {
-                    // Post notification to show payment success
+                    // Post notification that payment is completed
                     NotificationCenter.default.post(
-                        name: Notification.Name("PaymentSuccessReceived"),
+                        name: Notification.Name("PaymentCompleted"),
                         object: nil,
                         userInfo: [
                             "afterpartyId": afterpartyId ?? "",
-                            "userId": userId ?? ""
+                            "userId": userId ?? "",
+                            "source": "url_redirect"
                         ]
                     )
+                    
+                    // Also post navigation notification to go to parties list  
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        NotificationCenter.default.post(
+                            name: Notification.Name("NavigateToPartiesList"),
+                            object: nil,
+                            userInfo: ["afterpartyId": afterpartyId ?? ""]
+                        )
+                    }
                 }
         }
     }

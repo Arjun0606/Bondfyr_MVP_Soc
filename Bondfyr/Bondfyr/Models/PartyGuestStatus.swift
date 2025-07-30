@@ -18,7 +18,7 @@ enum PartyGuestStatus: String, CaseIterable {
         switch self {
         case .notRequested: return "Request to Join"
         case .requestSubmitted: return "Request Sent"
-        case .approved: return "Join Party Chat!"
+        case .approved: return "Approved!"
         case .denied: return "Request Denied"
         case .going: return "You're Going!"
         case .soldOut: return "Sold Out"

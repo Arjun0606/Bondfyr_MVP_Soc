@@ -13,7 +13,7 @@ struct FixedActionButtonsView: View {
     @Binding var showingPaymentSheet: Bool
     
     @EnvironmentObject private var authViewModel: AuthViewModel
-    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @ObservedObject private var afterpartyManager = AfterpartyManager.shared
     @State private var isLoading = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
@@ -118,10 +118,29 @@ struct FixedActionButtonsView: View {
         print("🔍 FIXED: activeUsers: \(afterparty.activeUsers)")
         print("🔍 FIXED: guestRequests count: \(afterparty.guestRequests.count)")
         
-        // Check if fully confirmed (in activeUsers)
-        if afterparty.activeUsers.contains(userId) {
-            print("🔍 FIXED: User is in activeUsers - state: going")
+        // BULLETPROOF CHECK: User must be BOTH in activeUsers AND have paid status
+        let inActiveUsers = afterparty.activeUsers.contains(userId)
+        let userRequest = afterparty.guestRequests.first(where: { $0.userId == userId })
+        let hasPaidStatus = userRequest?.paymentStatus == .paid
+        
+        if inActiveUsers && hasPaidStatus {
+            print("🔍 FIXED: ✅ User in activeUsers with PAID status - state: going")
             return .going
+        } else if inActiveUsers && !hasPaidStatus {
+            print("🚨 FIXED: ⚠️ DATA INCONSISTENCY! User in activeUsers but payment status: \(userRequest?.paymentStatus.rawValue ?? "unknown")")
+            print("🚨 FIXED: ⚠️ FORCING correct state based on payment status.")
+            
+            // FORCE the correct state based on payment status, ignoring activeUsers
+            if let request = userRequest {
+                if request.paymentStatus == .proofSubmitted {
+                    print("🚨 FIXED: ✅ FORCING proofSubmitted state (ignoring activeUsers)")
+                    return .proofSubmitted
+                } else if request.approvalStatus == .approved {
+                    print("🚨 FIXED: ✅ FORCING approved state (ignoring activeUsers)")
+                    return .approved
+                }
+            }
+            // If no request found, continue with normal logic
         }
         
         // Check if party is sold out
@@ -141,16 +160,13 @@ struct FixedActionButtonsView: View {
             case .approved:
                 // Check payment status to determine exact state
                 if request.paymentStatus == .paid {
-                    print("🔍 FIXED: Approved and paid - state: going")
+                    print("🔍 FIXED: Approved and PAID - state: going (waiting for activeUsers update)")
                     return .going
                 } else if request.paymentStatus == .proofSubmitted {
                     print("🔍 FIXED: Approved with proof submitted - state: proofSubmitted")
                     return .proofSubmitted
-                } else if afterparty.activeUsers.contains(userId) {
-                    print("🔍 FIXED: Approved and in activeUsers - state: going")
-                    return .going
                 } else {
-                    print("🔍 FIXED: Approved but not paid - state: approved")
+                    print("🔍 FIXED: Approved but needs to pay - state: approved")
                     return .approved // Need to pay!
                 }
             case .denied:

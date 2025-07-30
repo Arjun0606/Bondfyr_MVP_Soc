@@ -33,6 +33,7 @@ struct FixedGuestListView: View {
                         ForEach(pendingRequests) { request in
                             FixedPendingGuestRow(
                                 request: request,
+                                partyId: partyId,
                                 onApprove: { approveRequest(request) },
                                 onDeny: { denyRequest(request) }
                             )
@@ -58,7 +59,11 @@ struct FixedGuestListView: View {
                         }
                     ) {
                         ForEach(approvedGuests) { request in
-                            FixedApprovedGuestRow(request: request)
+                            FixedApprovedGuestRow(
+                                request: request,
+                                onVerifyPayment: request.paymentStatus == .proofSubmitted ? { verifyPaymentProof(request) } : nil,
+                                onRejectPayment: request.paymentStatus == .proofSubmitted ? { rejectPaymentProof(request) } : nil
+                            )
                         }
                     }
                 }
@@ -180,12 +185,17 @@ struct FixedGuestListView: View {
             
             print("🔄 FIXED LIST: Data refreshed - Pending: \(pendingRequests.count), Approved: \(approvedGuests.count)")
             print("🔄 FIXED LIST: Active users: \(freshParty.activeUsers.count)")
+            print("🔄 FIXED LIST: ActiveUsers list: \(freshParty.activeUsers)")
             
             // Debug payment status for all guest requests
             for (index, request) in freshParty.guestRequests.enumerated() {
                 print("🔄 FIXED LIST: Request \(index): \(request.userHandle) - Approval: \(request.approvalStatus), Payment: \(request.paymentStatus)")
                 if request.paymentStatus == .paid {
                     print("✅ FIXED LIST: \(request.userHandle) has PAID status!")
+                }
+                if request.paymentStatus == .proofSubmitted {
+                    print("🟡 FIXED LIST: \(request.userHandle) has PROOF SUBMITTED! ProofURL: \(request.paymentProofImageURL ?? "nil")")
+                    print("🟡 FIXED LIST: \(request.userHandle) proofSubmittedAt: \(request.proofSubmittedAt?.description ?? "nil")")
                 }
             }
             
@@ -258,6 +268,63 @@ struct FixedGuestListView: View {
             } catch {
                 await MainActor.run {
                     alertMessage = "Failed to deny: \(error.localizedDescription)"
+                    showingAlert = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Payment Verification Actions
+    private func verifyPaymentProof(_ request: GuestRequest) {
+        print("✅ VERIFY: Verifying payment proof for \(request.userHandle)")
+        
+        Task {
+            do {
+                try await afterpartyManager.verifyPaymentProof(
+                    afterpartyId: partyId,
+                    guestRequestId: request.id,
+                    approved: true
+                )
+                
+                await MainActor.run {
+                    alertMessage = "✅ Payment verified for @\(request.userHandle)"
+                    showingAlert = true
+                }
+                
+                // Refresh to show updated state
+                await refreshData()
+                
+            } catch {
+                await MainActor.run {
+                    alertMessage = "Failed to verify payment: \(error.localizedDescription)"
+                    showingAlert = true
+                }
+            }
+        }
+    }
+    
+    private func rejectPaymentProof(_ request: GuestRequest) {
+        print("❌ REJECT: Rejecting payment proof for \(request.userHandle)")
+        
+        Task {
+            do {
+                try await afterpartyManager.verifyPaymentProof(
+                    afterpartyId: partyId,
+                    guestRequestId: request.id,
+                    approved: false
+                )
+                
+                await MainActor.run {
+                    alertMessage = "❌ Payment proof rejected for @\(request.userHandle)"
+                    showingAlert = true
+                }
+                
+                // Refresh to show updated state
+                await refreshData()
+                
+            } catch {
+                await MainActor.run {
+                    alertMessage = "Failed to reject payment proof: \(error.localizedDescription)"
                     showingAlert = true
                 }
             }

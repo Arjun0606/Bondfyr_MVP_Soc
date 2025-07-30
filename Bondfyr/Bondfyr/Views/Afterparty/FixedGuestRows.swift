@@ -3,11 +3,16 @@ import SwiftUI
 // MARK: - Fixed Guest Row Components
 struct FixedPendingGuestRow: View {
     let request: GuestRequest
+    let partyId: String
     let onApprove: () -> Void
     let onDeny: () -> Void
     
     @State private var showingUserProfile = false
+    @State private var showingApprovalSheet = false
     @State private var showingFullMessage = false
+    @State private var showingPaymentVerification = false
+    
+    @ObservedObject private var afterpartyManager = AfterpartyManager.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -81,46 +86,64 @@ struct FixedPendingGuestRow: View {
                 .background(Color.gray.opacity(0.3))
                 .padding(.vertical, 4)
             
-            // Action Buttons - COMPLETELY ISOLATED
-            HStack(spacing: 16) {
-                // Approve Button
-                Button(action: {
-                    print("✅ APPROVE: Button tapped for \(request.userHandle)")
-                    onApprove()
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Approve")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            // NEW: Single Review Button that opens proper approval sheet
+            Button(action: {
+                print("🎯 REVIEW: Opening new approval sheet for \(request.userHandle)")
+                showingApprovalSheet = true
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.badge.plus")
+                    Text("Review Request")
+                        .fontWeight(.semibold)
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                
-                // Deny Button
-                Button(action: {
-                    print("❌ DENY: Button tapped for \(request.userHandle)")
-                    onDeny()
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "xmark.circle.fill")
-                        Text("Deny")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(BorderlessButtonStyle())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
             }
+            .buttonStyle(BorderlessButtonStyle())
         }
         .padding(.vertical, 8)
         .sheet(isPresented: $showingUserProfile) {
             UserInfoView(userId: request.userId)
+        }
+        .sheet(isPresented: $showingApprovalSheet) {
+            NewApprovalActionSheet(
+                request: request,
+                onApproveWithPayment: {
+                    showingApprovalSheet = false
+                    onApprove()
+                },
+                onApproveWithoutPayment: {
+                    showingApprovalSheet = false
+                    handleVIPApproval()
+                },
+                onDeny: {
+                    showingApprovalSheet = false
+                    onDeny()
+                },
+                onDismiss: {
+                    showingApprovalSheet = false
+                }
+            )
+        }
+        .sheet(isPresented: $showingPaymentVerification) {
+            PaymentVerificationSheet(
+                request: request,
+                partyId: partyId,
+                onVerify: {
+                    showingPaymentVerification = false
+                    handleVerifyPayment()
+                },
+                onReject: {
+                    showingPaymentVerification = false
+                    handleRejectPayment()
+                },
+                onDismiss: {
+                    showingPaymentVerification = false
+                }
+            )
         }
     }
     
@@ -129,12 +152,66 @@ struct FixedPendingGuestRow: View {
         formatter.dateTimeStyle = .named
         return formatter.localizedString(for: date, relativeTo: Date())
     }
+    
+    private func handleVIPApproval() {
+        print("🌟 VIP APPROVAL: Starting VIP approval for \(request.userHandle)")
+        
+        Task {
+            do {
+                try await afterpartyManager.approveGuestRequestFree(
+                    afterpartyId: partyId,
+                    guestRequestId: request.id
+                )
+                print("✅ VIP APPROVAL: Successfully approved \(request.userHandle) as VIP")
+            } catch {
+                print("🔴 VIP APPROVAL: Error approving \(request.userHandle) as VIP: \(error)")
+            }
+        }
+    }
+    
+    private func handleVerifyPayment() {
+        print("✅ SAFE VERIFY: Verifying payment proof for \(request.userHandle)")
+        
+        Task {
+            do {
+                try await afterpartyManager.verifyPaymentProof(
+                    afterpartyId: partyId,
+                    guestRequestId: request.id,
+                    approved: true
+                )
+                print("✅ SAFE VERIFY: Payment verified for \(request.userHandle)")
+            } catch {
+                print("🔴 SAFE VERIFY: Error verifying payment: \(error)")
+            }
+        }
+    }
+    
+    private func handleRejectPayment() {
+        print("❌ SAFE REJECT: Rejecting payment proof for \(request.userHandle)")
+        
+        Task {
+            do {
+                try await afterpartyManager.verifyPaymentProof(
+                    afterpartyId: partyId,
+                    guestRequestId: request.id,
+                    approved: false
+                )
+                print("❌ SAFE REJECT: Payment rejected for \(request.userHandle)")
+            } catch {
+                print("🔴 SAFE REJECT: Error rejecting payment: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - Fixed Approved Guest Row
 struct FixedApprovedGuestRow: View {
     let request: GuestRequest
+    let onVerifyPayment: (() -> Void)?
+    let onRejectPayment: (() -> Void)?
     @State private var showingUserProfile = false
+    @State private var showingPaymentProof = false
+    @State private var showingPaymentVerification = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -186,22 +263,122 @@ struct FixedApprovedGuestRow: View {
                         .font(.caption)
                         .foregroundColor(paymentStatusColor)
                 }
+                
+                // Payment Verification Section (NEW)
+                if request.paymentStatus == .proofSubmitted {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let proofURL = request.paymentProofImageURL, !proofURL.isEmpty {
+                            Button(action: { 
+                                showingPaymentProof = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "photo")
+                                    Text("View Payment Screenshot")
+                                }
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
             }
             
             Spacer()
             
-            // Status Badge
-            Text("✅ Approved")
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.green.opacity(0.2))
-                .foregroundColor(.green)
-                .cornerRadius(6)
+            // Action Buttons or Status Badge
+            if request.paymentStatus == .proofSubmitted {
+                // NEW: Single Review Payment Button (no more simultaneous actions!)
+                Button(action: {
+                    print("🎯 PAYMENT REVIEW: Opening payment verification for \(request.userHandle)")
+                    showingPaymentVerification = true
+                }) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "creditcard.and.123")
+                            .font(.title3)
+                        Text("Review Payment")
+                            .font(.caption2)
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .frame(width: 70, height: 50)
+                    .background(.blue)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(BorderlessButtonStyle())
+            } else {
+                // Regular Status Badge
+                Text("✅ Approved")
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.2))
+                    .foregroundColor(.green)
+                    .cornerRadius(6)
+            }
         }
         .padding(.vertical, 8)
         .sheet(isPresented: $showingUserProfile) {
             UserInfoView(userId: request.userId)
+        }
+        .sheet(isPresented: $showingPaymentProof) {
+            if let proofURL = request.paymentProofImageURL {
+                NavigationView {
+                    VStack {
+                        Text("Payment Proof")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .padding()
+                        
+                        AsyncImage(url: URL(string: proofURL)) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .cornerRadius(12)
+                            case .failure:
+                                Text("Failed to load image")
+                                    .foregroundColor(.red)
+                            case .empty:
+                                ProgressView()
+                                    .frame(height: 200)
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                        .padding()
+                        
+                        Spacer()
+                    }
+                    .navigationBarItems(
+                        trailing: Button("Done") {
+                            showingPaymentProof = false
+                        }
+                    )
+                }
+            }
+        }
+        .sheet(isPresented: $showingPaymentVerification) {
+            PaymentVerificationSheet(
+                request: request,
+                partyId: "",  // Will need to pass this properly
+                onVerify: {
+                    showingPaymentVerification = false
+                    onVerifyPayment?()
+                },
+                onReject: {
+                    showingPaymentVerification = false
+                    onRejectPayment?()
+                },
+                onDismiss: {
+                    showingPaymentVerification = false
+                }
+            )
         }
     }
     
@@ -210,6 +387,7 @@ struct FixedApprovedGuestRow: View {
         case .pending: return "clock.fill"
         case .proofSubmitted: return "hourglass.tophalf.filled"
         case .paid: return "checkmark.circle.fill"
+        case .free: return "star.fill"
         case .refunded: return "arrow.counterclockwise.circle.fill"
         }
     }
@@ -219,6 +397,7 @@ struct FixedApprovedGuestRow: View {
         case .pending: return .orange
         case .proofSubmitted: return .yellow
         case .paid: return .green
+        case .free: return .purple
         case .refunded: return .red
         }
     }
@@ -228,6 +407,7 @@ struct FixedApprovedGuestRow: View {
         case .pending: return "Payment Pending"
         case .proofSubmitted: return "⏳ Payment Proof Submitted"
         case .paid: return "✅ PAID - Attending!"
+        case .free: return "⭐ VIP - Free Entry!"
         case .refunded: return "Refunded"
         }
     }
@@ -245,39 +425,40 @@ struct FixedGuestRows_Previews: PreviewProvider {
         VStack {
             FixedPendingGuestRow(
                 request: GuestRequest.preview,
+                partyId: "sample-party-id",
                 onApprove: { print("Approved") },
                 onDeny: { print("Denied") }
             )
             
-            FixedApprovedGuestRow(request: GuestRequest.approvedPreview)
+            FixedApprovedGuestRow(
+                request: GuestRequest.preview,
+                onVerifyPayment: { print("Verified") },
+                onRejectPayment: { print("Rejected") }
+            )
         }
         .padding()
         .background(Color.black)
     }
 }
 
-// MARK: - Preview Data
+// MARK: - GuestRequest Preview Data
 extension GuestRequest {
     static var preview: GuestRequest {
         GuestRequest(
-            userId: "user123",
-            userName: "John Doe",
-            userHandle: "johndoe",
-            introMessage: "Hey! I'm visiting from NYC and would love to join this party. It looks awesome!",
+            id: "preview-id",
+            userId: "user-123",
+            userName: "Jane Doe",
+            userHandle: "janedoe",
+            introMessage: "Hi! Would love to join your party!",
+            requestedAt: Date(),
             paymentStatus: .pending,
-            approvalStatus: .pending
-        )
-    }
-    
-    static var approvedPreview: GuestRequest {
-        GuestRequest(
-            userId: "user456",
-            userName: "Jane Smith",
-            userHandle: "janesmith",
-            introMessage: "Excited to attend!",
-            paymentStatus: .pending,
-            approvalStatus: .approved,
-            approvedAt: Date()
+            approvalStatus: .pending,
+            paypalOrderId: nil,
+            paidAt: nil,
+            approvedAt: nil,
+            paymentProofImageURL: nil,
+            proofSubmittedAt: nil,
+            verificationImageURL: "example-url"
         )
     }
 } 

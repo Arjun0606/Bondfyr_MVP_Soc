@@ -29,6 +29,7 @@ enum PaymentStatus: String, Codable {
     case pending = "pending"
     case proofSubmitted = "proof_submitted" // NEW: Guest uploaded proof, awaiting host verification
     case paid = "paid"
+    case free = "free" // NEW: VIP/complimentary entry, no payment required
     case refunded = "refunded"
 }
 
@@ -138,9 +139,10 @@ struct Afterparty: Identifiable, Codable {
     let cashAppHandle: String? // Host's Cash App handle ($username)
     let acceptsApplePay: Bool? // Whether host accepts Apple Pay via phone
     
-    // MARK: - Party Chat fields
-    let chatEnded: Bool?
-    let chatEndedAt: Date?
+    // MARK: - Dodo Payment Integration (for listing fees)
+    let paymentId: String? // Dodo payment ID for listing fee
+    let paymentStatus: String? // Dodo payment status
+    let listingFeePaid: Bool? // Whether listing fee was paid
     
     // MARK: - Stats Processing (Realistic Metrics System)
     let statsProcessed: Bool?        // Whether user stats have been updated
@@ -264,8 +266,12 @@ struct Afterparty: Identifiable, Codable {
         // Payment Methods (Critical for P2P payments)
         case venmoHandle, zelleInfo, cashAppHandle, acceptsApplePay
         
+        // Dodo Payment Integration (for listing fees)
+        case paymentId, paymentStatus, listingFeePaid
+        case hostId, partyId // Legacy/duplicate fields
+        
         // Party Chat fields
-        case chatEnded, chatEndedAt
+
         
         // Stats Processing (Realistic Metrics System)
         case statsProcessed, statsProcessedAt
@@ -317,9 +323,13 @@ struct Afterparty: Identifiable, Codable {
          cashAppHandle: String? = nil,
          acceptsApplePay: Bool? = nil,
          
+         // Dodo Payment Integration (for listing fees)
+         paymentId: String? = nil,
+         paymentStatus: String? = nil,
+         listingFeePaid: Bool? = nil,
+         
          // Party Chat fields
-         chatEnded: Bool? = nil,
-         chatEndedAt: Date? = nil,
+         
          
          // Stats Processing (Realistic Metrics System)
          statsProcessed: Bool? = nil,
@@ -374,9 +384,13 @@ struct Afterparty: Identifiable, Codable {
         self.cashAppHandle = cashAppHandle
         self.acceptsApplePay = acceptsApplePay
         
+        // Dodo Payment Integration (for listing fees)
+        self.paymentId = paymentId
+        self.paymentStatus = paymentStatus
+        self.listingFeePaid = listingFeePaid
+        
         // Party Chat fields
-        self.chatEnded = chatEnded
-        self.chatEndedAt = chatEndedAt
+
         
         // Stats Processing (Realistic Metrics System)
         self.statsProcessed = statsProcessed
@@ -400,7 +414,7 @@ struct Afterparty: Identifiable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
         // Basic fields
-        id = try container.decode(String.self, forKey: .id)
+        id = try container.decode(String.self, forKey: .partyId)
         userId = try container.decode(String.self, forKey: .userId)
         hostHandle = try container.decode(String.self, forKey: .hostHandle)
         radius = try container.decode(Double.self, forKey: .radius)
@@ -408,7 +422,7 @@ struct Afterparty: Identifiable, Codable {
         locationName = try container.decode(String.self, forKey: .locationName)
         description = try container.decode(String.self, forKey: .description)
         address = try container.decode(String.self, forKey: .address)
-        googleMapsLink = try container.decode(String.self, forKey: .googleMapsLink)
+        googleMapsLink = (try? container.decode(String.self, forKey: .googleMapsLink)) ?? ""
         vibeTag = try container.decode(String.self, forKey: .vibeTag)
         
         // Arrays with default empty if missing
@@ -446,15 +460,19 @@ struct Afterparty: Identifiable, Codable {
         instagramHandle = try? container.decode(String.self, forKey: .instagramHandle)
         snapchatHandle = try? container.decode(String.self, forKey: .snapchatHandle)
         
-        // TESTFLIGHT: Payment details - removed venmoHandle as we use P2P payments
+        // Payment Methods (Critical for P2P payments) - FIXED DECODER
+        venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)
+        zelleInfo = try? container.decode(String.self, forKey: .zelleInfo)
+        cashAppHandle = try? container.decode(String.self, forKey: .cashAppHandle)
+        acceptsApplePay = (try? container.decode(Bool.self, forKey: .acceptsApplePay)) ?? false
+        
+        // Dodo Payment Integration (for listing fees) - FIXED DECODER
+        paymentId = try? container.decode(String.self, forKey: .paymentId)
+        paymentStatus = try? container.decode(String.self, forKey: .paymentStatus)
+        listingFeePaid = (try? container.decode(Bool.self, forKey: .listingFeePaid)) ?? false
         
         // Party Chat fields
-        chatEnded = try? container.decode(Bool.self, forKey: .chatEnded)
-        if let chatEndTimestamp = try? container.decode(Timestamp.self, forKey: .chatEndedAt) {
-            chatEndedAt = chatEndTimestamp.dateValue()
-        } else {
-            chatEndedAt = try? container.decode(Date.self, forKey: .chatEndedAt)
-        }
+
         
         // Stats Processing (Realistic Metrics System)
         statsProcessed = try? container.decode(Bool.self, forKey: .statsProcessed)
@@ -504,16 +522,33 @@ struct Afterparty: Identifiable, Codable {
         } else if let geoPoint = try? container.decode(GeoPoint.self, forKey: .coordinate) {
             coordinate = geoPoint
         } else {
-            throw DecodingError.dataCorruptedError(forKey: .geoPoint,
+            // Try to decode as nested container for dictionary format
+            do {
+                let coordinateContainer = try container.nestedContainer(keyedBy: CoordinateKeys.self, forKey: .coordinate)
+                
+                // Try to decode as strings first, then as doubles
+                if let latString = try? coordinateContainer.decode(String.self, forKey: .latitude),
+                   let lonString = try? coordinateContainer.decode(String.self, forKey: .longitude),
+                   let lat = Double(latString),
+                   let lon = Double(lonString) {
+                    coordinate = GeoPoint(latitude: lat, longitude: lon)
+                } else {
+                    let lat = try coordinateContainer.decode(Double.self, forKey: .latitude)
+                    let lon = try coordinateContainer.decode(Double.self, forKey: .longitude)
+                    coordinate = GeoPoint(latitude: lat, longitude: lon)
+                }
+            } catch {
+                throw DecodingError.dataCorruptedError(forKey: .coordinate,
                                                   in: container,
-                                                  debugDescription: "Missing or invalid location data")
+                                                      debugDescription: "Missing or invalid location data: \(error)")
+        }
         }
         
-        // Payment Methods (Critical for P2P payments) - with defaults for backward compatibility
-        venmoHandle = try? container.decode(String.self, forKey: .venmoHandle)
-        zelleInfo = try? container.decode(String.self, forKey: .zelleInfo)
-        cashAppHandle = try? container.decode(String.self, forKey: .cashAppHandle)
-        acceptsApplePay = try? container.decode(Bool.self, forKey: .acceptsApplePay)
+    }
+    
+    // Helper CodingKeys for coordinate dictionary
+    private enum CoordinateKeys: String, CodingKey {
+        case latitude, longitude
     }
     
     // MARK: - Encodable implementation
@@ -554,12 +589,7 @@ struct Afterparty: Identifiable, Codable {
         // TESTFLIGHT: Payment details - removed venmoHandle as we use P2P payments
         
         // Party Chat fields
-        try container.encode(chatEnded, forKey: .chatEnded)
-        if let chatEndedAt = chatEndedAt {
-            try container.encode(Timestamp(date: chatEndedAt), forKey: .chatEndedAt)
-        } else {
-            try container.encodeNil(forKey: .chatEndedAt)
-        }
+
         
         // Stats Processing (Realistic Metrics System)
         try container.encode(statsProcessed, forKey: .statsProcessed)

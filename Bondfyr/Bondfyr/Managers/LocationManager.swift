@@ -67,20 +67,20 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 lastGeocodingTime = now
                 lastGeocodedLocation = location
                 
-                let geocoder = CLGeocoder()
-                geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
-                    guard let self = self,
-                          let placemark = placemarks?.first,
-                          let city = placemark.locality else {
-                        if let error = error {
-                            print("Geocoding error: \(error)")
-                        }
-                        return
+            let geocoder = CLGeocoder()
+            geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+                guard let self = self,
+                      let placemark = placemarks?.first,
+                      let city = placemark.locality else {
+                    if let error = error {
+                        print("Geocoding error: \(error)")
                     }
-                    
-                    DispatchQueue.main.async {
-                        self.currentCity = city
-                        UserDefaults.standard.set(city, forKey: "selectedCity")
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    self.currentCity = city
+                    UserDefaults.standard.set(city, forKey: "selectedCity")
                         
                         // OPTIMIZATION: Stop location updates once we have city to save battery and API calls
                         self.locationManager.stopUpdatingLocation()

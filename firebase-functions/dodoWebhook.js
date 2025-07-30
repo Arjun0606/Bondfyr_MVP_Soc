@@ -16,13 +16,13 @@ exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
     console.log('🔵 DODO WEBHOOK RECEIVED');
     
     try {
-        // Only accept POST requests
-        if (req.method !== 'POST') {
+    // Only accept POST requests
+    if (req.method !== 'POST') {
             console.log('❌ Not POST method');
-            res.status(405).send('Method Not Allowed');
-            return;
-        }
-
+        res.status(405).send('Method Not Allowed');
+        return;
+    }
+    
         // Get the raw webhook data
         const webhookData = req.body;
         console.log('📦 Raw webhook data received');
@@ -83,7 +83,7 @@ exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
 async function createPartyFromPendingData(afterpartyId, userId, paymentId, metadata) {
     try {
         console.log('🔍 Looking for pending party:', afterpartyId);
-        
+    
         // Get pending party data
         const pendingPartyRef = db.collection('pendingParties').doc(afterpartyId);
         const pendingPartyDoc = await pendingPartyRef.get();
@@ -126,7 +126,7 @@ async function createPartyFromPendingData(afterpartyId, userId, paymentId, metad
 async function sendPartyCreatedNotification(userId, partyTitle) {
     try {
         console.log('📱 Sending party created notification to:', userId);
-        
+    
         // Get user's FCM token
         const userDoc = await db.collection('users').doc(userId).get();
         if (!userDoc.exists) {

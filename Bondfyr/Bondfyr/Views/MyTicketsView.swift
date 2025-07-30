@@ -502,20 +502,18 @@ struct ActionButtonsSection: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            // PRIORITY: Join Party Chat Button
-            NavigationLink(destination: PartyChatView(afterparty: party)) {
+            // Party Status Display
                 HStack {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                    Text("Join Party Chat")
+                Text("You're Going!")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(LinearGradient(gradient: Gradient(colors: [.purple, .pink]), startPoint: .leading, endPoint: .trailing))
+            .background(LinearGradient(gradient: Gradient(colors: [.green, .mint]), startPoint: .leading, endPoint: .trailing))
                 .foregroundColor(.white)
                 .cornerRadius(12)
-            }
             
             if !party.googleMapsLink.isEmpty {
                 Link(destination: URL(string: party.googleMapsLink)!) {

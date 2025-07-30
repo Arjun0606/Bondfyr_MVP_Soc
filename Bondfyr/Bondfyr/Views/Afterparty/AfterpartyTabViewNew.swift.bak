@@ -407,55 +407,30 @@ struct HostedPartyCard: View {
                 }
             }
             
-            // Stats row - simplified
+            // Stats row
             HStack(spacing: 20) {
-                VStack(spacing: 4) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.title3)
-                        .foregroundColor(.orange)
-                    Text("\(guestStats.pending)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                    Text("Pending")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(8)
+                SimpleStatItem(
+                    icon: "clock.arrow.circlepath",
+                    value: "\(guestStats.pending)",
+                    label: "Pending",
+                    color: Color.orange
+                )
                 
-                VStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                    Text("\(guestStats.approved)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                    Text("Approved")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
+                SimpleStatItem(
+                    icon: "checkmark.circle.fill",
+                    value: "\(guestStats.approved)",
+                    label: "Approved",
+                    color: Color.blue
+                )
                 
-                VStack(spacing: 4) {
-                    Image(systemName: "person.3.fill")
-                        .font(.title3)
-                        .foregroundColor(.green)
-                    Text("\(guestStats.active)")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                    Text("Going")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
+                SimpleStatItem(
+                    icon: "person.3.fill",
+                    value: "\(guestStats.active)",
+                    label: "Going",
+                    color: Color.green
+                )
+                
+                Spacer()
             }
             
             // Action buttons
@@ -516,3 +491,30 @@ struct HostedPartyCard: View {
         }
     }
 } 
+// MARK: - Simple Stat Item
+struct SimpleStatItem: View {
+    let icon: String
+    let value: String
+    let label: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(color)
+            
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+            
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.1))
+        .cornerRadius(8)
+    }
+}

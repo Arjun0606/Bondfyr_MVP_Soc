@@ -6,11 +6,7 @@ const crypto = require('crypto');
 // Initialize Firebase Admin
 admin.initializeApp();
 
-// Export existing chat functions
-const { initializeChatData, addChatMessage, endPartyChat } = require('./chatFunctions');
-exports.initializeChatData = initializeChatData;
-exports.addChatMessage = addChatMessage;
-exports.endPartyChat = endPartyChat;
+
 
 // Export existing Dodo webhook
 const { dodoWebhook } = require('./dodoWebhook');

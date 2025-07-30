@@ -1,12 +1,13 @@
 import SwiftUI
 import FirebaseFirestore
+import FirebaseStorage
 
 struct RequestToJoinSheet: View {
     let afterparty: Afterparty
     let onRequestSubmitted: (() -> Void)?
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject private var authViewModel: AuthViewModel
-    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @ObservedObject private var afterpartyManager = AfterpartyManager.shared
     @StateObject private var dodoPaymentService = DodoPaymentService.shared
     
     @State private var introMessage = ""
@@ -73,8 +74,8 @@ struct RequestToJoinSheet: View {
         }
         .onAppear {
             checkUserStatus()
-            // Start a timer to periodically check if user has been approved
-            refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            // Start a timer to periodically check if user has been approved (reduced from 2s to 15s)
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { _ in
                 checkUserStatus()
             }
         }
@@ -361,22 +362,35 @@ struct RequestToJoinSheet: View {
         print("🟡 REQUEST: submitRequest() called for party \(afterparty.id)")
         print("🟡 REQUEST: Current user: \(currentUser.name) (\(currentUser.uid))")
         print("🟡 REQUEST: Intro message: '\(introMessage.trimmingCharacters(in: .whitespacesAndNewlines))'")
-        print("🟡 REQUEST: NEW FLOW - Sending request WITHOUT payment (payment comes after approval)")
+        print("🟡 REQUEST: Verification image selected: \(verificationImage != nil)")
         
         isSubmitting = true
         
         Task {
             do {
+                var verificationImageURL: String? = nil
+                
+                // NEW: Upload verification image if one was selected
+                if let image = verificationImage {
+                    print("🔄 REQUEST: Uploading verification image...")
+                    verificationImageURL = try await uploadVerificationImage(image: image, userId: currentUser.uid)
+                    print("✅ REQUEST: Verification image uploaded successfully: \(verificationImageURL ?? "nil")")
+                } else {
+                    print("ℹ️ REQUEST: No verification image selected")
+                }
+                
                 // NEW FLOW: Create guest request WITHOUT payment processing
                 let guestRequest = GuestRequest(
                     userId: currentUser.uid,
                     userName: currentUser.name,
                     userHandle: currentUser.username ?? currentUser.name,
                     introMessage: introMessage.trimmingCharacters(in: .whitespacesAndNewlines),
-                    paymentStatus: .pending // Will process payment AFTER approval
+                    paymentStatus: .pending, // Will process payment AFTER approval
+                    verificationImageURL: verificationImageURL // Pass the uploaded image URL
                 )
                 
                 print("🟡 REQUEST: Created GuestRequest with ID: \(guestRequest.id)")
+                print("🟡 REQUEST: Verification URL: \(guestRequest.verificationImageURL ?? "nil")")
                 print("🟡 REQUEST: Calling afterpartyManager.submitGuestRequest()...")
                 
                 // Submit request to Firestore (NO PAYMENT YET)
@@ -404,6 +418,33 @@ struct RequestToJoinSheet: View {
             }
         }
     }
+}
+
+// NEW: Function to upload verification image to Firebase Storage
+private func uploadVerificationImage(image: UIImage, userId: String) async throws -> String {
+    guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+        throw NSError(domain: "ImageUploadError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+    }
+    
+    // Create Firebase Storage reference
+    let storage = Storage.storage()
+    let filename = "verification_\(userId)_\(UUID().uuidString).jpg"
+    let storageRef = storage.reference().child("guest_verification/\(filename)")
+    
+    print("🔄 UPLOAD: Uploading verification image to: \(filename)")
+    
+    // Upload the image
+    let metadata = StorageMetadata()
+    metadata.contentType = "image/jpeg"
+    
+    let _ = try await storageRef.putDataAsync(imageData, metadata: metadata)
+    print("✅ UPLOAD: Image uploaded successfully")
+    
+    // Get download URL
+    let downloadURL = try await storageRef.downloadURL()
+    print("✅ UPLOAD: Download URL obtained: \(downloadURL.absoluteString)")
+    
+    return downloadURL.absoluteString
 }
 
 struct FlowStepView: View {

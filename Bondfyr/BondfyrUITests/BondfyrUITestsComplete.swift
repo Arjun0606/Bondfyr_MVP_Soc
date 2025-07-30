@@ -151,62 +151,8 @@ class BondfyrUITestsComplete: XCTestCase {
         XCTAssertTrue(approvedSection.waitForExistence(timeout: 3.0))
     }
     
-    func testPartyChatFlow() throws {
-        // Step 1: Navigate to a party with Live Chat
-        let partyFeedTab = app.tabBars.buttons["Party Feed"]
-        XCTAssertTrue(partyFeedTab.waitForExistence(timeout: 5.0))
-        partyFeedTab.tap()
-        
-        // Step 2: Find and tap Live Chat button
-        let liveChatButton = app.buttons.matching(identifier: "liveChatButton").element(boundBy: 0)
-        XCTAssertTrue(liveChatButton.waitForExistence(timeout: 5.0))
-        liveChatButton.tap()
-        
-        // Step 3: Verify chat interface loaded
-        let chatScrollView = app.scrollViews["chatScrollView"]
-        XCTAssertTrue(chatScrollView.waitForExistence(timeout: 3.0))
-        
-        // Step 4: Test message input (if user can post)
-        let messageField = app.textViews["messageInputField"]
-        if messageField.exists && messageField.isEnabled {
-            messageField.tap()
-            messageField.typeText("This is a test message from UI automation!")
-            
-            let sendButton = app.buttons["sendMessageButton"]
-            XCTAssertTrue(sendButton.exists)
-            sendButton.tap()
-            
-            // Verify message appears
-            let sentMessage = app.staticTexts["This is a test message from UI automation!"]
-            XCTAssertTrue(sentMessage.waitForExistence(timeout: 5.0))
-        }
-        
-        // Step 5: Test photo sharing button visibility
-        let photoButton = app.buttons["photoButton"]
-        let cameraButton = app.buttons["cameraButton"]
-        
-        // These should be visible if user can post
-        if messageField.exists && messageField.isEnabled {
-            XCTAssertTrue(photoButton.exists || cameraButton.exists)
-        }
-        
-        // Step 6: Test emoji reactions
-        let firstMessage = app.staticTexts.matching(identifier: "chatMessage").element(boundBy: 0)
-        if firstMessage.exists {
-            firstMessage.press(forDuration: 1.0) // Long press for reactions
-            
-            let emojiPicker = app.scrollViews["emojiPickerView"]
-            if emojiPicker.waitForExistence(timeout: 2.0) {
-                let partyEmoji = app.buttons["🎉"]
-                XCTAssertTrue(partyEmoji.exists)
-                partyEmoji.tap()
-            }
-        }
-        
-        // Step 7: Close chat
-        let backButton = app.navigationBars.buttons.element(boundBy: 0)
-        backButton.tap()
-    }
+    // REMOVED: Chat functionality has been removed from the app
+    // func testPartyChatFlow() throws { ... }
     
     func testPartyInvitesScreen() throws {
         // Step 1: Navigate to Party Invites tab

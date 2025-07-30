@@ -5,7 +5,7 @@ import CoreLocation
 struct GuestDashboard: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @StateObject private var realTimeManager = RealTimePartyManager.shared
-    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @ObservedObject private var afterpartyManager = AfterpartyManager.shared
     
     @State private var selectedTab: DashboardTab = .active
     @State private var showingPartyBrowser = false
@@ -322,7 +322,6 @@ struct ActivePartiesView: View {
 
 struct ActivePartyCard: View {
     let partyInfo: GuestPartyInfo
-    @State private var showingChat = false
     @State private var showingDetails = false
     
     private var timeStatus: String {
@@ -373,18 +372,18 @@ struct ActivePartyCard: View {
             // Action buttons
             HStack(spacing: 12) {
                 if partyInfo.status == .going {
-                    // Join Chat button (primary)
-                    Button(action: { showingChat = true }) {
+                    // Party Access button (primary)
+                    Button(action: { /* Party is active */ }) {
                         HStack(spacing: 8) {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                            Text("Join Chat")
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("You're Going!")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [.blue, .cyan]),
+                                gradient: Gradient(colors: [.green, .mint]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -392,6 +391,7 @@ struct ActivePartyCard: View {
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
+                    .disabled(true) // Just a status indicator
                 } else if partyInfo.status == .approved {
                     // Activate button
                     Button(action: { /* Activate party access */ }) {
@@ -444,9 +444,6 @@ struct ActivePartyCard: View {
                         .stroke(.white.opacity(0.1), lineWidth: 1)
                 )
         )
-        .sheet(isPresented: $showingChat) {
-            PartyChatView(afterparty: partyInfo.party)
-        }
         .sheet(isPresented: $showingDetails) {
             PartyDetailsPlaceholderView(party: partyInfo.party)
         }
@@ -674,7 +671,7 @@ struct EmptyActivePartiesView: View {
                 .font(.title3)
                 .fontWeight(.semibold)
             
-            Text("When you're approved for parties, they'll appear here with chat access.")
+                            Text("When you're approved for parties, they'll appear here with party access.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

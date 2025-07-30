@@ -288,8 +288,7 @@ struct HostPartyControls_Previews: PreviewProvider {
             guestRequests: [],
             earnings: 0,
             bondfyrFee: 0,
-            chatEnded: false,
-            chatEndedAt: nil,
+
             statsProcessed: false,
             statsProcessedAt: nil
         ))

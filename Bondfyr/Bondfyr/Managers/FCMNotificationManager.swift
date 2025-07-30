@@ -241,6 +241,31 @@ class FCMNotificationManager: NSObject, ObservableObject {
         )
     }
     
+    /// NEW: Notify GUEST when approved as VIP (free entry)
+    func notifyGuestOfVIPApproval(
+        guestUserId: String,
+        partyId: String,
+        partyTitle: String,
+        hostName: String
+    ) async {
+        print("🔔 FCM: Notifying GUEST \(guestUserId) of VIP approval")
+        
+        let data: [String: Any] = [
+            "type": "vip_approved",
+            "partyId": partyId,
+            "partyTitle": partyTitle,
+            "hostName": hostName,
+            "action": "party_access"
+        ]
+        
+        await sendNotificationToUser(
+            userId: guestUserId,
+            title: "⭐ VIP Access Granted!",
+            body: "You've been approved as VIP for \(partyTitle)! No payment required - you're all set!",
+            data: data
+        )
+    }
+    
     /// Notify GUEST when payment is verified  
     func notifyGuestOfPaymentVerification(
         guestUserId: String,

@@ -129,7 +129,7 @@ struct CreateAfterpartyButton: View {
 // MARK: - Main View
 struct AfterpartyTabView: View {
     @StateObject private var locationManager = LocationManager()
-    @StateObject private var afterpartyManager = AfterpartyManager.shared
+    @ObservedObject private var afterpartyManager = AfterpartyManager.shared
     @EnvironmentObject private var authViewModel: AuthViewModel
     @State private var showingCreateSheet = false
     @State private var searchText = ""
@@ -543,58 +543,13 @@ struct ActionButtonsView: View {
                 guestActionButton
             }
             
-            // PARTY LIVE CHAT BUTTON - Your sister's viral feature! 🔥
-            NavigationLink(destination: PartyChatView(afterparty: afterparty)) {
-                VStack(spacing: 2) {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 14))
-                    Text("Live")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [.purple, .pink]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(12)
-                .overlay(
-                    // Show "VIEW" indicator if user can't post
-                    canUserPostToParty() ? nil : 
-                    Text("VIEW")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.blue)
-                        .padding(2)
-                        .background(Color.blue.opacity(0.2))
-                        .cornerRadius(4)
-                        .offset(x: 18, y: -12)
-                )
-                .shadow(color: .purple.opacity(0.3), radius: 4, x: 0, y: 2)
-            }
+
             
             shareButton
         }
     }
     
-    // Helper function to check if user can post in party chat
-    private func canUserPostToParty() -> Bool {
-        guard let userId = authViewModel.currentUser?.uid else { return false }
-        
-        // Host can always post
-        if afterparty.userId == userId {
-            return true
-        }
-        
-        // CRITICAL FIX: Use activeUsers array for consistency with PartyChatManager
-        // This ensures all permission checks use the same logic throughout the app
-        return afterparty.activeUsers.contains(userId)
-    }
+
     
     private var hostControlsMenu: some View {
         Menu {
@@ -651,9 +606,9 @@ struct ActionButtonsView: View {
                     buttonState = .proofSubmitted
                     print("🎯 PAYMENT DEBUG: User has submitted proof, awaiting verification")
                 } else {
-                    buttonState = .approved
-                    print("🎯 PAYMENT DEBUG: User is APPROVED! Should show payment button")
-                    print("🎯 PAYMENT DEBUG: Request payment status: \(request.paymentStatus)")
+                buttonState = .approved
+                print("🎯 PAYMENT DEBUG: User is APPROVED! Should show payment button")
+                print("🎯 PAYMENT DEBUG: Request payment status: \(request.paymentStatus)")
                 }
             case .pending:
                 buttonState = .pending
@@ -1143,8 +1098,8 @@ struct AfterpartyCard: View {
             // Refresh party data when card appears to ensure UI is up to date
             refreshAfterpartyData()
             
-            // Start periodic refresh timer for real-time updates
-            refreshTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            // Start periodic refresh timer for real-time updates (reduced frequency)
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
                 refreshAfterpartyData()
             }
             
@@ -1176,7 +1131,7 @@ struct AfterpartyCard: View {
             refreshAfterpartyData()
         }
         .sheet(isPresented: $showingHostInfo) {
-            HostDetailsSheet(afterparty: afterparty)
+            HostProfileSheet(afterparty: afterparty)
         }
         .sheet(isPresented: $showingPaymentSheet) {
             P2PPaymentSheet(afterparty: afterparty) {
@@ -1645,13 +1600,10 @@ struct GuestListView: View {
                 )
                 updatedRequests[index] = updatedRequest
                 
-                // Also add to activeUsers for immediate UI update
-                var updatedActiveUsers = afterparty.activeUsers
-                if !updatedActiveUsers.contains(request.userId) {
-                    updatedActiveUsers.append(request.userId)
-                }
+                // DON'T add to activeUsers yet - wait for payment verification!
+                // Users should only be in activeUsers when payment status is .paid
                 
-                // Update the binding immediately
+                // Update the binding immediately (without activeUsers change)
                 afterparty = Afterparty(
                     id: afterparty.id,
                     userId: afterparty.userId,
@@ -1666,7 +1618,7 @@ struct GuestListView: View {
                     address: afterparty.address,
                     googleMapsLink: afterparty.googleMapsLink,
                     vibeTag: afterparty.vibeTag,
-                    activeUsers: updatedActiveUsers,
+                    activeUsers: afterparty.activeUsers, // Keep original activeUsers - no premature addition!
                     pendingRequests: afterparty.pendingRequests,
                     createdAt: afterparty.createdAt,
                     title: afterparty.title,
@@ -1681,8 +1633,13 @@ struct GuestListView: View {
                     guestRequests: updatedRequests,
                     earnings: afterparty.earnings,
                     bondfyrFee: afterparty.bondfyrFee,
-                    chatEnded: afterparty.chatEnded,
-                    chatEndedAt: afterparty.chatEndedAt
+                    venmoHandle: afterparty.venmoHandle,
+                    zelleInfo: afterparty.zelleInfo,
+                    cashAppHandle: afterparty.cashAppHandle,
+                    acceptsApplePay: afterparty.acceptsApplePay,
+                    paymentId: afterparty.paymentId,
+                    paymentStatus: afterparty.paymentStatus,
+                    listingFeePaid: afterparty.listingFeePaid
                 )
                 
                 print("🟢 DEBUG: UI updated immediately - user moved to approved section")
@@ -1762,8 +1719,7 @@ struct GuestListView: View {
                 guestRequests: updatedRequests,
                 earnings: afterparty.earnings,
                 bondfyrFee: afterparty.bondfyrFee,
-                chatEnded: afterparty.chatEnded,
-                chatEndedAt: afterparty.chatEndedAt
+
             )
             
             print("🔴 DEBUG: UI updated immediately - request removed")
@@ -2508,9 +2464,8 @@ struct CreateAfterpartyView: View {
                     
                     // TODO: Navigate to created party or show success message
                     print("🎉 PARTY CREATED: Party created successfully!")
-                    print("💬 CHAT ACCESS: Host can now access party chat via the Live Chat button")
-                }
-            } catch {
+            }
+        } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showingError = true
@@ -2854,7 +2809,7 @@ struct DemoPartiesBanner: View {
         )
         .padding(.horizontal)
     }
-}
+} 
 
 struct PartyDetailsSection: View {
     @Binding var title: String

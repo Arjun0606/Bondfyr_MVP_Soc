@@ -1058,15 +1058,9 @@ class NotificationManager: NSObject {
             options: [.foreground]
         )
         
-        let joinChatAction = UNNotificationAction(
-            identifier: "JOIN_CHAT",
-            title: "Join Chat",
-            options: [.foreground]
-        )
-        
         let guestStatusCategory = UNNotificationCategory(
             identifier: "GUEST_STATUS",
-            actions: [viewPartyAction, joinChatAction],
+            actions: [viewPartyAction],
             intentIdentifiers: [],
             options: []
         )

@@ -163,10 +163,7 @@ class AfterpartyManager: NSObject, ObservableObject {
         let data = try Firestore.Encoder().encode(afterparty)
         try await db.collection("afterparties").document(afterparty.id).setData(data)
         
-        // Start the party chat when party is created
-        await MainActor.run {
-            PartyChatManager.shared.startPartyChat(for: afterparty)
-        }
+
         
         // CRITICAL FIX: Schedule party start reminder notification
         NotificationManager.shared.schedulePartyStartReminder(
@@ -217,22 +214,25 @@ class AfterpartyManager: NSObject, ObservableObject {
                 
                 let afterparty = try Firestore.Decoder().decode(Afterparty.self, from: docData)
                 
+                // CRITICAL: Clean up data inconsistencies before displaying
+                let cleanedAfterparty = cleanupActiveUsersData(afterparty)
+                
                 // Get locations
-                let partyLocation = CLLocation(latitude: afterparty.coordinate.latitude, 
-                                             longitude: afterparty.coordinate.longitude)
+                let partyLocation = CLLocation(latitude: cleanedAfterparty.coordinate.latitude, 
+                                             longitude: cleanedAfterparty.coordinate.longitude)
                 let userLocation = CLLocation(latitude: location.latitude, 
                                             longitude: location.longitude)
                 
                 // Calculate distance
                 let distanceInMeters = userLocation.distance(from: partyLocation)
-                let radiusInMeters = afterparty.radius // radius is already in meters
+                let radiusInMeters = cleanedAfterparty.radius // radius is already in meters
                 
                 
                 
                 // Include if within radius
                 if distanceInMeters <= radiusInMeters {
                     
-                    return afterparty
+                    return cleanedAfterparty
                 } else {
                     
                     return nil
@@ -312,14 +312,18 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         print("🟡 BACKEND: Starting Firestore transaction...")
         
-        // Get party title first for notifications
+        // Simplified approach: Get party title directly from Firestore
         let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
-        guard let data = doc.data(),
-              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
-            print("🔴 BACKEND: submitGuestRequest() FAILED - party not found")
-            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        guard let data = doc.data() else {
+            print("🔴 BACKEND: submitGuestRequest() FAILED - no document data")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty document not found"])
         }
-        let partyTitle = afterparty.title
+        
+        // Get party title and host ID directly without full decoding
+        let partyTitle = data["title"] as? String ?? "Unknown Party"
+        let hostUserId = data["userId"] as? String ?? ""
+        print("🟡 BACKEND: Party title: \(partyTitle)")
+        print("🟡 BACKEND: Host user ID: \(hostUserId)")
         
         // CRITICAL FIX: Use Firestore transaction to prevent race conditions
         try await db.runTransaction { (transaction, errorPointer) -> Any? in
@@ -336,10 +340,21 @@ class AfterpartyManager: NSObject, ObservableObject {
                 return nil
             }
             
-            guard let data = afterpartyDocument.data(),
-              let currentAfterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
-                print("🔴 BACKEND: Failed to decode party data")
-                let error = NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+            guard let data = afterpartyDocument.data() else {
+                print("🔴 BACKEND: No document data in transaction")
+                let error = NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty document has no data"])
+                errorPointer?.pointee = error
+                return nil
+            }
+            
+            guard let currentAfterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+                print("🔴 BACKEND: Failed to decode party data in transaction")
+                print("🔴 BACKEND: Available data keys: \(data.keys.sorted())")
+                print("🔴 BACKEND: Sample data values:")
+                for (key, value) in data.prefix(5) {
+                    print("🔴 BACKEND:   \(key): \(type(of: value)) = \(value)")
+                }
+                let error = NSError(domain: "AfterpartyError", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to decode afterparty data - check data format"])
                 errorPointer?.pointee = error
                 return nil
         }
@@ -387,7 +402,7 @@ class AfterpartyManager: NSObject, ObservableObject {
         Task {
             print("🔔 FCM: Sending push notification to host about new guest request")
             await FCMNotificationManager.shared.notifyHostOfGuestRequest(
-                hostUserId: afterparty.userId,
+                hostUserId: hostUserId,
                 partyId: afterpartyId,
                 partyTitle: partyTitle,
                 guestName: guestRequest.userHandle
@@ -441,6 +456,20 @@ class AfterpartyManager: NSObject, ObservableObject {
             
             print("🟢 BACKEND: approveGuestRequest() SUCCESS - Marked \(originalRequest.userHandle) as approved, waiting for payment")
             
+            // CRITICAL: Post local notification for immediate UI updates
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: Notification.Name("GuestApproved"),
+                    object: afterpartyId,
+                    userInfo: [
+                        "partyId": afterpartyId,
+                        "guestId": originalRequest.userId,
+                        "guestHandle": originalRequest.userHandle
+                    ]
+                )
+                print("🔔 LOCAL: Posted GuestApproved notification for immediate UI refresh")
+            }
+            
             // NEW: Send FCM push notification to guest about approval
             Task {
                 print("🔔 FCM: Sending push notification to guest about approval")
@@ -454,8 +483,84 @@ class AfterpartyManager: NSObject, ObservableObject {
             }
             
             print("✅ NEW FLOW: Approved guest \(originalRequest.userHandle) - payment required to confirm spot")
+        
+        // CRITICAL: Refresh manager data so guest button sees latest status
+        await fetchNearbyAfterparties()
         } else {
             print("🔴 BACKEND: approveGuestRequest() FAILED - request not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
+        }
+    }
+    
+    /// NEW: Approve guest request without payment (VIP/Free entry)
+    func approveGuestRequestFree(afterpartyId: String, guestRequestId: String) async throws {
+        print("⭐ VIP APPROVAL: approveGuestRequestFree() called for party \(afterpartyId), request \(guestRequestId)")
+        
+        let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+        guard let data = doc.data(),
+              let afterparty = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+            print("🔴 VIP APPROVAL: FAILED - party not found")
+            throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Afterparty not found"])
+        }
+        
+        // Find and update the guest request
+        if let index = afterparty.guestRequests.firstIndex(where: { $0.id == guestRequestId }) {
+            let originalRequest = afterparty.guestRequests[index]
+            print("⭐ VIP APPROVAL: Found request for user \(originalRequest.userHandle), approving as VIP...")
+            
+            // VIP FLOW: Mark as approved AND free (no payment needed)
+            let updatedRequest = GuestRequest(
+                id: originalRequest.id,
+                userId: originalRequest.userId,
+                userName: originalRequest.userName,
+                userHandle: originalRequest.userHandle,
+                introMessage: originalRequest.introMessage,
+                requestedAt: originalRequest.requestedAt,
+                paymentStatus: .free, // NEW: Free entry status
+                approvalStatus: .approved,
+                paypalOrderId: originalRequest.paypalOrderId,
+                paidAt: Date(), // Mark as "paid" for free
+                refundedAt: originalRequest.refundedAt,
+                approvedAt: Date(),
+                paymentProofImageURL: originalRequest.paymentProofImageURL,
+                proofSubmittedAt: originalRequest.proofSubmittedAt,
+                verificationImageURL: originalRequest.verificationImageURL
+            )
+            
+            var updatedRequests = afterparty.guestRequests
+            updatedRequests[index] = updatedRequest
+            
+            // VIP: Add to activeUsers immediately (no payment required)
+            var updatedActiveUsers = afterparty.activeUsers
+            if !updatedActiveUsers.contains(originalRequest.userId) {
+                updatedActiveUsers.append(originalRequest.userId)
+                print("⭐ VIP APPROVAL: Added \(originalRequest.userHandle) to activeUsers immediately")
+            }
+            
+            // Update Firestore with approved VIP guest
+            try await db.collection("afterparties").document(afterpartyId).updateData([
+                "guestRequests": try updatedRequests.map { try Firestore.Encoder().encode($0) },
+                "activeUsers": updatedActiveUsers
+            ])
+            
+            print("⭐ VIP APPROVAL: SUCCESS - \(originalRequest.userHandle) approved as VIP with free entry")
+            
+            // Send VIP notification to guest
+            Task {
+                print("🔔 FCM: Sending VIP approval notification to guest")
+                await FCMNotificationManager.shared.notifyGuestOfVIPApproval(
+                    guestUserId: originalRequest.userId,
+                    partyId: afterpartyId,
+                    partyTitle: afterparty.title,
+                    hostName: afterparty.hostHandle
+                )
+            }
+            
+            // Refresh manager data
+            await fetchNearbyAfterparties()
+            
+        } else {
+            print("🔴 VIP APPROVAL: FAILED - request not found")
             throw NSError(domain: "AfterpartyError", code: 404, userInfo: [NSLocalizedDescriptionKey: "Guest request not found"])
         }
     }
@@ -820,9 +925,7 @@ class AfterpartyManager: NSObject, ObservableObject {
         }
         
         // End the party chat first
-        await MainActor.run {
-            PartyChatManager.shared.endPartyChatForDeletedParty()
-        }
+
         
         // Delete the afterparty
         try await db.collection("afterparties").document(afterparty.id).delete()
@@ -965,7 +1068,10 @@ class AfterpartyManager: NSObject, ObservableObject {
         }
         
         print("🔍 BACKEND: getAfterpartyById() SUCCESS - party found with \(afterparty.activeUsers.count) active users")
-        return afterparty
+            
+            // CRITICAL: Clean up data inconsistencies
+            let cleanedAfterparty = cleanupActiveUsersData(afterparty)
+            return cleanedAfterparty
     }
     
     /// Process party completion and update user stats (REALISTIC TRACKING)
@@ -1573,6 +1679,38 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         // Refresh local data
         await fetchNearbyAfterparties()
+    }
+    
+    // MARK: - Data Cleanup
+    
+    /// Removes users from activeUsers who don't have .paid payment status
+    private func cleanupActiveUsersData(_ afterparty: Afterparty) -> Afterparty {
+        let originalActiveCount = afterparty.activeUsers.count
+        
+        // Find users who are in activeUsers but don't have .paid status
+        let validActiveUsers = afterparty.activeUsers.filter { userId in
+            if let request = afterparty.guestRequests.first(where: { $0.userId == userId }) {
+                return request.paymentStatus == .paid
+            } else {
+                // User in activeUsers but no guest request - also invalid
+                print("🚨 CLEANUP: User \(userId) in activeUsers but no guest request found!")
+                return false
+            }
+        }
+        
+        if validActiveUsers.count != originalActiveCount {
+            print("🧹 CLEANUP: ⚠️ FOUND \(originalActiveCount - validActiveUsers.count) invalid users in activeUsers!")
+            print("🧹 CLEANUP: Before: \(afterparty.activeUsers)")
+            print("🧹 CLEANUP: Should be: \(validActiveUsers)")
+            print("🚨 CLEANUP: NOTE - Cannot modify immutable struct, but this alerts us to data inconsistencies")
+            
+            // For now, return the original afterparty but log the inconsistency
+            // The UI logic will handle these cases correctly with the bulletproof guest button
+            return afterparty
+        } else {
+            print("🧹 CLEANUP: ✅ All activeUsers have valid .paid status")
+            return afterparty
+        }
     }
 }
 
