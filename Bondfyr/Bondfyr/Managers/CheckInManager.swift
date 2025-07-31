@@ -41,6 +41,12 @@ class CheckInManager: ObservableObject {
                         completion(false, "Error checking in: \(error.localizedDescription)")
                     } else {
                         self.fetchActiveCheckIn(userId: userId)
+                        
+                        // 🔥 NEW: Record guest check-in for reputation system
+                        Task {
+                            await RatingManager.shared.recordGuestCheckIn(userId: userId)
+                        }
+                        
                         completion(true, "Successfully checked in!")
                     }
                 }

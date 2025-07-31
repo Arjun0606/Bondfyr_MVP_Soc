@@ -11,7 +11,6 @@ struct SettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showTermsOfService = false
     @State private var showHelpFAQ = false
-    @State private var showingNotificationTest = false
     @State private var showingNotificationStatus = false
     
     var body: some View {
@@ -99,37 +98,6 @@ struct SettingsView: View {
                                     UserDefaults.standard.set(value, forKey: "partyUpdates")
                                     print("🔔 SETTINGS: Party updates \(value ? "enabled" : "disabled")")
                                 }
-                            
-                            // Test Notifications Button
-                            Button(action: {
-                                print("🧪 TESTING: User requested notification test")
-                                NotificationManager.shared.testAllNotifications()
-                                showingNotificationTest = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "bell.badge")
-                                        .foregroundColor(.blue)
-                                    Text("Test Notifications")
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                    Text("Tap to test")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
-                            // Notification Status Info
-                            Button(action: {
-                                NotificationManager.shared.checkNotificationStatus()
-                                showingNotificationStatus = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "info.circle")
-                                        .foregroundColor(.orange)
-                                    Text("Check Notification Status")
-                                        .foregroundColor(.orange)
-                                }
-                            }
                         }
                         
                         // Privacy section
@@ -243,17 +211,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showHelpFAQ) {
                 HelpFAQView()
-            }
-            .alert("Notification Test", isPresented: $showingNotificationTest) {
-                Button("OK") { }
-            } message: {
-                Text("Test notifications have been scheduled! You should receive 4 test notifications over the next 8 seconds to verify the system is working.")
-            }
-            .alert("Notification Status", isPresented: $showingNotificationStatus) {
-                Button("Settings", action: openNotificationSettings)
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("Check the console output for detailed notification status. If notifications aren't working, enable them in Settings.")
             }
         }
     }

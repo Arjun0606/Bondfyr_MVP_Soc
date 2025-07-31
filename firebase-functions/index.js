@@ -960,3 +960,283 @@ exports.notifyHostOfPayment = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
+
+// MARK: - Reputation System Firebase Functions
+
+/**
+ * Monitor party ratings and award host credit when 20% threshold is met
+ */
+exports.processPartyRatings = functions.firestore
+  .document('afterparties/{partyId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const partyId = context.params.partyId;
+    
+    try {
+      // Check if ratings were just submitted
+      const beforeRatings = before.ratingsSubmitted || {};
+      const afterRatings = after.ratingsSubmitted || {};
+      
+      if (Object.keys(afterRatings).length > Object.keys(beforeRatings).length) {
+        console.log(`📊 New rating submitted for party ${partyId}`);
+        
+        const ratingsCount = Object.keys(afterRatings).length;
+        const ratingsRequired = after.ratingsRequired || 0;
+        const hostCreditAwarded = after.hostCreditAwarded || false;
+        
+        if (ratingsRequired > 0 && !hostCreditAwarded) {
+          const threshold = Math.max(1, Math.ceil(ratingsRequired * 0.20)); // At least 20%
+          
+          console.log(`📊 RATING CHECK: ${ratingsCount}/${ratingsRequired} ratings (${threshold} needed)`);
+          
+          if (ratingsCount >= threshold) {
+            await awardHostCredit(partyId, after.userId, after.title);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error processing ratings for party ${partyId}:`, error);
+    }
+  });
+
+/**
+ * Award host credit and check for verification
+ */
+async function awardHostCredit(partyId, hostId, partyTitle) {
+  const batch = admin.firestore().batch();
+  
+  try {
+    // Mark party as credit awarded
+    const partyRef = admin.firestore().collection('afterparties').doc(partyId);
+    batch.update(partyRef, { hostCreditAwarded: true });
+    
+    // Increment host's hostedPartiesCount
+    const hostRef = admin.firestore().collection('users').doc(hostId);
+    batch.update(hostRef, {
+      hostedPartiesCount: admin.firestore.FieldValue.increment(1)
+    });
+    
+    await batch.commit();
+    console.log(`✅ Host credit awarded for party ${partyId}`);
+    
+    // Check for host verification
+    await checkHostVerification(hostId);
+    
+    // Send achievement notification
+    await sendHostCreditNotification(hostId, partyTitle);
+    
+  } catch (error) {
+    console.error(`❌ Error awarding host credit for party ${partyId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Check if host should be verified (3+ credited parties)
+ */
+async function checkHostVerification(hostId) {
+  try {
+    const hostDoc = await admin.firestore().collection('users').doc(hostId).get();
+    const hostData = hostDoc.data();
+    
+    if (hostData) {
+      const hostedCount = hostData.hostedPartiesCount || 0;
+      const isVerified = hostData.isHostVerified || false;
+      
+      if (hostedCount >= 3 && !isVerified) {
+        await admin.firestore().collection('users').doc(hostId).update({
+          isHostVerified: true
+        });
+        
+        console.log(`🏆 Host ${hostId} achieved verification!`);
+        
+        // Send verification notification
+        await sendVerificationNotification(hostId, 'host');
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Error checking host verification for ${hostId}:`, error);
+  }
+}
+
+/**
+ * Check if guest should be verified (5+ attended parties)
+ */
+async function checkGuestVerification(userId) {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    const userData = userDoc.data();
+    
+    if (userData) {
+      const attendedCount = userData.attendedPartiesCount || 0;
+      const isVerified = userData.isGuestVerified || false;
+      
+      if (attendedCount >= 5 && !isVerified) {
+        await admin.firestore().collection('users').doc(userId).update({
+          isGuestVerified: true
+        });
+        
+        console.log(`⭐ Guest ${userId} achieved verification!`);
+        
+        // Send verification notification
+        await sendVerificationNotification(userId, 'guest');
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Error checking guest verification for ${userId}:`, error);
+  }
+}
+
+/**
+ * Monitor user check-ins and award guest credit
+ */
+exports.processGuestCheckIn = functions.firestore
+  .document('users/{userId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const userId = context.params.userId;
+    
+    try {
+      const beforeAttended = before.attendedPartiesCount || 0;
+      const afterAttended = after.attendedPartiesCount || 0;
+      
+      // Check if attended count increased
+      if (afterAttended > beforeAttended) {
+        console.log(`✅ Guest ${userId} checked in, count: ${afterAttended}`);
+        await checkGuestVerification(userId);
+      }
+    } catch (error) {
+      console.error(`❌ Error processing guest check-in for ${userId}:`, error);
+    }
+  });
+
+/**
+ * Send notification helpers
+ */
+async function sendHostCreditNotification(hostId, partyTitle) {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(hostId).get();
+    const fcmToken = userDoc.data()?.fcmToken;
+    
+    if (fcmToken) {
+      const message = {
+        notification: {
+          title: '🎉 Host Credit Earned!',
+          body: `Your party "${partyTitle}" was rated by enough guests!`
+        },
+        data: {
+          type: 'host_credit',
+          action: 'open_profile'
+        },
+        token: fcmToken
+      };
+      
+      await admin.messaging().send(message);
+      console.log(`📱 Host credit notification sent to ${hostId}`);
+    }
+  } catch (error) {
+    console.error(`❌ Error sending host credit notification:`, error);
+  }
+}
+
+async function sendVerificationNotification(userId, type) {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    const fcmToken = userDoc.data()?.fcmToken;
+    
+    if (fcmToken) {
+      const title = type === 'host' ? '🏆 Host Verified!' : '⭐ Guest Verified!';
+      const body = type === 'host' ? 
+        'Congratulations! You\'re now a Verified Host on Bondfyr.' :
+        'Congratulations! You\'re now a Verified Guest on Bondfyr.';
+      
+      const message = {
+        notification: { title, body },
+        data: {
+          type: 'verification_achieved',
+          verificationType: type,
+          action: 'open_profile'
+        },
+        token: fcmToken
+      };
+      
+      await admin.messaging().send(message);
+      console.log(`📱 Verification notification sent to ${userId}`);
+    }
+  } catch (error) {
+    console.error(`❌ Error sending verification notification:`, error);
+  }
+}
+
+/**
+ * Function to send rating requests to all party guests
+ */
+exports.sendRatingRequests = functions.https.onCall(async (data, context) => {
+  const { partyId, userIds, partyTitle } = data;
+  
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  try {
+    const usersSnapshot = await admin.firestore()
+      .collection('users')
+      .where(admin.firestore.FieldPath.documentId(), 'in', userIds)
+      .get();
+    
+    const tokens = [];
+    usersSnapshot.forEach(doc => {
+      const userData = doc.data();
+      if (userData.fcmToken) {
+        tokens.push(userData.fcmToken);
+      }
+    });
+    
+    if (tokens.length === 0) {
+      return { success: true, sentCount: 0, totalTokens: 0 };
+    }
+    
+    const message = {
+      notification: {
+        title: 'Rate Your Experience',
+        body: `How was ${partyTitle}? Your rating helps the community!`
+      },
+      data: {
+        type: 'rate_party',
+        partyId: partyId,
+        action: 'open_rating'
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          priority: 'high'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      }
+    };
+    
+    const promises = tokens.map(token => {
+      return admin.messaging().send({ ...message, token });
+    });
+    
+    const results = await Promise.allSettled(promises);
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    
+    console.log(`📱 Sent rating requests to ${successCount}/${tokens.length} devices`);
+    return { success: true, sentCount: successCount, totalTokens: tokens.length };
+    
+  } catch (error) {
+    console.error('❌ Error sending rating requests:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});

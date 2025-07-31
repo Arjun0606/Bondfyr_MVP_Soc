@@ -15,21 +15,13 @@ struct ProfileView: View {
     @State private var showHelpSupport = false
     @State private var userAchievements: [SimpleAchievement] = []
     
-    // Simplified computed properties using new AppUser model
+    // Simplified computed properties using new robust reputation model
     private var totalAttendedParties: Int {
-        authViewModel.currentUser?.partiesAttended ?? 0
+        authViewModel.currentUser?.attendedPartiesCount ?? 0
     }
     
     private var totalHostedParties: Int {
-        authViewModel.currentUser?.partiesHosted ?? 0
-    }
-    
-    private var totalPartyHours: Int {
-        authViewModel.currentUser?.totalPartyHours ?? 0
-    }
-    
-    private var accountAgeDays: Int {
-        authViewModel.currentUser?.accountAgeDays ?? 0
+        authViewModel.currentUser?.hostedPartiesCount ?? 0
     }
     
     private var totalAchievements: Int {
@@ -244,11 +236,6 @@ struct ProfileView: View {
                     value: "\(totalAttendedParties)", 
                     label: "Attended",
                     subtitle: isGuestVerified ? "Verified" : "\(max(0, 5 - totalAttendedParties)) to verify"
-                )
-                StatView(
-                    value: "\(totalPartyHours)h", 
-                    label: "Party Time",
-                    subtitle: "Hours spent"
                 )
                 StatView(
                     value: authViewModel.currentUser?.accountAgeDisplayText ?? "New", 

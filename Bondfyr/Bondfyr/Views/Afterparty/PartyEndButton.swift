@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseFirestore
+import CoreLocation
 
 struct PartyEndButton: View {
     let afterparty: Afterparty
@@ -21,66 +23,83 @@ struct PartyEndButton: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.green, Color.blue]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(12)
-                .shadow(radius: 4)
+                .background(Color.pink)
+                .cornerRadius(10)
             }
-            
-            Text("Tap when you're ready to leave the party")
-                .font(.caption)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal)
         .alert("End Party Experience?", isPresented: $showingConfirmation) {
             Button("Cancel", role: .cancel) { }
-            Button("Yes, I'm Done") {
+            Button("Rate & Exit") {
                 showingRatingSheet = true
             }
+            Button("Skip Rating") {
+                onPartyEnd()
+            }
         } message: {
-            Text("You'll be asked to rate your experience to help improve future parties.")
+            Text("Rate your experience before leaving?")
         }
         .sheet(isPresented: $showingRatingSheet) {
-            PartyRatingView(
-                afterparty: afterparty,
-                onSubmit: handleRatingSubmission,
-                onSkip: handleSkipRating
+            PostPartyRatingView(
+                party: afterparty,
+                onRatingSubmitted: {
+                    onPartyEnd()
+                }
             )
         }
-    }
-    
-    private func handleRatingSubmission(_ rating: PartyRating) {
-        print("📝 RATING: Guest submitted rating for party \(afterparty.title)")
-        print("📝 RATING: Party: \(rating.partyRating)/5, Host: \(rating.hostRating)/5")
-        
-        // Save rating to Firestore
-        Task {
-            await RatingManager.shared.submitRating(rating)
-        }
-        
-        // Mark guest as having ended the party
-        onPartyEnd()
-    }
-    
-    private func handleSkipRating() {
-        print("⏭️ RATING: Guest skipped rating for party \(afterparty.title)")
-        
-        // Still mark as ended, just without rating
-        onPartyEnd()
     }
 }
 
 #Preview {
     PartyEndButton(
-        afterparty: Afterparty.sampleData,
+        afterparty: Afterparty(
+            id: "test",
+            userId: "host123",
+            hostHandle: "johndoe",
+            coordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            radius: 100,
+            startTime: Date(),
+            endTime: Date().addingTimeInterval(3600),
+            city: "Test City",
+            locationName: "Test Location",
+            description: "Test party",
+            address: "123 Test St",
+            googleMapsLink: "",
+            vibeTag: "House Party",
+            activeUsers: [],
+            pendingRequests: [],
+            createdAt: Date(),
+            title: "Epic House Party",
+            ticketPrice: 10.0,
+            coverPhotoURL: nil,
+            maxGuestCount: 50,
+            visibility: .publicFeed,
+            approvalType: .manual,
+            ageRestriction: nil,
+            maxMaleRatio: 0.7,
+            legalDisclaimerAccepted: true,
+            guestRequests: [],
+            earnings: 0,
+            bondfyrFee: 0,
+            phoneNumber: nil,
+            instagramHandle: nil,
+            snapchatHandle: nil,
+            venmoHandle: nil,
+            zelleInfo: nil,
+            cashAppHandle: nil,
+            acceptsApplePay: nil,
+            paymentId: nil,
+            paymentStatus: nil,
+            listingFeePaid: nil,
+            statsProcessed: nil,
+            statsProcessedAt: nil,
+            completionStatus: nil,
+            endedAt: nil,
+            endedBy: nil,
+            ratedBy: nil,
+            lastRatedAt: nil
+        ),
         onPartyEnd: { }
     )
     .environmentObject(AuthViewModel())
     .preferredColorScheme(.dark)
-} 
+}

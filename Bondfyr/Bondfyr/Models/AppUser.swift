@@ -31,6 +31,11 @@ struct AppUser: Codable {
     let totalPartyHours: Int?         // Total hours spent at parties (trackable via check-ins)
     let accountAgeDays: Int?          // Days since account creation (always accurate)
     
+    // New Robust Reputation System Properties
+    let hostedPartiesCount: Int?      // Host credit only after 20% guest rating threshold
+    let attendedPartiesCount: Int?    // Incremented immediately upon successful check-in
+    let lastRatedPartyId: String?     // Prevent duplicate ratings from same user
+    
     // Simple Verification (No Ratings Required)
     let isHostVerified: Bool?         // Verified after 3 successful parties
     let isGuestVerified: Bool?        // Verified after 5 attended parties
@@ -49,7 +54,7 @@ struct AppUser: Codable {
         case admin
     }
     
-    init(uid: String, name: String, email: String, dob: Date, phoneNumber: String, role: UserRole = .user, username: String? = nil, gender: String? = nil, bio: String? = nil, instagramHandle: String? = nil, snapchatHandle: String? = nil, avatarURL: String? = nil, googleID: String? = nil, city: String? = nil, partiesHosted: Int? = 0, partiesAttended: Int? = 0, totalPartyHours: Int? = 0, accountAgeDays: Int? = 0, isHostVerified: Bool? = false, isGuestVerified: Bool? = false, accountCreated: Date? = Date(), lastActiveParty: Date? = nil, instagramConnected: Bool? = false, snapchatConnected: Bool? = false) {
+    init(uid: String, name: String, email: String, dob: Date, phoneNumber: String, role: UserRole = .user, username: String? = nil, gender: String? = nil, bio: String? = nil, instagramHandle: String? = nil, snapchatHandle: String? = nil, avatarURL: String? = nil, googleID: String? = nil, city: String? = nil, partiesHosted: Int? = 0, partiesAttended: Int? = 0, totalPartyHours: Int? = 0, accountAgeDays: Int? = 0, hostedPartiesCount: Int? = 0, attendedPartiesCount: Int? = 0, lastRatedPartyId: String? = nil, isHostVerified: Bool? = false, isGuestVerified: Bool? = false, accountCreated: Date? = Date(), lastActiveParty: Date? = nil, instagramConnected: Bool? = false, snapchatConnected: Bool? = false) {
         self.uid = uid
         self.name = name
         self.email = email
@@ -70,6 +75,12 @@ struct AppUser: Codable {
         self.partiesAttended = partiesAttended
         self.totalPartyHours = totalPartyHours
         self.accountAgeDays = accountAgeDays
+        
+        // New Reputation System
+        self.hostedPartiesCount = hostedPartiesCount
+        self.attendedPartiesCount = attendedPartiesCount
+        self.lastRatedPartyId = lastRatedPartyId
+        
         self.isHostVerified = isHostVerified
         self.isGuestVerified = isGuestVerified
         self.accountCreated = accountCreated

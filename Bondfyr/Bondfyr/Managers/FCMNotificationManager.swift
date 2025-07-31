@@ -322,6 +322,77 @@ class FCMNotificationManager: NSObject, ObservableObject {
             data: data
         )
     }
+    
+    // MARK: - Reputation System Notifications
+    
+    /// Send rating request notification to guests after party ends
+    func sendRatingRequestNotification(to userId: String, partyId: String) async {
+        print("🔔 FCM: Sending rating request to user \(userId) for party \(partyId)")
+        
+        let data: [String: Any] = [
+            "type": "rating_request",
+            "partyId": partyId,
+            "action": "rate_party"
+        ]
+        
+        await sendNotificationToUser(
+            userId: userId,
+            title: "🌟 Rate Your Experience",
+            body: "How was the party? Your rating helps the community!",
+            data: data
+        )
+    }
+    
+    /// Send host verification notification
+    func sendHostVerificationNotification(to userId: String) async {
+        print("🔔 FCM: Sending host verification to user \(userId)")
+        
+        let data: [String: Any] = [
+            "type": "host_verified",
+            "action": "view_profile"
+        ]
+        
+        await sendNotificationToUser(
+            userId: userId,
+            title: "🏆 Verified Host!",
+            body: "Congratulations! You're now a Verified Host on Bondfyr.",
+            data: data
+        )
+    }
+    
+    /// Send guest verification notification
+    func sendGuestVerificationNotification(to userId: String) async {
+        print("🔔 FCM: Sending guest verification to user \(userId)")
+        
+        let data: [String: Any] = [
+            "type": "guest_verified",
+            "action": "view_profile"
+        ]
+        
+        await sendNotificationToUser(
+            userId: userId,
+            title: "⭐ Verified Guest!",
+            body: "Congratulations! You're now a Verified Guest on Bondfyr.",
+            data: data
+        )
+    }
+    
+    /// Send achievement notification
+    func sendAchievementNotification(to userId: String, message: String) async {
+        print("🔔 FCM: Sending achievement notification to user \(userId)")
+        
+        let data: [String: Any] = [
+            "type": "achievement",
+            "action": "view_profile"
+        ]
+        
+        await sendNotificationToUser(
+            userId: userId,
+            title: "🎉 Achievement Unlocked!",
+            body: message,
+            data: data
+        )
+    }
 }
 
 // MARK: - MessagingDelegate
@@ -365,6 +436,22 @@ extension FCMNotificationManager: UNUserNotificationCenterDelegate {
                     name: Notification.Name("NavigateToPartyDetails"),
                     object: nil,
                     userInfo: ["partyId": partyId]
+                )
+                
+            case "rating_request":
+                // Navigate to party rating view
+                NotificationCenter.default.post(
+                    name: Notification.Name("NavigateToPartyRating"),
+                    object: nil,
+                    userInfo: ["partyId": partyId]
+                )
+                
+            case "host_verified", "guest_verified", "achievement":
+                // Navigate to profile view
+                NotificationCenter.default.post(
+                    name: Notification.Name("NavigateToProfile"),
+                    object: nil,
+                    userInfo: ["type": type]
                 )
                 
             default:

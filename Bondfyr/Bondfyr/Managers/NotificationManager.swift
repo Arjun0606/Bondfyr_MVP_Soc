@@ -1361,6 +1361,56 @@ class NotificationManager: NSObject {
             )
         }
     }
+    
+    // MARK: - Reputation System Notifications
+    
+    /// Send verification achievement notification
+    func sendVerificationNotification(to userId: String, type: String) {
+        let title = type == "host" ? "Verified Host!" : "Verified Guest!"
+        let body = type == "host" ? 
+            "Congratulations! You're now a Verified Host on Bondfyr." :
+            "Congratulations! You're now a Verified Guest on Bondfyr."
+        
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.badge = 1
+        content.userInfo = ["type": "verification_achieved", "verificationType": type]
+        
+        let request = UNNotificationRequest(identifier: "verification_\(userId)_\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    /// Send achievement notification
+    func sendAchievementNotification(to userId: String, message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Achievement Unlocked!"
+        content.body = message
+        content.sound = .default
+        content.badge = 1
+        content.userInfo = ["type": "achievement"]
+        
+        let request = UNNotificationRequest(identifier: "achievement_\(userId)_\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+    
+    /// Send rating request notification
+    func sendRatingRequestNotification(to userId: String, partyTitle: String, partyId: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Rate Your Experience"
+        content.body = "How was \(partyTitle)? Your rating helps the community!"
+        content.sound = .default
+        content.badge = 1
+        content.userInfo = [
+            "type": "rating_request",
+            "partyId": partyId,
+            "partyTitle": partyTitle
+        ]
+        
+        let request = UNNotificationRequest(identifier: "rating_\(partyId)_\(userId)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
 }
 
 // MARK: - UNUserNotificationCenterDelegate

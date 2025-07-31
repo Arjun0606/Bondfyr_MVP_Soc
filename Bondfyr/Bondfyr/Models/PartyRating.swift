@@ -1,53 +1,50 @@
 import Foundation
 import FirebaseFirestore
 
-// MARK: - Party Rating Model
 struct PartyRating: Identifiable, Codable {
     let id: String
     let partyId: String
-    let partyTitle: String
+    let userId: String
     let hostId: String
-    let hostName: String
-    let guestId: String
-    let guestName: String
+    let rating: Int // 1-5 stars
+    let comment: String?
+    let submittedAt: Date
+    let partyTitle: String
+    let hostHandle: String
     
-    // Ratings (1-5 stars)
-    let partyRating: Int        // Overall party experience
-    let hostRating: Int         // Host performance
-    
-    // Optional feedback
-    let comments: String?
-    
-    // Metadata
-    let ratedAt: Date
-    let partyDate: Date
-    
-    init(
-        id: String = UUID().uuidString,
-        partyId: String,
-        partyTitle: String,
-        hostId: String,
-        hostName: String,
-        guestId: String,
-        guestName: String,
-        partyRating: Int,
-        hostRating: Int,
-        comments: String? = nil,
-        ratedAt: Date = Date(),
-        partyDate: Date
-    ) {
+    init(id: String = UUID().uuidString,
+         partyId: String,
+         userId: String,
+         hostId: String,
+         rating: Int,
+         comment: String? = nil,
+         submittedAt: Date = Date(),
+         partyTitle: String,
+         hostHandle: String) {
         self.id = id
         self.partyId = partyId
-        self.partyTitle = partyTitle
+        self.userId = userId
         self.hostId = hostId
-        self.hostName = hostName
-        self.guestId = guestId
-        self.guestName = guestName
-        self.partyRating = partyRating
-        self.hostRating = hostRating
-        self.comments = comments
-        self.ratedAt = ratedAt
-        self.partyDate = partyDate
+        self.rating = rating
+        self.comment = comment
+        self.submittedAt = submittedAt
+        self.partyTitle = partyTitle
+        self.hostHandle = hostHandle
+    }
+    
+    var isPositiveRating: Bool {
+        return rating >= 4
+    }
+    
+    var ratingDescription: String {
+        switch rating {
+        case 1: return "Poor"
+        case 2: return "Fair"
+        case 3: return "Good"
+        case 4: return "Very Good"
+        case 5: return "Excellent"
+        default: return "Unknown"
+        }
     }
 }
 

@@ -155,6 +155,13 @@ struct Afterparty: Identifiable, Codable {
     let ratedBy: [String: Bool]?                  // Track which guests have rated
     let lastRatedAt: Date?                        // When last rating was submitted
     
+    // MARK: - Enhanced Rating System for Host Reputation
+    let ratingsSubmitted: [String: Int]?          // userId: rating (1-5 stars)
+    let ratingsRequired: Int?                     // Total checked-in guests who can rate
+    let hostCreditAwarded: Bool?                  // Prevent duplicate host credits
+    let averageRating: Double?                    // Calculated average of all ratings
+    let totalRatingsCount: Int?                   // Total number of ratings received
+    
     // MARK: - Computed properties
     var isExpired: Bool {
         return Date() > endTime
@@ -267,6 +274,9 @@ struct Afterparty: Identifiable, Codable {
         
         // Rating and Party Completion System
         case completionStatus, endedAt, endedBy, ratedBy, lastRatedAt
+        
+        // Enhanced Rating System for Host Reputation
+        case ratingsSubmitted, ratingsRequired, hostCreditAwarded, averageRating, totalRatingsCount
     }
     
     // MARK: - Initializer
@@ -329,7 +339,14 @@ struct Afterparty: Identifiable, Codable {
          endedAt: Date? = nil,
          endedBy: String? = nil,
          ratedBy: [String: Bool]? = nil,
-         lastRatedAt: Date? = nil) {
+         lastRatedAt: Date? = nil,
+         
+         // Enhanced Rating System for Host Reputation
+         ratingsSubmitted: [String: Int]? = nil,
+         ratingsRequired: Int? = nil,
+         hostCreditAwarded: Bool? = nil,
+         averageRating: Double? = nil,
+         totalRatingsCount: Int? = nil) {
         
         self.id = id
         self.userId = userId
@@ -391,6 +408,13 @@ struct Afterparty: Identifiable, Codable {
         self.endedBy = endedBy
         self.ratedBy = ratedBy
         self.lastRatedAt = lastRatedAt
+        
+        // Enhanced Rating System for Host Reputation
+        self.ratingsSubmitted = ratingsSubmitted
+        self.ratingsRequired = ratingsRequired
+        self.hostCreditAwarded = hostCreditAwarded
+        self.averageRating = averageRating
+        self.totalRatingsCount = totalRatingsCount
     }
     
     // Helper to convert GeoPoint to CLLocationCoordinate2D
@@ -485,6 +509,13 @@ struct Afterparty: Identifiable, Codable {
         } else {
             lastRatedAt = try? container.decode(Date.self, forKey: .lastRatedAt)
         }
+        
+        // Enhanced Rating System for Host Reputation
+        ratingsSubmitted = (try? container.decode([String: Int].self, forKey: .ratingsSubmitted)) ?? [:]
+        ratingsRequired = try? container.decode(Int.self, forKey: .ratingsRequired)
+        hostCreditAwarded = (try? container.decode(Bool.self, forKey: .hostCreditAwarded)) ?? false
+        averageRating = (try? container.decode(Double.self, forKey: .averageRating)) ?? 0.0
+        totalRatingsCount = (try? container.decode(Int.self, forKey: .totalRatingsCount)) ?? 0
         
         // Handle Timestamps
         if let startTimestamp = try? container.decode(Timestamp.self, forKey: .startTime) {
@@ -602,6 +633,13 @@ struct Afterparty: Identifiable, Codable {
         } else {
             try container.encodeNil(forKey: .lastRatedAt)
         }
+        
+        // Enhanced Rating System for Host Reputation
+        try container.encode(ratingsSubmitted, forKey: .ratingsSubmitted)
+        try container.encode(ratingsRequired, forKey: .ratingsRequired)
+        try container.encode(hostCreditAwarded, forKey: .hostCreditAwarded)
+        try container.encode(averageRating, forKey: .averageRating)
+        try container.encode(totalRatingsCount, forKey: .totalRatingsCount)
     }
 } 
 

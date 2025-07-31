@@ -1,149 +1,338 @@
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
 
-@MainActor
 class RatingManager: ObservableObject {
     static let shared = RatingManager()
     private let db = Firestore.firestore()
     
     private init() {}
     
-    // MARK: - Submit Rating
+    // MARK: - Host Reputation System
     
-    /// Submit a guest's rating for a party and host
-    func submitRating(_ rating: PartyRating) async {
-        do {
-            // Save individual rating
-            try await db.collection("party_ratings").document(rating.id).setData(
-                try Firestore.Encoder().encode(rating)
-            )
-            
-            print("✅ RATING: Successfully saved rating \(rating.id)")
-            
-            // Update host's rating summary
-            await updateHostRatingSummary(for: rating.hostId)
-            
-            // Mark party as having been rated by this guest
-            await markPartyAsRated(partyId: rating.partyId, guestId: rating.guestId)
-            
-        } catch {
-            print("🔴 RATING: Error saving rating - \(error)")
+    /// Submit a rating for a party and trigger host credit evaluation
+    func submitPartyRating(
+        partyId: String,
+        rating: Int,
+        comment: String? = nil,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard let currentUserId = Auth.auth().currentUser?.uid,
+              rating >= 1 && rating <= 5 else {
+            completion(.failure(RatingError.invalidInput))
+            return
         }
-    }
-    
-    // MARK: - Host Rating Summary
-    
-    /// Update aggregated rating data for a host
-    private func updateHostRatingSummary(for hostId: String) async {
-        do {
-            // Get all ratings for this host
-            let snapshot = try await db.collection("party_ratings")
-                .whereField("hostId", isEqualTo: hostId)
-                .getDocuments()
-            
-            let ratings = snapshot.documents.compactMap { doc -> PartyRating? in
-                try? doc.data(as: PartyRating.self)
+        
+        let partyRef = db.collection("afterparties").document(partyId)
+        
+        // First, check if user already rated this party
+        partyRef.getDocument { [weak self] snapshot, error in
+            if let error = error {
+                completion(.failure(error))
+                return
             }
             
-            guard !ratings.isEmpty else { return }
+            guard let data = snapshot?.data(),
+                  let party = try? Firestore.Decoder().decode(Afterparty.self, from: data) else {
+                completion(.failure(RatingError.partyNotFound))
+                return
+            }
             
-            // Calculate averages
-            let totalRatings = ratings.count
-            let avgPartyRating = Double(ratings.map(\.partyRating).reduce(0, +)) / Double(totalRatings)
-            let avgHostRating = Double(ratings.map(\.hostRating).reduce(0, +)) / Double(totalRatings)
-            let overallAverage = (avgPartyRating + avgHostRating) / 2.0
+            // Check if user already rated
+            if let existingRatings = party.ratingsSubmitted,
+               existingRatings[currentUserId] != nil {
+                completion(.failure(RatingError.alreadyRated))
+                return
+            }
             
-            let summary = HostRatingSummary(
-                hostId: hostId,
-                totalRatings: totalRatings,
-                averagePartyRating: avgPartyRating,
-                averageHostRating: avgHostRating,
-                overallAverage: overallAverage
-            )
-            
-            // Save summary
-            try await db.collection("host_ratings").document(hostId).setData(
-                try Firestore.Encoder().encode(summary)
-            )
-            
-            print("📊 RATING: Updated host summary - \(overallAverage.formatted(.number.precision(.fractionLength(1)))) stars (\(totalRatings) ratings)")
-            
-        } catch {
-            print("🔴 RATING: Error updating host summary - \(error)")
+            // Submit the rating
+            Task {
+                do {
+                    try await self?.submitRatingToFirestore(
+                        partyRef: partyRef,
+                        userId: currentUserId,
+                        rating: rating,
+                        comment: comment,
+                        party: party
+                    )
+                    completion(.success(()))
+                } catch {
+                    completion(.failure(error))
+                }
+            }
         }
     }
     
-    // MARK: - Party Completion Tracking
+    private func submitRatingToFirestore(
+        partyRef: DocumentReference,
+        userId: String,
+        rating: Int,
+        comment: String?,
+        party: Afterparty
+    ) async throws {
+        var updateData: [String: Any] = [
+            "ratingsSubmitted.\(userId)": rating,
+            "lastRatedAt": FieldValue.serverTimestamp()
+        ]
+        
+        if let comment = comment, !comment.isEmpty {
+            updateData["comments.\(userId)"] = comment
+        }
+        
+        // If this is the first rating, set ratingsRequired
+        if party.ratingsRequired == nil {
+            updateData["ratingsRequired"] = party.activeUsers.count
+        }
+        
+        try await partyRef.updateData(updateData)
+        
+        // Update user's lastRatedPartyId
+        updateUserLastRatedParty(userId: userId, partyId: party.id)
+        
+        // Check if host should receive credit
+        await evaluateHostCredit(for: party.id, hostId: party.userId)
+    }
     
-    /// Mark that a guest has rated a specific party
-    private func markPartyAsRated(partyId: String, guestId: String) async {
+    private func updateUserLastRatedParty(userId: String, partyId: String) {
+        let userRef = db.collection("users").document(userId)
+        userRef.updateData(["lastRatedPartyId": partyId]) { error in
+            if let error = error {
+                print("❌ Error updating user lastRatedPartyId: \(error)")
+            } else {
+                print("✅ User lastRatedPartyId updated")
+            }
+        }
+    }
+    
+    /// Evaluate if host should receive credit based on 20% rating threshold
+    private func evaluateHostCredit(for partyId: String, hostId: String) async {
+        let partyRef = db.collection("afterparties").document(partyId)
+        
         do {
-            try await db.collection("afterparties").document(partyId).updateData([
-                "ratedBy.\(guestId)": true,
-                "lastRatedAt": FieldValue.serverTimestamp()
+            let snapshot = try await partyRef.getDocument()
+            guard let data = snapshot.data(),
+                  let ratingsSubmitted = data["ratingsSubmitted"] as? [String: Int],
+                  let ratingsRequired = data["ratingsRequired"] as? Int,
+                  let hostCreditAwarded = data["hostCreditAwarded"] as? Bool else {
+                return
+            }
+            
+            // Don't award credit if already awarded
+            if hostCreditAwarded { return }
+            
+            let ratingsCount = ratingsSubmitted.count
+            let threshold = max(1, Int(ceil(Double(ratingsRequired) * 0.20))) // At least 20%
+            
+            print("📊 RATING EVALUATION: \(ratingsCount)/\(ratingsRequired) ratings (\(threshold) needed)")
+            
+            if ratingsCount >= threshold {
+                await awardHostCredit(partyId: partyId, hostId: hostId)
+            }
+        } catch {
+            print("❌ Error evaluating host credit: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Award host credit and check for verification
+    private func awardHostCredit(partyId: String, hostId: String) async {
+        let batch = db.batch()
+        
+        // Mark party as credit awarded
+        let partyRef = db.collection("afterparties").document(partyId)
+        batch.updateData(["hostCreditAwarded": true], forDocument: partyRef)
+        
+        // Increment host's hostedPartiesCount
+        let hostRef = db.collection("users").document(hostId)
+        batch.updateData([
+            "hostedPartiesCount": FieldValue.increment(Int64(1))
+        ], forDocument: hostRef)
+        
+        do {
+            try await batch.commit()
+            print("✅ Host credit awarded for party \(partyId)")
+            
+            // Check for host verification
+            await checkHostVerification(hostId: hostId)
+            
+            // Send achievement notification
+            await FCMNotificationManager.shared.sendAchievementNotification(
+                to: hostId, 
+                message: "Great job hosting! Keep it up to earn more achievements."
+            )
+        } catch {
+            print("❌ Error awarding host credit: \(error)")
+        }
+    }
+    
+    private func checkHostVerification(hostId: String) async {
+        let hostRef = db.collection("users").document(hostId)
+        
+        do {
+            let snapshot = try await hostRef.getDocument()
+            guard let data = snapshot.data(),
+                  let hostedCount = data["hostedPartiesCount"] as? Int,
+                  let isVerified = data["isHostVerified"] as? Bool else {
+                return
+            }
+            
+            if hostedCount >= 3 && !isVerified {
+                try await hostRef.updateData(["isHostVerified": true])
+                print("🏆 Host verification achieved!")
+                await FCMNotificationManager.shared.sendHostVerificationNotification(to: hostId)
+            }
+        } catch {
+            print("❌ Error checking host verification: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Guest Reputation Logic
+    
+    /// Records when a guest checks into a party
+    func recordGuestCheckIn(userId: String) async {
+        await incrementGuestAttendedCount(userId: userId)
+    }
+    
+    /// Increments guest's attended count when they check in
+    func incrementGuestAttendedCount(userId: String) async {
+        let userRef = db.collection("users").document(userId)
+        
+        do {
+            try await userRef.updateData([
+                "attendedPartiesCount": FieldValue.increment(Int64(1)),
+                "lastActiveParty": FieldValue.serverTimestamp()
             ])
             
-            print("✅ RATING: Marked party \(partyId) as rated by guest \(guestId)")
+            print("✅ Guest attended count incremented")
+            
+            // Check for guest verification
+            await checkGuestVerification(userId: userId)
             
         } catch {
-            print("🔴 RATING: Error marking party as rated - \(error)")
+            print("❌ Error recording guest check-in: \(error)")
         }
     }
     
-    // MARK: - Fetch Host Rating
-    
-    /// Get a host's current rating summary
-    func getHostRating(for hostId: String) async -> HostRatingSummary? {
+    private func checkGuestVerification(userId: String) async {
+        let userRef = db.collection("users").document(userId)
+        
         do {
-            let doc = try await db.collection("host_ratings").document(hostId).getDocument()
-            return try doc.data(as: HostRatingSummary.self)
+            let snapshot = try await userRef.getDocument()
+            guard let data = snapshot.data(),
+                  let attendedCount = data["attendedPartiesCount"] as? Int,
+                  let isVerified = data["isGuestVerified"] as? Bool else {
+                return
+            }
+            
+            if attendedCount >= 5 && !isVerified {
+                try await userRef.updateData(["isGuestVerified": true])
+                print("⭐ Guest verification achieved!")
+                await FCMNotificationManager.shared.sendGuestVerificationNotification(to: userId)
+            }
         } catch {
-            print("🔴 RATING: Error fetching host rating - \(error)")
-            return nil
+            print("❌ Error checking guest verification: \(error.localizedDescription)")
         }
     }
     
-    // MARK: - Check if Guest Can Rate
+    // MARK: - Party End Logic
     
-    /// Check if a guest has already rated a specific party
-    func hasGuestRated(partyId: String, guestId: String) async -> Bool {
+    /// Called when host ends a party - sets up the rating flow
+    func hostEndParty(_ party: Afterparty) async {
+        let partyRef = db.collection("afterparties").document(party.id)
+        
         do {
-            let doc = try await db.collection("afterparties").document(partyId).getDocument()
-            let data = doc.data()
-            let ratedBy = data?["ratedBy"] as? [String: Bool] ?? [:]
-            return ratedBy[guestId] == true
-        } catch {
-            print("🔴 RATING: Error checking if guest rated - \(error)")
-            return false
-        }
-    }
-    
-    // MARK: - Host End Party
-    
-    /// Host ends the party - triggers rating notifications to all guests
-    func hostEndParty(_ afterparty: Afterparty) async {
-        do {
-            // Update party status
-            try await db.collection("afterparties").document(afterparty.id).updateData([
-                "completionStatus": PartyCompletionStatus.hostEnded.rawValue,
+            try await partyRef.updateData([
+                "completionStatus": "hostEnded",
                 "endedAt": FieldValue.serverTimestamp(),
-                "endedBy": afterparty.userId
+                "endedBy": party.userId,
+                "ratingsRequired": party.activeUsers.count,
+                "hostCreditAwarded": false
             ])
             
-            print("🏁 RATING: Host ended party \(afterparty.title)")
+            print("✅ Party \(party.title) ended by host, rating flow initiated")
             
-            // Send notifications to all active guests to rate
-            await sendRatingNotifications(to: afterparty.activeUsers, for: afterparty)
+            // Send rating request notifications to all checked-in users
+            await sendRatingRequestNotifications(partyId: party.id, userIds: party.activeUsers)
             
         } catch {
-            print("🔴 RATING: Error ending party - \(error)")
+            print("❌ Error ending party: \(error)")
         }
     }
     
-    /// Send rating notification to guests
-    private func sendRatingNotifications(to guestIds: [String], for afterparty: Afterparty) async {
-        // TODO: Implement push notifications
-        print("🔔 RATING: Would send rating notifications to \(guestIds.count) guests")
-        print("🔔 RATING: Notification: 'Rate your experience at \(afterparty.title)'")
+    /// Sets up rating requirements when a party ends
+    func setupPartyRatingFlow(for partyId: String, checkedInUsers: [String]) async {
+        let partyRef = db.collection("afterparties").document(partyId)
+        
+        do {
+            try await partyRef.updateData([
+                "activeUsers": checkedInUsers,
+                "ratingsRequired": checkedInUsers.count,
+                "hostCreditAwarded": false
+            ])
+            
+            print("✅ Rating flow setup for party \(partyId) with \(checkedInUsers.count) potential raters")
+            
+            // Send rating request notifications to checked-in users
+            for userId in checkedInUsers {
+                NotificationManager.shared.sendRatingRequestNotification(
+                    to: userId,
+                    partyTitle: "Party", // Placeholder, actual title will be fetched
+                    partyId: partyId
+                )
+            }
+            
+        } catch {
+            print("❌ Error setting up rating flow: \(error.localizedDescription)")
+        }
+    }
+    
+    // MARK: - Notification Helpers
+    
+    private func sendHostAchievementNotification(hostId: String) {
+        // Send push notification for new hosted party credit
+        NotificationManager.shared.sendAchievementNotification(
+            to: hostId,
+            message: "🎉 You received host credit! Your party was rated by enough guests."
+        )
+    }
+    
+    /// Send rating request notifications to all checked-in guests
+    func sendRatingRequestNotifications(for party: Afterparty) {
+        for userId in party.activeUsers {
+            NotificationManager.shared.sendRatingRequestNotification(
+                to: userId,
+                partyTitle: party.title,
+                partyId: party.id
+            )
+        }
+    }
+    
+    /// Send rating request notifications to all checked-in guests
+    func sendRatingRequestNotifications(partyId: String, userIds: [String]) async {
+        for userId in userIds {
+            NotificationManager.shared.sendRatingRequestNotification(
+                to: userId,
+                partyTitle: "Party", // Placeholder, actual title will be fetched
+                partyId: partyId
+            )
+        }
+    }
+}
+
+// MARK: - Rating Errors
+
+enum RatingError: LocalizedError {
+    case invalidInput
+    case partyNotFound
+    case alreadyRated
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidInput:
+            return "Invalid rating input"
+        case .partyNotFound:
+            return "Party not found"
+        case .alreadyRated:
+            return "You have already rated this party"
+        }
     }
 } 

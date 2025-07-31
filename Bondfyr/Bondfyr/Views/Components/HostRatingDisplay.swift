@@ -2,84 +2,87 @@ import SwiftUI
 
 struct HostRatingDisplay: View {
     let hostId: String
-    @State private var ratingData: HostRatingSummary?
-    @State private var isLoading = true
+    let isVerified: Bool
+    let hostedPartiesCount: Int
+    let averageRating: Double?
     
     var body: some View {
-        HStack(spacing: 4) {
-            if isLoading {
-                ProgressView()
-                    .scaleEffect(0.6)
-            } else if let rating = ratingData {
-                // Star rating
-                HStack(spacing: 2) {
-                    ForEach(1...5, id: \.self) { star in
-                        Image(systemName: star <= rating.starRating ? "star.fill" : "star")
-                            .font(.caption)
-                            .foregroundColor(star <= rating.starRating ? .yellow : .gray)
-                    }
+        HStack(spacing: 8) {
+            // Verification Badge
+            if isVerified {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundColor(.pink)
+                        .font(.caption)
+                    Text("Verified Host")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.pink)
                 }
-                
-                // Rating text
-                Text(String(format: "%.1f", rating.displayRating))
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
-                
-                // Rating count
-                Text("(\(rating.totalRatings))")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-            } else {
-                Text("New Host")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.pink.opacity(0.15))
+                .cornerRadius(8)
             }
+            
+            // Rating Display
+            if let rating = averageRating, rating > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                        .font(.caption2)
+                    Text(String(format: "%.1f", rating))
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                }
+            }
+            
+            // Hosted Count
+            Text("\(hostedPartiesCount) parties")
+                .font(.caption2)
+                .foregroundColor(.gray)
         }
-        .task {
-            await loadRating()
-        }
-    }
-    
-    private func loadRating() async {
-        isLoading = true
-        ratingData = await RatingManager.shared.getHostRating(for: hostId)
-        isLoading = false
     }
 }
 
-// MARK: - Compact version for small spaces
-struct CompactHostRating: View {
-    let hostId: String
-    @State private var ratingData: HostRatingSummary?
+// Convenience initializer for use with AppUser
+struct HostRatingDisplay_FromUser: View {
+    let user: AppUser?
     
     var body: some View {
-        HStack(spacing: 2) {
-            if let rating = ratingData {
-                Image(systemName: "star.fill")
-                    .font(.caption2)
-                    .foregroundColor(.yellow)
-                Text(String(format: "%.1f", rating.displayRating))
-                    .font(.caption2)
-                    .fontWeight(.medium)
-            } else {
-                Text("NEW")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-            }
-        }
-        .task {
-            ratingData = await RatingManager.shared.getHostRating(for: hostId)
-        }
+        HostRatingDisplay(
+            hostId: user?.uid ?? "",
+            isVerified: user?.isHostVerified ?? false,
+            hostedPartiesCount: user?.hostedPartiesCount ?? 0,
+            averageRating: nil // Could be calculated from user's party history
+        )
     }
 }
 
 #Preview {
-    VStack(spacing: 20) {
-        HostRatingDisplay(hostId: "sample-host-id")
-        CompactHostRating(hostId: "sample-host-id")
+    VStack(spacing: 16) {
+        HostRatingDisplay(
+            hostId: "test123",
+            isVerified: true,
+            hostedPartiesCount: 8,
+            averageRating: 4.7
+        )
+        
+        HostRatingDisplay(
+            hostId: "test456",
+            isVerified: false,
+            hostedPartiesCount: 2,
+            averageRating: 3.8
+        )
+        
+        HostRatingDisplay(
+            hostId: "newhost",
+            isVerified: false,
+            hostedPartiesCount: 0,
+            averageRating: nil
+        )
     }
     .padding()
     .background(Color.black)
-    .preferredColorScheme(.dark)
 } 
