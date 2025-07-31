@@ -149,7 +149,7 @@ struct ProfileView: View {
                             .aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Circle()
-                        .fill(Color.purple.opacity(0.8))
+                        .fill(Color.pink.opacity(0.8))
                             .overlay(
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -157,10 +157,10 @@ struct ProfileView: View {
                     }
                     .frame(width: 100, height: 100)
                     .clipShape(Circle())
-                .overlay(Circle().stroke(Color.purple, lineWidth: 3))
+                .overlay(Circle().stroke(Color.pink, lineWidth: 3))
                 } else {
                     Circle()
-                    .fill(Color.purple.opacity(0.8))
+                    .fill(Color.pink.opacity(0.8))
                         .frame(width: 100, height: 100)
                         .overlay(
                         Text(authViewModel.currentUser?.name.prefix(1).uppercased() ?? "?")
@@ -214,10 +214,10 @@ struct ProfileView: View {
                 Text("Edit Profile")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.purple)
+                    .foregroundColor(.pink)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 8)
-                    .background(Color.purple.opacity(0.2))
+                    .background(Color.pink.opacity(0.2))
                     .cornerRadius(20)
             }
         }
@@ -310,7 +310,7 @@ struct ProfileView: View {
                     
                     if !isHostVerified && totalHostedParties > 0 {
                         ProgressView(value: hostVerificationProgress)
-                            .progressViewStyle(LinearProgressViewStyle(tint: .purple))
+                            .progressViewStyle(LinearProgressViewStyle(tint: .pink))
                             .scaleEffect(y: 0.8)
                     }
                 }
@@ -319,7 +319,7 @@ struct ProfileView: View {
             Button(action: { showVerificationGuide = true }) {
                 Text("Learn about verification")
                     .font(.caption)
-                    .foregroundColor(.purple)
+                    .foregroundColor(.pink)
             }
         }
         .padding()
@@ -342,7 +342,7 @@ struct ProfileView: View {
                 Button(action: { showAchievements = true }) {
                     Text("View All")
                         .font(.caption)
-                        .foregroundColor(.purple)
+                        .foregroundColor(.pink)
                 }
             }
             
@@ -516,7 +516,7 @@ struct SimpleAchievementCell: View {
                 .lineLimit(2)
         }
         .frame(width: 60, height: 60)
-        .background(Color.purple.opacity(0.2))
+        .background(Color.pink.opacity(0.2))
         .clipShape(Circle())
     }
 }
@@ -538,7 +538,7 @@ struct SettingsRowView: View {
         Button(action: action) {
             HStack {
                 Image(systemName: icon)
-                    .foregroundColor(isDestructive ? .red : .purple)
+                    .foregroundColor(isDestructive ? .red : .pink)
                     .frame(width: 20)
                 
                 Text(title)

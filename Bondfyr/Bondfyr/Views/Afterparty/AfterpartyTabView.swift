@@ -109,11 +109,7 @@ struct CreateAfterpartyButton: View {
                     if hasActiveParty {
                         Color.gray
                     } else {
-                        LinearGradient(
-                            gradient: Gradient(colors: [.pink, .purple]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                        Color.pink
                     }
                 }
             )
@@ -170,7 +166,7 @@ struct AfterpartyTabView: View {
             return parties
         }
         
-        return parties.filter { afterparty in
+        let distanceFilteredParties = parties.filter { afterparty in
             let afterpartyLocation = CLLocation(
                 latitude: afterparty.coordinate.latitude,
                 longitude: afterparty.coordinate.longitude
@@ -182,6 +178,26 @@ struct AfterpartyTabView: View {
             let distance = afterpartyLocation.distance(from: userCLLocation) / 1609.34 // Convert meters to miles
             return distance <= selectedRadius
         }
+        
+        // PIN USER'S ACTIVE PARTY TO TOP
+        guard let currentUserId = authViewModel.currentUser?.uid else {
+            return distanceFilteredParties
+        }
+        
+        // Find user's active party
+        let userActiveParties = distanceFilteredParties.filter { party in
+            return party.userId == currentUserId && (party.completionStatus == nil || party.completionStatus == .ongoing)
+        }
+        let activePartyForUser = userActiveParties.first
+        
+        // If user has an active party, pin it to the top
+        if let activeParty = activePartyForUser {
+            var reorderedParties = distanceFilteredParties.filter { $0.id != activeParty.id }
+            reorderedParties.insert(activeParty, at: 0)
+            return reorderedParties
+        }
+        
+        return distanceFilteredParties
     }
     
     // Check if any filters are active (different from defaults)
@@ -236,7 +252,7 @@ struct AfterpartyTabView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(hasActiveFilters ? Color.pink : Color.purple)
+                            .background(hasActiveFilters ? Color.pink : Color.black)
                             .foregroundColor(.white)
                             .cornerRadius(20)
                         }
@@ -307,24 +323,24 @@ struct AfterpartyTabView: View {
                     ScrollView {
                     VStack(spacing: 24) {
                         VStack(spacing: 16) {
-                            Image(systemName: "testtube.2")
+                            Image(systemName: "party.popper.fill")
                                 .font(.system(size: 50))
-                                .foregroundColor(.blue)
+                                .foregroundColor(.pink)
                             
                             VStack(spacing: 8) {
-                                Text("🧪 TestFlight Version")
+                                Text("🎉 Welcome to Bondfyr")
                                     .font(.title2)
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
                                 
-                                Text("Help us test Bondfyr before the official launch!")
+                                Text("Create amazing parties and connect with people!")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .multilineTextAlignment(.center)
                             }
                         }
                         .padding()
-                        .background(Color.blue.opacity(0.1))
+                        .background(Color.pink.opacity(0.1))
                         .cornerRadius(16)
                         
                         VStack(spacing: 16) {
@@ -343,15 +359,12 @@ struct AfterpartyTabView: View {
                                     Text("• Early hosts get featured first")
                                     Text("• Build your reputation early")
                                     Text("• Secure payments via Dodo Payments")
-                                    Text("• Keep 100% during TestFlight")
+                                    Text("• Simple party management tools")
                                 }
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
                                 
-                                Text("Full version: Automated payments, 80% to hosts")
-                                    .font(.caption)
-                                    .foregroundColor(.yellow)
-                                    .padding(.top, 4)
+
                             }
                             
                             Button("Create First Party") {
@@ -365,7 +378,7 @@ struct AfterpartyTabView: View {
                             }
                             .padding(.horizontal, 32)
                             .padding(.vertical, 16)
-                            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                            .background(Color.pink)
                             .foregroundColor(.white)
                             .cornerRadius(25)
                             .fontWeight(.semibold)
@@ -695,7 +708,7 @@ struct ActionButtonsView: View {
         case .denied, .soldOut:
             return AnyView(Color.gray)
         case .requestToJoin:
-            return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+            return AnyView(Color.pink)
         }
     }
     
@@ -817,6 +830,30 @@ struct AfterpartyCard: View {
         return ""
     }
     
+    private var timeUntilEndEnabled: String {
+        let now = Date()
+        let enableTime = afterparty.startTime.addingTimeInterval(3600) // 1 hour after start
+        
+        // If already enabled, return empty string
+        if now >= enableTime {
+            return ""
+        }
+        
+        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: enableTime)
+        if let hours = components.hour, let minutes = components.minute {
+            if hours > 0 {
+                return "\(hours)h \(minutes)m"
+            } else {
+                return "\(minutes)m"
+            }
+        }
+        return ""
+    }
+    
+    private var canEndParty: Bool {
+        Date() >= afterparty.startTime.addingTimeInterval(3600) // 1 hour after start
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // MARK: - Cover Photo & Price Header
@@ -835,17 +872,7 @@ struct AfterpartyCard: View {
                         case .failure(_), .empty:
                             // Fallback to gradient on failure or loading
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.purple.opacity(0.8),
-                                            Color.pink.opacity(0.6),
-                                            Color.orange.opacity(0.5)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
+                                .fill(Color.pink)
                                 .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
                                 .frame(maxWidth: .infinity)
                                 .overlay(
@@ -861,17 +888,7 @@ struct AfterpartyCard: View {
                         @unknown default:
                             // Default fallback
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.purple.opacity(0.8),
-                                            Color.pink.opacity(0.6),
-                                            Color.orange.opacity(0.5)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
+                                .fill(Color.pink)
                                 .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
                                 .frame(maxWidth: .infinity)
                                 .overlay(
@@ -884,17 +901,7 @@ struct AfterpartyCard: View {
                 } else {
                     // Default gradient placeholder when no image URL
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.purple.opacity(0.8),
-                                    Color.pink.opacity(0.6),
-                                    Color.orange.opacity(0.5)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color.pink)
                         .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
                         .frame(maxWidth: .infinity)
                         .overlay(
@@ -1026,44 +1033,50 @@ struct AfterpartyCard: View {
             
             // FIXED: Use new action button system
             if isHost {
-                // Host controls with cancel party option
+                // Host controls with end party option - VISUAL DISTINCTION FOR PINNED PARTY
                 VStack(spacing: 8) {
-                    HStack(spacing: 12) {
-                        Button(action: { showingGuestList = true }) {
-                            HStack {
-                                Image(systemName: "person.2.fill")
-                                Text("Manage Guests (\(afterparty.guestRequests.count))")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                    // "MY PARTY" Badge for visual distinction
+                    HStack {
+                        Image(systemName: "crown.fill")
+                            .foregroundColor(.yellow)
+                        Text("MY PARTY")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.yellow)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.yellow.opacity(0.1))
+                    .cornerRadius(6)
+                    
+                    // Consolidated Manage Party Button
+                    Button(action: { showingGuestList = true }) {
+                        HStack {
+                            Image(systemName: "gearshape.fill")
+                            Text("Manage Party")
                         }
-                        
-                        Button(action: { showingShareSheet = true }) {
-                            Image(systemName: "square.and.arrow.up")
-                                .padding()
-                                .background(Color.gray)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.pink)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                     }
                     
-                    // Cancel Party Button
+                    // End Party Button (enabled 1 hour after start)
                     Button(action: { showingDeleteConfirmation = true }) {
                         HStack {
-                            Image(systemName: "xmark.circle.fill")
-                            Text("Cancel Party")
+                            Image(systemName: canEndParty ? "stop.circle.fill" : "clock.fill")
+                            Text(canEndParty ? "End Party" : "End Available in \(timeUntilEndEnabled)")
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(Color.red.opacity(0.2))
-                        .foregroundColor(.red)
+                        .background(canEndParty ? Color.red.opacity(0.2) : Color.gray.opacity(0.2))
+                        .foregroundColor(canEndParty ? .red : .gray)
                         .cornerRadius(8)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                                .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                         )
                     }
                 }
@@ -1996,11 +2009,11 @@ struct CreateAfterpartyView: View {
     // MARK: - Computed Properties
     private var createButtonBackground: AnyView {
         if isFormValid {
-            return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
-                                        } else {
-            return AnyView(LinearGradient(gradient: Gradient(colors: [.gray, .gray]), startPoint: .leading, endPoint: .trailing))
-                                }
-                            }
+            return AnyView(Color.pink)
+        } else {
+            return AnyView(Color.gray)
+        }
+    }
     
     var body: some View {
         NavigationView {
@@ -2025,8 +2038,7 @@ struct CreateAfterpartyView: View {
                     
                     // Vibe Tags
                     VibeTagsSection(
-                        selectedVibes: $selectedVibes,
-                        vibeOptions: vibeOptions
+                        selectedVibes: $selectedVibes
                     )
                     
                     // Enhanced Date & Time Selection
@@ -2698,7 +2710,7 @@ struct AfterpartyDetailView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                        .background(Color.pink)
                         .foregroundColor(.white)
                         .cornerRadius(15)
                     }
@@ -2809,7 +2821,7 @@ struct DemoPartiesBanner: View {
         )
         .padding(.horizontal)
     }
-} 
+}
 
 struct PartyDetailsSection: View {
     @Binding var title: String
@@ -3025,7 +3037,8 @@ struct CoverPhotoSectionWithBinding: View {
 
 struct VibeTagsSection: View {
     @Binding var selectedVibes: Set<String>
-    let vibeOptions: [String]
+    @State private var customTag = ""
+    @State private var showingCustomTagField = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -3038,7 +3051,8 @@ struct VibeTagsSection: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                ForEach(vibeOptions, id: \.self) { vibe in
+                // Default vibe options
+                ForEach(Afterparty.vibeOptions, id: \.self) { vibe in
                     Button(action: {
                         if selectedVibes.contains(vibe) {
                             selectedVibes.remove(vibe)
@@ -3054,6 +3068,79 @@ struct VibeTagsSection: View {
                             .cornerRadius(12)
                     }
                 }
+                
+                // Custom tags that were added
+                ForEach(Array(selectedVibes.filter { !Afterparty.vibeOptions.contains($0) }), id: \.self) { customVibe in
+                    Button(action: {
+                        selectedVibes.remove(customVibe)
+                    }) {
+                        HStack {
+                            Text(customVibe)
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.pink)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                }
+                
+                // Custom Tag Button
+                Button(action: {
+                    showingCustomTagField = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Custom Tag")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.pink.opacity(0.3))
+                    .foregroundColor(.pink)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.pink, lineWidth: 2)
+                    )
+                }
+            }
+            
+            // Custom tag input field
+            if showingCustomTagField {
+                VStack(spacing: 8) {
+                    HStack {
+                        TextField("Enter custom tag", text: $customTag)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .foregroundColor(.black)
+                        
+                        Button("Add") {
+                            if !customTag.isEmpty && !selectedVibes.contains(customTag) {
+                                selectedVibes.insert(customTag)
+                                customTag = ""
+                                showingCustomTagField = false
+                            }
+                        }
+                        .disabled(customTag.isEmpty)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(customTag.isEmpty ? Color.gray : Color.pink)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        
+                        Button("Cancel") {
+                            customTag = ""
+                            showingCustomTagField = false
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray6))
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                    }
+                }
+                .padding(.top, 8)
             }
         }
     }
@@ -3252,6 +3339,26 @@ struct ApprovalSection: View {
             
             // Gender Ratio Control (only shows for auto-approve)
             if approvalType == .automatic {
+                // PRIVATE PARTY NOTICE
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "eye.slash.fill")
+                            .foregroundColor(.pink)
+                        Text("Your party will be private and unlisted. It will only be discoverable through the share link.")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                    }
+                    .padding(12)
+                    .background(Color.pink.opacity(0.1))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.pink.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .padding(.bottom, 8)
+                
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Max Male Ratio: \(Int(maxMaleRatio * 100))%")
                         .font(.subheadline)
@@ -3292,48 +3399,68 @@ struct ApprovalSection: View {
 
 struct AgeRestrictionSection: View {
     @Binding var ageRestriction: Int?
+    @State private var sliderValue: Double = 0 // 0 = None, 1-12 = ages 18-30
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Age Restriction (Optional)")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Age Restriction")
                 .font(.body)
                 .foregroundColor(.white)
             
-            HStack {
-                AgeRestrictionButton(title: "None", value: nil, current: ageRestriction) {
-                    ageRestriction = nil
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Minimum Age: \(displayAge)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
                 
-                AgeRestrictionButton(title: "18+", value: 18, current: ageRestriction) {
-                    ageRestriction = 18
+                Slider(value: $sliderValue, in: 0...13, step: 1) { _ in
+                    updateAgeRestriction()
                 }
+                .accentColor(.pink)
                 
-                AgeRestrictionButton(title: "21+", value: 21, current: ageRestriction) {
-                    ageRestriction = 21
+                HStack {
+                    Text("None")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text("30+")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                 }
-                
-                Spacer()
             }
+        }
+        .onAppear {
+            // Initialize slider based on current age restriction
+            if let age = ageRestriction {
+                sliderValue = Double(max(0, min(13, age - 17)))
+            } else {
+                sliderValue = 0
+            }
+        }
+    }
+    
+    private var displayAge: String {
+        if sliderValue == 0 {
+            return "None"
+        } else if sliderValue >= 13 {
+            return "30+"
+        } else {
+            return "\(Int(sliderValue + 17))+"
+        }
+    }
+    
+    private func updateAgeRestriction() {
+        if sliderValue == 0 {
+            ageRestriction = nil
+        } else if sliderValue >= 13 {
+            ageRestriction = 30
+        } else {
+            ageRestriction = Int(sliderValue + 17)
         }
     }
 }
 
-struct AgeRestrictionButton: View {
-    let title: String
-    let value: Int?
-    let current: Int?
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-        }
-        .padding()
-        .background(current == value ? Color.pink : Color(.systemGray6))
-        .foregroundColor(.white)
-        .cornerRadius(8)
-    }
-}
+
 
 
 
@@ -3507,69 +3634,7 @@ struct LegalDisclaimerSection: View {
 }
 
 
-struct TestFlightDisclaimerSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "info.circle.fill")
-                    .foregroundColor(.blue)
-                Text("TestFlight Version")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("🧪 This is a test version - help us validate the concept!")
-                    .font(.body)
-                    .foregroundColor(.gray)
-                
-                Text("💰 You keep 100% of payments during TestFlight")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.green)
-                
-                Text("📱 Guests send payments directly via Venmo/CashApp")
-                    .font(.body)
-                    .foregroundColor(.gray)
-                
-                Text("🚀 Full version will include:")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .padding(.top, 8)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("   • Automatic payment processing")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                    Text("   • 20% Bondfyr service fee (you keep 80%)")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                    Text("   • Secure payments via Dodo Payments")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    Text("   • Advanced analytics & promotion tools")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                }
-                
-                Text("Early hosts get priority features and promotion!")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.yellow)
-                    .padding(.top, 4)
-            }
-            .padding()
-            .background(Color.blue.opacity(0.1))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-            )
-        }
-    }
-}
+
 
 struct ContactHostSheet: View {
     let afterparty: Afterparty
@@ -3782,7 +3847,7 @@ struct ContactHostSheet: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                    .background(Color.pink)
                     .foregroundColor(.white)
                     .cornerRadius(12)
                 }

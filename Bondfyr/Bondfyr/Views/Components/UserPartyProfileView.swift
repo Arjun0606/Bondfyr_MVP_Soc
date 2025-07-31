@@ -18,7 +18,7 @@ struct UserPartyProfileView: View {
             // User Header
             VStack {
                 Circle()
-                    .fill(Color.purple.opacity(0.8))
+                    .fill(Color.pink.opacity(0.8))
                     .frame(width: 80, height: 80)
                     .overlay(
                         Text(String(user.name.prefix(1)).uppercased())
@@ -83,7 +83,7 @@ struct UserPartyProfileView: View {
                         .fontWeight(.bold)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(hasLiked ? Color.purple : Color.blue)
+                        .background(hasLiked ? Color.pink : Color.blue)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                 }
@@ -200,7 +200,7 @@ struct ConnectionRequestView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.purple)
+                    .background(Color.pink)
                     .foregroundColor(.white)
                     .cornerRadius(12)
                     .disabled(isSubmitting)

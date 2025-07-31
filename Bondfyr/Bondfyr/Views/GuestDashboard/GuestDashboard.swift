@@ -90,7 +90,7 @@ struct GuestDashboard: View {
                             .padding(.vertical, 12)
                             .background(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [.purple, .pink]),
+                                    gradient: Gradient(colors: [.pink]),
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )

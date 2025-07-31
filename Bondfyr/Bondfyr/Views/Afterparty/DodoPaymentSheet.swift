@@ -94,7 +94,7 @@ struct DodoPaymentSheet: View {
                     .padding()
                     .background(
                         LinearGradient(
-                            gradient: Gradient(colors: [.blue, .purple]),
+                            gradient: Gradient(colors: [.blue, .black]),
                             startPoint: .leading,
                             endPoint: .trailing
                         )

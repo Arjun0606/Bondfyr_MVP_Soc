@@ -60,7 +60,7 @@ struct HostDetailsSheet: View {
             // Host Avatar
             Circle()
                 .fill(LinearGradient(
-                    gradient: Gradient(colors: [.pink, .purple]),
+                    gradient: Gradient(colors: [.pink]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ))

@@ -288,7 +288,7 @@ struct FixedGuestActionButton: View {
     private func buttonBackground(for state: GuestButtonState) -> AnyView {
         switch state {
         case .requestToJoin:
-            return AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+            return AnyView(Color.pink)
         case .pending:
             return AnyView(Color.orange)
         case .approved:

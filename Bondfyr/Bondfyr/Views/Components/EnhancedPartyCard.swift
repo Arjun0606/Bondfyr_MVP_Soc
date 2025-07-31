@@ -33,6 +33,12 @@ struct EnhancedPartyCard: View {
         }
     }
     
+    private var formattedDateTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, MMM d 'at' h:mm a"
+        return formatter.string(from: party.startTime)
+    }
+    
     init(party: Afterparty, userId: String) {
         self.party = party
         self._guestState = StateObject(wrappedValue: PartyGuestState(partyId: party.id, userId: userId))
@@ -46,7 +52,7 @@ struct EnhancedPartyCard: View {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [.purple.opacity(0.8), .pink.opacity(0.6)]),
+                            gradient: Gradient(colors: [.black.opacity(0.8), .pink.opacity(0.6)]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -86,32 +92,45 @@ struct EnhancedPartyCard: View {
             // MARK: - Party Details Section
             VStack(spacing: 12) {
                 // Time and location info
-                HStack {
-                    // Time info
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.fill")
-                            .foregroundColor(.orange)
-                        Text(timeUntilStart)
-                            .font(.caption)
+                VStack(spacing: 8) {
+                    // Date and time
+                    HStack {
+                        Image(systemName: "calendar.circle.fill")
+                            .foregroundColor(.pink)
+                        Text(formattedDateTime)
+                            .font(.subheadline)
                             .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
                     }
                     
-                    Spacer()
-                    
-                    // Capacity info
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.3.fill")
-                            .foregroundColor(capacityInfo.isNearCapacity ? .red : .green)
-                        Text(capacityInfo.displayText)
-                            .font(.caption)
-                            .fontWeight(.medium)
+                    HStack {
+                        // Countdown info
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.fill")
+                                .foregroundColor(.pink)
+                            Text(timeUntilStart)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                        
+                        Spacer()
+                        
+                        // Capacity info
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.3.fill")
+                                .foregroundColor(capacityInfo.isNearCapacity ? .red : .pink)
+                            Text(capacityInfo.displayText)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
                     }
                 }
                 
                 // Location
                 HStack {
                     Image(systemName: "location.fill")
-                        .foregroundColor(.blue)
+                        .foregroundColor(.pink)
                     Text(party.locationName)
                         .font(.caption)
                         .lineLimit(1)
@@ -142,7 +161,7 @@ struct EnhancedPartyCard: View {
                         .frame(width: 100, height: 50)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [.pink, .purple]),
+                                gradient: Gradient(colors: [.pink, .black]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -343,7 +362,7 @@ struct ActionButton: View {
         case .notRequested:
             return AnyView(
                 LinearGradient(
-                    gradient: Gradient(colors: [.purple, .pink]),
+                    gradient: Gradient(colors: [.black, .pink]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -464,7 +483,7 @@ struct EnhancedRequestSheet: View {
                         .frame(height: 50)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [.purple, .pink]),
+                                gradient: Gradient(colors: [.black, .pink]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -570,7 +589,7 @@ struct PartyQuickInfo: View {
                 
                 HStack {
                     Image(systemName: "tag.fill")
-                        .foregroundColor(.purple)
+                        .foregroundColor(.black)
                     Text(party.vibeTag)
                         .font(.caption)
                 }

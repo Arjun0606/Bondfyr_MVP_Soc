@@ -40,7 +40,7 @@ struct CreateAfterpartyDirectView: View {
                     BenefitRow(icon: "checkmark.shield.fill", text: "Secure Payments Handled")
                     BenefitRow(icon: "person.2.fill", text: "Automated Guest List")
                     BenefitRow(icon: "ticket.fill", text: "Hassle-Free Ticketing")
-                    BenefitRow(icon: "chart.pie.fill", text: "You Keep 100% During TestFlight!", isPrimary: true)
+                    BenefitRow(icon: "chart.pie.fill", text: "Simple Party Management")
                 }
                 .padding()
                 .background(Color(.systemGray6).opacity(0.1))
@@ -70,7 +70,7 @@ struct CreateAfterpartyDirectView: View {
                         .background(
                             hasActiveParty ? 
                             AnyView(Color.gray) : 
-                            AnyView(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                            AnyView(Color.pink)
                         )
                         .foregroundColor(.white)
                         .cornerRadius(15)

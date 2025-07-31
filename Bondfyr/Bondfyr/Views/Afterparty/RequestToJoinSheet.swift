@@ -286,8 +286,8 @@ struct RequestToJoinSheet: View {
             .padding()
             .background(
                 introMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 
-                LinearGradient(gradient: Gradient(colors: [.gray, .gray]), startPoint: .leading, endPoint: .trailing) : 
-                LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing)
+                Color.gray : 
+                Color.pink
             )
             .foregroundColor(.white)
             .cornerRadius(12)

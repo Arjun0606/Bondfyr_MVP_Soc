@@ -69,7 +69,7 @@ struct HostProfileSheet: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [.pink, .purple]),
+                        gradient: Gradient(colors: [.pink]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -236,7 +236,7 @@ struct HostProfileSheet: View {
             .padding()
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [.pink, .purple]),
+                    gradient: Gradient(colors: [.pink]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )

@@ -181,7 +181,7 @@ struct SocialPlatformButtons: View {
                     title: "Instagram Stories",
                     icon: "camera.fill",
                     color: .purple,
-                    gradientColors: [.purple, .pink]
+                    gradientColors: [.pink]
                 ) {
                     shareToInstagramStories()
                 }
@@ -201,7 +201,7 @@ struct SocialPlatformButtons: View {
                     title: "Instagram Feed",
                     icon: "square.and.arrow.up.fill",
                     color: .pink,
-                    gradientColors: [.pink, .purple]
+                    gradientColors: [.pink]
                 ) {
                     shareToInstagramFeed()
                 }

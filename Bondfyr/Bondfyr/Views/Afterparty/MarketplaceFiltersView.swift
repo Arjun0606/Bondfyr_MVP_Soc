@@ -217,7 +217,7 @@ struct MarketplaceFiltersView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+                        .background(Color.pink)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }

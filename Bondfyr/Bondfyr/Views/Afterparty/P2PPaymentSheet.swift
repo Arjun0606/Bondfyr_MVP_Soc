@@ -308,7 +308,7 @@ struct P2PPaymentSheet: View {
             .padding()
             .background(
                 paymentProof != nil ?
-                    AnyView(LinearGradient(gradient: Gradient(colors: [.green, .blue]), startPoint: .leading, endPoint: .trailing)) :
+                    AnyView(Color.pink) :
                     AnyView(Color.gray)
             )
             .foregroundColor(.white)

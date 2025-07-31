@@ -132,7 +132,7 @@ struct EmptyInvitesSection: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            .background(LinearGradient(gradient: Gradient(colors: [.pink, .purple]), startPoint: .leading, endPoint: .trailing))
+            .background(Color.pink)
             .foregroundColor(.white)
             .cornerRadius(25)
         }
@@ -253,7 +253,7 @@ struct PartyInviteCard: View {
                 RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(
                         LinearGradient(
-                            gradient: Gradient(colors: [.pink, .purple]),
+                            gradient: Gradient(colors: [.pink]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -384,7 +384,7 @@ struct InviteConfirmationSection: View {
             
             // Confirmation icon
             Circle()
-                .fill(LinearGradient(gradient: Gradient(colors: [.green, .mint]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(Color.pink)
                 .frame(width: 120, height: 120)
                 .overlay(
                     VStack {
@@ -511,7 +511,7 @@ struct ActionButtonsSection: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-            .background(LinearGradient(gradient: Gradient(colors: [.green, .mint]), startPoint: .leading, endPoint: .trailing))
+            .background(Color.pink)
                 .foregroundColor(.white)
                 .cornerRadius(12)
             
@@ -523,7 +523,7 @@ struct ActionButtonsSection: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.blue)
+                    .background(Color.pink)
                     .foregroundColor(.white)
                     .cornerRadius(12)
                 }

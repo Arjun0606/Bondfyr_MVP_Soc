@@ -455,7 +455,7 @@ struct EventPhotoGalleryView: View {
                         .foregroundColor(.white)
                         .frame(height: 50)
                         .frame(maxWidth: .infinity)
-                        .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                        .background(Color.pink)
                         .cornerRadius(12)
                         .padding(.horizontal)
                     }

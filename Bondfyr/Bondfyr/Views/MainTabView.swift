@@ -24,20 +24,10 @@ struct MainTabView: View {
                 AfterpartyTabView()  // Party discovery is now the main feed
             }
             .tabItem {
-                Image(systemName: "dollarsign.circle.fill")
+                Image(systemName: "house.fill")
                 Text("Party Feed")
             }
             .tag(Tab.partyFeed)
-            
-
-            NavigationView {
-                CreateAfterpartyDirectView()  // Direct party creation view
-            }
-            .tabItem {
-                Image(systemName: "plus.circle.fill")
-                Text("Host Party")
-            }
-            .tag(Tab.hostParty)
             
             NavigationView {
                 MyTicketsView()  // User's accepted party invites

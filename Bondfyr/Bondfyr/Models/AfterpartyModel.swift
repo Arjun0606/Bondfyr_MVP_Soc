@@ -230,22 +230,11 @@ struct Afterparty: Identifiable, Codable {
     
     // MARK: - Updated vibe options for nightlife culture
     static let vibeOptions = [
-        "BYOB",
-        "Frat", 
-        "420",
-        "Pool",
-        "Rooftop",
-        "All-Girls",
-        "Dress Code",
-        "💊",
-        "Lounge",
         "House Party",
-        "Dorm Party",
-        "Backyard",
-        "Exclusive",
-        "Games",
-        "Dancing",
-        "Chill"
+        "💊", 
+        "420",
+        "Dorm",
+        "Pre Game"
     ]
     
     // MARK: - CodingKeys

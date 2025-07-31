@@ -13,7 +13,6 @@ class TabSelection: ObservableObject {
 
 enum Tab: Int, Hashable {
     case partyFeed      // main party discovery and marketplace
-    case hostParty      // party creation and host dashboard
     case tickets        // user's purchased tickets and upcoming parties
     case profile        // user profile and settings
 }
