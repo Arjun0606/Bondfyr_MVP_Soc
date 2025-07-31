@@ -243,7 +243,23 @@ class ReputationManager {
                 }
                 
                 let achievements = documents.compactMap { doc -> SimpleAchievement? in
-                    try? doc.data(as: SimpleAchievement.self)
+                    let data = doc.data()
+                    guard let id = data["id"] as? String,
+                          let type = data["type"] as? String,
+                          let title = data["title"] as? String,
+                          let description = data["description"] as? String,
+                          let emoji = data["emoji"] as? String,
+                          let earnedDate = (data["earnedDate"] as? Timestamp)?.dateValue() else {
+                        return nil
+                    }
+                    
+                    return SimpleAchievement(
+                        id: id,
+                        title: title,
+                        description: description,
+                        emoji: emoji,
+                        earnedDate: earnedDate
+                    )
                 }
                 
                 completion(achievements)

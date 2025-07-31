@@ -237,11 +237,6 @@ struct ProfileView: View {
                     label: "Attended",
                     subtitle: isGuestVerified ? "Verified" : "\(max(0, 5 - totalAttendedParties)) to verify"
                 )
-                StatView(
-                    value: authViewModel.currentUser?.accountAgeDisplayText ?? "New", 
-                    label: "Member",
-                    subtitle: "Account age"
-                )
             }
         }
         .padding()

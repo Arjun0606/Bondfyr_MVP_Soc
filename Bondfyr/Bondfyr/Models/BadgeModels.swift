@@ -82,6 +82,17 @@ struct SimpleAchievement: Identifiable, Codable {
         self.earnedDate = earnedDate
     }
     
+    // Custom initializer for loading from Firestore
+    init(id: String, title: String, description: String, emoji: String, earnedDate: Date, type: AchievementType? = nil, milestone: Int? = nil) {
+        self.id = id
+        self.type = type ?? .firstPartyAttended // Default type if not provided
+        self.title = title
+        self.description = description
+        self.emoji = emoji
+        self.milestone = milestone
+        self.earnedDate = earnedDate
+    }
+    
     var displayTitle: String {
         if let milestone = milestone {
             switch type {

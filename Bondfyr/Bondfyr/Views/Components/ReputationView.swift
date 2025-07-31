@@ -32,7 +32,7 @@ struct ReputationView: View {
             HStack(spacing: 16) {
                 // Parties hosted
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(user.partiesHosted ?? 0)")
+                    Text("\(user.hostedPartiesCount ?? 0)")
                         .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -43,7 +43,7 @@ struct ReputationView: View {
                 
                 // Parties attended
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(user.partiesAttended ?? 0)")
+                    Text("\(user.attendedPartiesCount ?? 0)")
                         .font(.title3)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -52,26 +52,24 @@ struct ReputationView: View {
                         .foregroundColor(.gray)
                 }
                 
-                // Party hours (more meaningful than fake connections)
-                if let partyHours = user.totalPartyHours, partyHours > 0 {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(partyHours)h")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        Text("Party Time")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-                
-                // Account age
+                // Verification badges
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(user.accountAgeDisplayText)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    Text("Member")
+                    HStack {
+                        if user.isHostVerified == true {
+                            Text("🏆")
+                                .font(.title3)
+                        }
+                        if user.isGuestVerified == true {
+                            Text("⭐")
+                                .font(.title3)
+                        }
+                        if user.isHostVerified != true && user.isGuestVerified != true {
+                            Text("👤")
+                                .font(.title3)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    Text("Badges")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }

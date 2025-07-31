@@ -151,6 +151,12 @@ class RatingManager: ObservableObject {
             try await batch.commit()
             print("✅ Host credit awarded for party \(partyId)")
             
+            // Award First Host Achievement if this is their first credited party
+            let hostSnapshot = try await hostRef.getDocument()
+            if let hostedCount = hostSnapshot.data()?["hostedPartiesCount"] as? Int, hostedCount == 1 {
+                await awardAchievement(userId: hostId, type: "first_party_hosted", title: "First Host", description: "Successfully hosted your first afterparty", emoji: "🎉")
+            }
+            
             // Check for host verification
             await checkHostVerification(hostId: hostId)
             
@@ -178,6 +184,10 @@ class RatingManager: ObservableObject {
             if hostedCount >= 3 && !isVerified {
                 try await hostRef.updateData(["isHostVerified": true])
                 print("🏆 Host verification achieved!")
+                
+                // Award Host Verification Achievement
+                await awardAchievement(userId: hostId, type: "host_verified", title: "Verified Host", description: "Verified as a trusted host", emoji: "🏆")
+                
                 await FCMNotificationManager.shared.sendHostVerificationNotification(to: hostId)
             }
         } catch {
@@ -204,6 +214,11 @@ class RatingManager: ObservableObject {
             
             print("✅ Guest attended count incremented")
             
+            // Award First Party Achievement if this is their first party
+            if try await userRef.getDocument().data()?["attendedPartiesCount"] as? Int == 1 {
+                await awardAchievement(userId: userId, type: "first_party_attended", title: "Party Goer", description: "Attended your first afterparty", emoji: "🕺")
+            }
+            
             // Check for guest verification
             await checkGuestVerification(userId: userId)
             
@@ -226,6 +241,10 @@ class RatingManager: ObservableObject {
             if attendedCount >= 5 && !isVerified {
                 try await userRef.updateData(["isGuestVerified": true])
                 print("⭐ Guest verification achieved!")
+                
+                // Award Guest Verification Achievement
+                await awardAchievement(userId: userId, type: "guest_verified", title: "Verified Guest", description: "Verified as an active community member", emoji: "⭐")
+                
                 await FCMNotificationManager.shared.sendGuestVerificationNotification(to: userId)
             }
         } catch {
@@ -309,11 +328,32 @@ class RatingManager: ObservableObject {
     /// Send rating request notifications to all checked-in guests
     func sendRatingRequestNotifications(partyId: String, userIds: [String]) async {
         for userId in userIds {
-            NotificationManager.shared.sendRatingRequestNotification(
-                to: userId,
-                partyTitle: "Party", // Placeholder, actual title will be fetched
-                partyId: partyId
-            )
+            await FCMNotificationManager.shared.sendRatingRequestNotification(to: userId, partyId: partyId)
+        }
+    }
+    
+    // MARK: - Achievement System
+    
+    /// Awards an achievement to a user and stores it in Firestore
+    private func awardAchievement(userId: String, type: String, title: String, description: String, emoji: String) async {
+        do {
+            let achievement: [String: Any] = [
+                "id": UUID().uuidString,
+                "type": type,
+                "title": title,
+                "description": description,
+                "emoji": emoji,
+                "earnedDate": FieldValue.serverTimestamp(),
+                "userId": userId
+            ]
+            
+            // Store achievement in user's achievements subcollection
+            try await db.collection("users").document(userId).collection("achievements").addDocument(data: achievement)
+            
+            print("🎉 Achievement awarded: \(title) to user \(userId)")
+            
+        } catch {
+            print("❌ Error awarding achievement: \(error.localizedDescription)")
         }
     }
 }
