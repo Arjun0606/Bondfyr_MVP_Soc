@@ -3113,7 +3113,8 @@ struct VibeTagsSection: View {
                     HStack {
                         TextField("Enter custom tag", text: $customTag)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .foregroundColor(.black)
+                            .background(Color.white)
+                            .cornerRadius(8)
                         
                         Button("Add") {
                             if !customTag.isEmpty && !selectedVibes.contains(customTag) {
