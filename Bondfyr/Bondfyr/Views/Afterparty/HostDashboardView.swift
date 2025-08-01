@@ -734,23 +734,6 @@ struct ManagementActionsSection: View {
             }
             
             ActionRowView(
-                title: "Share Party",
-                subtitle: "Invite more guests",
-                icon: "square.and.arrow.up"
-            ) {
-                let partyURL = "https://bondfyr.app/party/\(party.id)"
-                let activityViewController = UIActivityViewController(
-                    activityItems: [partyURL],
-                    applicationActivities: nil
-                )
-                
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootViewController = windowScene.windows.first?.rootViewController {
-                    rootViewController.present(activityViewController, animated: true)
-                }
-            }
-            
-            ActionRowView(
                 title: canEndParty ? "End Party" : "End Party",
                 subtitle: canEndParty ? "Complete the party" : "Available in \(timeUntilEndEnabled)",
                 icon: canEndParty ? "stop.circle" : "clock.fill",

@@ -12,6 +12,12 @@ struct HostProfileSheet: View {
     @State private var isLoading = true
     @State private var showingRequestSheet = false
     
+    // MARK: - Computed Properties
+    
+    private var isCurrentUserHost: Bool {
+        return authViewModel.currentUser?.uid == afterparty.userId
+    }
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -23,17 +29,16 @@ struct HostProfileSheet: View {
                         // Host Profile Header
                         hostProfileHeader
                         
-                        // Basic Information
-                        basicInfoSection
-                        
                         // Social Media (if available)
                         socialMediaSection
                         
                         // Verification Status
                         verificationSection
                         
-                        // Request to Join Button
-                        requestToJoinButton
+                        // Host Management Section (only for host viewing their own profile)
+                        if isCurrentUserHost {
+                            hostManagementSection
+                        }
                     }
                 }
                 .padding()
@@ -57,7 +62,7 @@ struct HostProfileSheet: View {
             }
         }
         .onAppear {
-            fetchHostProfile()
+            loadHostData()
         }
     }
     
@@ -65,22 +70,36 @@ struct HostProfileSheet: View {
     
     private var hostProfileHeader: some View {
         VStack(spacing: 16) {
-            // Avatar
-            Circle()
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [.pink]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            // Host's Actual Profile Picture
+            if let hostUser = hostUser, let avatarURL = hostUser.avatarURL, !avatarURL.isEmpty {
+                AsyncImage(url: URL(string: avatarURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .overlay(
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        )
+                }
+                .frame(width: 120, height: 120)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.pink, lineWidth: 3))
+            } else {
+                // Fallback to initials if no profile picture
+                Circle()
+                    .fill(Color.pink)
+                    .frame(width: 120, height: 120)
+                    .overlay(
+                        Text(hostInitials)
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
                     )
-                )
-                .frame(width: 80, height: 80)
-                .overlay(
-                    Text(hostInitials)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+                    .overlay(Circle().stroke(Color.pink, lineWidth: 3))
+            }
             
             // Host Handle and Name
             VStack(spacing: 4) {
@@ -117,6 +136,26 @@ struct HostProfileSheet: View {
                 .foregroundColor(.white)
             
             VStack(spacing: 12) {
+                // Host's city/location
+                if let hostUser = hostUser, let city = hostUser.city, !city.isEmpty {
+                    InfoRow(
+                        icon: "location.fill",
+                        title: city,
+                        subtitle: "Host location",
+                        iconColor: .blue
+                    )
+                }
+                
+                // Host's bio
+                if let hostUser = hostUser, let bio = hostUser.bio, !bio.isEmpty {
+                    InfoRow(
+                        icon: "person.text.rectangle.fill",
+                        title: bio,
+                        subtitle: "About the host",
+                        iconColor: .pink
+                    )
+                }
+                
                 // Contact availability
                 if let phoneNumber = afterparty.phoneNumber, !phoneNumber.isEmpty {
                     InfoRow(
@@ -166,7 +205,7 @@ struct HostProfileSheet: View {
                         .foregroundColor(.white)
                     
                     VStack(spacing: 12) {
-                        if let instagram = afterparty.instagramHandle, !instagram.isEmpty {
+                        if let hostUser = hostUser, let instagram = hostUser.instagramHandle, !instagram.isEmpty {
                             SocialMediaRow(
                                 platform: "Instagram",
                                 handle: instagram,
@@ -175,7 +214,7 @@ struct HostProfileSheet: View {
                             )
                         }
                         
-                        if let snapchat = afterparty.snapchatHandle, !snapchat.isEmpty {
+                        if let hostUser = hostUser, let snapchat = hostUser.snapchatHandle, !snapchat.isEmpty {
                             SocialMediaRow(
                                 platform: "Snapchat",
                                 handle: snapchat,
@@ -201,6 +240,23 @@ struct HostProfileSheet: View {
                 .foregroundColor(.white)
             
             VStack(spacing: 12) {
+                // Host verification status
+                if let hostUser = hostUser {
+                    InfoRow(
+                        icon: (hostUser.isHostVerified == true) ? "crown.fill" : "crown",
+                        title: (hostUser.isHostVerified == true) ? "Verified Host" : "New Host",
+                        subtitle: (hostUser.isHostVerified == true) ? "Trusted party host" : "Building reputation",
+                        iconColor: (hostUser.isHostVerified == true) ? .yellow : .gray
+                    )
+                    
+                    InfoRow(
+                        icon: (hostUser.isGuestVerified == true) ? "star.fill" : "star",
+                        title: (hostUser.isGuestVerified == true) ? "Verified Guest" : "Community Member",
+                        subtitle: (hostUser.isGuestVerified == true) ? "Active community member" : "New to community",
+                        iconColor: (hostUser.isGuestVerified == true) ? .blue : .gray
+                    )
+                }
+                
                 // Phone verification
                 InfoRow(
                     icon: afterparty.phoneNumber != nil ? "checkmark.shield.fill" : "shield.slash.fill",
@@ -209,7 +265,7 @@ struct HostProfileSheet: View {
                     iconColor: afterparty.phoneNumber != nil ? .green : .gray
                 )
                 
-                // ID verification (if available)
+                // Profile completeness
                 InfoRow(
                     icon: "person.badge.shield.checkmark.fill",
                     title: "Profile Complete",
@@ -246,7 +302,67 @@ struct HostProfileSheet: View {
         }
     }
     
-    // MARK: - Helper Views
+    // MARK: - Host Management Section
+    
+    private var hostManagementSection: some View {
+        VStack(spacing: 16) {
+            // Host Badge
+            HStack {
+                Image(systemName: "crown.fill")
+                    .foregroundColor(.yellow)
+                Text("You are the host of this party")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
+            
+            // Party Stats
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "person.3.fill")
+                        .foregroundColor(.blue)
+                    Text("Party Capacity")
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text("\(afterparty.activeUsers.count)/\(afterparty.maxGuestCount)")
+                        .foregroundColor(.white)
+                        .fontWeight(.semibold)
+                }
+                
+                HStack {
+                    Image(systemName: "clock.fill")
+                        .foregroundColor(.green)
+                    Text("Party Status")
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Text(afterparty.completionStatus == nil ? "Active" : "Ended")
+                        .foregroundColor(afterparty.completionStatus == nil ? .green : .gray)
+                        .fontWeight(.semibold)
+                }
+                
+                if afterparty.ticketPrice > 0 {
+                    HStack {
+                        Image(systemName: "dollarsign.circle.fill")
+                            .foregroundColor(.pink)
+                        Text("Ticket Price")
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text("$\(String(format: "%.0f", afterparty.ticketPrice))")
+                            .foregroundColor(.white)
+                            .fontWeight(.semibold)
+                    }
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
+        }
+    }
+    
+    // MARK: - Supporting Views
     
     private struct InfoRow: View {
         let icon: String
@@ -321,14 +437,15 @@ struct HostProfileSheet: View {
     }
     
     private var hasAnySocialMedia: Bool {
-        let hasInstagram = afterparty.instagramHandle?.isEmpty == false
-        let hasSnapchat = afterparty.snapchatHandle?.isEmpty == false
+        guard let hostUser = hostUser else { return false }
+        let hasInstagram = hostUser.instagramHandle?.isEmpty == false
+        let hasSnapchat = hostUser.snapchatHandle?.isEmpty == false
         return hasInstagram || hasSnapchat
     }
     
     // MARK: - Data Fetching
     
-    private func fetchHostProfile() {
+    private func loadHostData() {
         Task {
             do {
                 // Fetch host user data

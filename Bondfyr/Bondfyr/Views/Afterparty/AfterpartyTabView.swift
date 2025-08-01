@@ -2079,6 +2079,54 @@ struct CreateAfterpartyView: View {
                             showingIdPicker: $showingIdPicker
                         )
                         
+                        // MARK: - Social Media Visibility Notice
+                        if !instagramHandle.isEmpty || !snapchatHandle.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Image(systemName: "eye.fill")
+                                        .foregroundColor(.blue)
+                                    Text("Social Media Visibility")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                }
+                                
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.caption)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Your linked social media will be visible to party guests:")
+                                            .font(.subheadline)
+                                            .foregroundColor(.gray)
+                                        
+                                        if !instagramHandle.isEmpty {
+                                            HStack {
+                                                Image(systemName: "camera.fill")
+                                                    .foregroundColor(.pink)
+                                                Text("Instagram: @\(instagramHandle)")
+                                                    .foregroundColor(.white)
+                                            }
+                                            .font(.caption)
+                                        }
+                                        
+                                        if !snapchatHandle.isEmpty {
+                                            HStack {
+                                                Image(systemName: "bolt.fill")
+                                                    .foregroundColor(.yellow)
+                                                Text("Snapchat: @\(snapchatHandle)")
+                                                    .foregroundColor(.white)
+                                            }
+                                            .font(.caption)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                        }
+                        
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
                         

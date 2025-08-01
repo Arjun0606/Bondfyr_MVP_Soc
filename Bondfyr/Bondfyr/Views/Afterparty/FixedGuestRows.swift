@@ -380,6 +380,9 @@ struct FixedApprovedGuestRow: View {
                 }
             )
         }
+        .sheet(isPresented: $showingUserProfile) {
+            UserInfoView(userId: request.userId)
+        }
     }
     
     private var paymentStatusIcon: String {
