@@ -529,8 +529,18 @@ struct ActionButtonsSection: View {
                 }
             }
             
-            Button("Share Invite") {
-                // TODO: Share functionality
+            Button("Share Link") {
+                // Share party link
+                let partyURL = "https://bondfyr.app/party/\(party.id)"
+                let activityViewController = UIActivityViewController(
+                    activityItems: [partyURL],
+                    applicationActivities: nil
+                )
+                
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    rootViewController.present(activityViewController, animated: true)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding()
@@ -539,7 +549,10 @@ struct ActionButtonsSection: View {
             .cornerRadius(12)
             
             Button("Contact Host") {
-                // TODO: Contact functionality
+                // Open party chat or contact host
+                if let url = URL(string: "sms:") {
+                    UIApplication.shared.open(url)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding()

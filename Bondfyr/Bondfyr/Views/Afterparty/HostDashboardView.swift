@@ -700,7 +700,16 @@ struct ManagementActionsSection: View {
                 subtitle: "Invite more guests",
                 icon: "square.and.arrow.up"
             ) {
-                // TODO: Share functionality
+                let partyURL = "https://bondfyr.app/party/\(party.id)"
+                let activityViewController = UIActivityViewController(
+                    activityItems: [partyURL],
+                    applicationActivities: nil
+                )
+                
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    rootViewController.present(activityViewController, animated: true)
+                }
             }
             
             ActionRowView(

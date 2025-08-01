@@ -760,7 +760,15 @@ struct AfterpartyCard: View {
     @State private var isJoining = false // Missing state variable for ContactHostSheet
     @State private var showingHostInfo = false // Host profile sheet
     @State private var showingPaymentSheet = false // NEW FLOW: Payment sheet for approved guests
+    @State private var showingManagementSheet = false // Party management sheet
     @State private var refreshTimer: Timer? // Add timer for periodic refresh
+    
+    // Computed property for formatted date/time
+    private var formattedDateTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, MMM d 'at' h:mm a"
+        return formatter.string(from: afterparty.startTime)
+    }
     
     // CRITICAL FIX: Add initializer to set the @State property
     init(afterparty: Afterparty) {
@@ -980,6 +988,18 @@ struct AfterpartyCard: View {
                 }
             }
             
+            // Date and Time Display
+            HStack {
+                Image(systemName: "calendar.circle.fill")
+                    .foregroundColor(.pink)
+                Text(formattedDateTime)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            
             // Vibe tags
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -1051,7 +1071,7 @@ struct AfterpartyCard: View {
                     .cornerRadius(6)
                     
                     // Consolidated Manage Party Button
-                    Button(action: { showingGuestList = true }) {
+                    Button(action: { showingManagementSheet = true }) {
                         HStack {
                             Image(systemName: "gearshape.fill")
                             Text("Manage Party")
@@ -1059,6 +1079,19 @@ struct AfterpartyCard: View {
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(Color.pink)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    
+                    // Share Party Button
+                    Button(action: { showingShareSheet = true }) {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Share Party")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -1106,6 +1139,9 @@ struct AfterpartyCard: View {
                 // Refresh marketplace data to get updated request status
                 refreshAfterpartyData()
             }
+        }
+        .sheet(isPresented: $showingManagementSheet) {
+            PartyManagementSheet(party: afterparty)
         }
         .onAppear {
             // Refresh party data when card appears to ensure UI is up to date
