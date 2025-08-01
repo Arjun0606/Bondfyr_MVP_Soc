@@ -199,6 +199,30 @@ struct ProfileView: View {
                         .multilineTextAlignment(.center)
                         .padding(.top, 4)
                 }
+                
+                // Social Connections
+                HStack(spacing: 16) {
+                    if let instagramHandle = authViewModel.currentUser?.instagramHandle, !instagramHandle.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "camera.fill")
+                                .foregroundColor(.pink)
+                            Text("@\(instagramHandle)")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    
+                    if let snapchatHandle = authViewModel.currentUser?.snapchatHandle, !snapchatHandle.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "camera.viewfinder")
+                                .foregroundColor(.yellow)
+                            Text("@\(snapchatHandle)")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .padding(.top, 4)
             }
             
             // Edit Profile Button
