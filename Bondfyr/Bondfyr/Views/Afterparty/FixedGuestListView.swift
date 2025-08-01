@@ -179,6 +179,14 @@ struct FixedGuestListView: View {
             
             currentParty = freshParty
             
+            // Enhanced Debug Logging
+            print("🔍 GUEST LIST DEBUG: Party ID: \(partyId)")
+            print("🔍 GUEST LIST DEBUG: Total guest requests: \(freshParty.guestRequests.count)")
+            print("🔍 GUEST LIST DEBUG: All guest requests:")
+            for (i, request) in freshParty.guestRequests.enumerated() {
+                print("   [\(i)] \(request.userHandle) - Status: \(request.approvalStatus) - Payment: \(request.paymentStatus)")
+            }
+            
             // Update request lists
             pendingRequests = freshParty.guestRequests.filter { $0.approvalStatus == .pending }
             approvedGuests = freshParty.guestRequests.filter { $0.approvalStatus == .approved }
@@ -186,6 +194,13 @@ struct FixedGuestListView: View {
             print("🔄 FIXED LIST: Data refreshed - Pending: \(pendingRequests.count), Approved: \(approvedGuests.count)")
             print("🔄 FIXED LIST: Active users: \(freshParty.activeUsers.count)")
             print("🔄 FIXED LIST: ActiveUsers list: \(freshParty.activeUsers)")
+            
+            if pendingRequests.isEmpty && approvedGuests.isEmpty {
+                print("⚠️ GUEST LIST WARNING: No guest requests found! This could mean:")
+                print("   1. No one has requested to join this party yet")
+                print("   2. The party data structure might be incorrect")
+                print("   3. Database sync issue")
+            }
             
             // Debug payment status for all guest requests
             for (index, request) in freshParty.guestRequests.enumerated() {
