@@ -770,6 +770,25 @@ struct AfterpartyCard: View {
         return formatter.string(from: afterparty.startTime)
     }
     
+    // End Party Logic - matches management screen implementation
+    private var canEndParty: Bool {
+        let oneHourAfterStart = afterparty.startTime.addingTimeInterval(3600) // 1 hour = 3600 seconds
+        return Date() >= oneHourAfterStart
+    }
+    
+    private var timeUntilEndEnabled: String {
+        let oneHourAfterStart = afterparty.startTime.addingTimeInterval(3600)
+        let timeRemaining = oneHourAfterStart.timeIntervalSinceNow
+        
+        if timeRemaining <= 0 {
+            return ""
+        } else if timeRemaining < 3600 {
+            return "\(Int(timeRemaining/60))m"
+        } else {
+            return "\(Int(timeRemaining/3600))h \(Int((timeRemaining.truncatingRemainder(dividingBy: 3600))/60))m"
+        }
+    }
+    
     // CRITICAL FIX: Add initializer to set the @State property
     init(afterparty: Afterparty) {
         self._afterparty = State(initialValue: afterparty)
@@ -815,51 +834,6 @@ struct AfterpartyCard: View {
     private var isUserApproved: Bool {
         guard let currentUserId = authViewModel.currentUser?.uid else { return false }
         return afterparty.activeUsers.contains(currentUserId)
-    }
-    
-    private var timeRemaining: String {
-        let now = Date()
-        let endTime = afterparty.endTime
-        
-        // Check if party has actually ended (past its real end time)
-        if now >= endTime {
-            return "Ended"
-        }
-        
-        // Show time until actual end time
-        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: endTime)
-        if let hours = components.hour, let minutes = components.minute {
-            if hours > 0 {
-                return "Ends in \(hours)h \(minutes)m"
-            } else {
-                return "Ends in \(minutes)m"
-            }
-        }
-        return ""
-    }
-    
-    private var timeUntilEndEnabled: String {
-        let now = Date()
-        let enableTime = afterparty.startTime.addingTimeInterval(3600) // 1 hour after start
-        
-        // If already enabled, return empty string
-        if now >= enableTime {
-            return ""
-        }
-        
-        let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: enableTime)
-        if let hours = components.hour, let minutes = components.minute {
-            if hours > 0 {
-                return "\(hours)h \(minutes)m"
-            } else {
-                return "\(minutes)m"
-            }
-        }
-        return ""
-    }
-    
-    private var canEndParty: Bool {
-        Date() >= afterparty.startTime.addingTimeInterval(3600) // 1 hour after start
     }
     
     var body: some View {
@@ -1097,7 +1071,11 @@ struct AfterpartyCard: View {
                     }
                     
                     // End Party Button (enabled 1 hour after start)
-                    Button(action: { showingDeleteConfirmation = true }) {
+                    Button(action: { 
+                        if canEndParty {
+                            showingDeleteConfirmation = true
+                        }
+                    }) {
                         HStack {
                             Image(systemName: canEndParty ? "stop.circle.fill" : "clock.fill")
                             Text(canEndParty ? "End Party" : "End Available in \(timeUntilEndEnabled)")
@@ -1112,6 +1090,7 @@ struct AfterpartyCard: View {
                                 .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                         )
                     }
+                    .disabled(!canEndParty)
                 }
             } else {
                 // FIXED: Guest action button
