@@ -531,15 +531,15 @@ struct PartyManagementSheet: View {
         .sheet(isPresented: $showingEditSheet) {
             EditAfterpartyView(afterparty: party)
         }
-        .alert("Cancel Party?", isPresented: $showingDeleteAlert) {
+        .alert("End Party?", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
+            Button("End Party", role: .destructive) {
                 Task {
                     await deleteParty()
                 }
             }
         } message: {
-            Text("This will immediately process refunds for all paid guests and permanently delete your party.")
+            Text("This will mark your party as ended. Guests will be notified.")
         }
     }
     
@@ -556,17 +556,36 @@ struct PartyManagementSheet: View {
     }
 }
 
+// MARK: - Party Overview Section
 struct PartyOverviewSection: View {
     let party: Afterparty
     
     var body: some View {
-        VStack(spacing: 16) {
-            PartyOverviewHeader(party: party)
-            PartyEarningsBreakdown(party: party)
+        VStack(alignment: .leading, spacing: 16) {
+            // Party Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(party.title)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    
+                    Text("at \(party.locationName)")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Text("$\(Int(party.ticketPrice))")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.pink)
+            }
+            .padding()
+            .background(Color(.systemGray6).opacity(0.1))
+            .cornerRadius(12)
         }
-        .padding()
-        .background(Color(.systemGray6).opacity(0.1))
-        .cornerRadius(16)
     }
 }
 
@@ -713,9 +732,9 @@ struct ManagementActionsSection: View {
             }
             
             ActionRowView(
-                title: "Cancel Party",
-                subtitle: "Refund all guests",
-                icon: "xmark.circle",
+                title: "End Party",
+                subtitle: "Complete the party",
+                icon: "stop.circle",
                 color: .red
             ) {
                 showingDeleteAlert = true
