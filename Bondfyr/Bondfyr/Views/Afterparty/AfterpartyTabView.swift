@@ -916,18 +916,6 @@ struct AfterpartyCard: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                
-                    if isHost {
-                        VStack(spacing: 2) {
-                            Text("you keep")
-                                .font(.caption2)
-                                .foregroundColor(.green.opacity(0.8))
-                            Text("80%")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.green)
-                        }
-                    }
                 }
                 .padding(8)
                 .background(Color.black.opacity(0.7))
