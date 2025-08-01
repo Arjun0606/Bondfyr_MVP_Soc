@@ -696,6 +696,25 @@ struct ManagementActionsSection: View {
         }
     }
     
+    // End Party Logic - matches main party card implementation
+    private var canEndParty: Bool {
+        let oneHourAfterStart = party.startTime.addingTimeInterval(3600) // 1 hour = 3600 seconds
+        return Date() >= oneHourAfterStart
+    }
+    
+    private var timeUntilEndEnabled: String {
+        let oneHourAfterStart = party.startTime.addingTimeInterval(3600)
+        let timeRemaining = oneHourAfterStart.timeIntervalSinceNow
+        
+        if timeRemaining <= 0 {
+            return ""
+        } else if timeRemaining < 3600 {
+            return "\(Int(timeRemaining/60))m"
+        } else {
+            return "\(Int(timeRemaining/3600))h \(Int((timeRemaining.truncatingRemainder(dividingBy: 3600))/60))m"
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 12) {
             ActionRowView(
@@ -732,12 +751,15 @@ struct ManagementActionsSection: View {
             }
             
             ActionRowView(
-                title: "End Party",
-                subtitle: "Complete the party",
-                icon: "stop.circle",
-                color: .red
+                title: canEndParty ? "End Party" : "End Party",
+                subtitle: canEndParty ? "Complete the party" : "Available in \(timeUntilEndEnabled)",
+                icon: canEndParty ? "stop.circle" : "clock.fill",
+                color: canEndParty ? .red : .gray,
+                isDisabled: !canEndParty
             ) {
-                showingDeleteAlert = true
+                if canEndParty {
+                    showingDeleteAlert = true
+                }
             }
         }
     }
@@ -748,6 +770,7 @@ struct ActionRowView: View {
     let subtitle: String
     let icon: String
     var color: Color = .white
+    var isDisabled: Bool = false
     let action: () -> Void
     
     var body: some View {
@@ -755,13 +778,13 @@ struct ActionRowView: View {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(color == .white ? .pink : color)
+                    .foregroundColor(isDisabled ? .gray : (color == .white ? .pink : color))
                     .frame(width: 30)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.headline)
-                        .foregroundColor(color)
+                        .foregroundColor(isDisabled ? .gray : color)
                     
                     Text(subtitle)
                         .font(.subheadline)
@@ -774,8 +797,9 @@ struct ActionRowView: View {
                     .foregroundColor(.gray)
             }
             .padding()
-            .background(Color(.systemGray6).opacity(0.1))
+            .background(Color(.systemGray6).opacity(isDisabled ? 0.05 : 0.1))
             .cornerRadius(12)
         }
+        .disabled(isDisabled)
     }
 } 
