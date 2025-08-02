@@ -543,13 +543,13 @@ struct PartyManagementSheet: View {
     
     private func deleteParty() async {
         do {
-            let afterpartyManager = AfterpartyManager.shared
-            try await afterpartyManager.deleteAfterparty(party)
+            // Call RatingManager to properly end party and trigger rating flow
+            await RatingManager.shared.hostEndParty(party)
             await MainActor.run {
                 presentationMode.wrappedValue.dismiss()
             }
         } catch {
-            
+            print("🔴 Error ending party: \(error)")
         }
     }
 }

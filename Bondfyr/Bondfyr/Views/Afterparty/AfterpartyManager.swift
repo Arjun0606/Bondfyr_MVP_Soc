@@ -172,6 +172,11 @@ class AfterpartyManager: NSObject, ObservableObject {
             startTime: afterparty.startTime
         )
         
+        // Post notification for real-time UI updates
+        await MainActor.run {
+            NotificationCenter.default.post(name: Notification.Name("PartyCreated"), object: afterparty.id)
+        }
+        
         // Fetch afterparties again to update the UI
         await fetchNearbyAfterparties()
     }

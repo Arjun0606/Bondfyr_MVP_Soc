@@ -430,6 +430,54 @@ struct AfterpartyTabView: View {
                 hasActiveParty = isActive
             }
         }
+        .onAppear {
+            // Refresh marketplace data when view appears
+            Task {
+                await loadMarketplaceAfterparties()
+            }
+            
+            // Listen for party creation notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PartyCreated"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                print("🔔 FEED: Party created - refreshing marketplace")
+                Task {
+                    await loadMarketplaceAfterparties()
+                }
+            }
+            
+            // Listen for guest approval notifications  
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("GuestApproved"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                print("🔔 FEED: Guest approved - refreshing marketplace")
+                Task {
+                    await loadMarketplaceAfterparties()
+                }
+            }
+            
+            // Listen for payment completion notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PaymentCompleted"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                print("🔔 FEED: Payment completed - refreshing marketplace") 
+                Task {
+                    await loadMarketplaceAfterparties()
+                }
+            }
+        }
+        .onDisappear {
+            // Clean up notification observers
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("PartyCreated"), object: nil)
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("GuestApproved"), object: nil)
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("PaymentCompleted"), object: nil)
+        }
         .alert("Active Afterparty Exists", isPresented: $showingActivePartyAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
