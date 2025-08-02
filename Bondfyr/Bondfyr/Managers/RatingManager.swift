@@ -89,6 +89,9 @@ class RatingManager: ObservableObject {
         // Update user's lastRatedPartyId
         updateUserLastRatedParty(userId: userId, partyId: party.id)
         
+        // CRITICAL: Record guest attendance when they rate
+        await recordGuestCheckIn(userId: userId)
+        
         // Check if host should receive credit
         await evaluateHostCredit(for: party.id, hostId: party.userId)
     }
