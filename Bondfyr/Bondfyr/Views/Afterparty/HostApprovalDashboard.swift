@@ -26,4 +26,4 @@ struct HostApprovalDashboard: View {
             )
         }
     }
-}
+} 

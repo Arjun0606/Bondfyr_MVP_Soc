@@ -622,10 +622,7 @@ struct ActionButtonsView: View {
                 Label("Edit Party", systemImage: "pencil")
             }
             
-            Button(role: .destructive, action: { showingDeleteConfirmation = true }) {
-                Label("Cancel Party", systemImage: "xmark.circle")
-                    .foregroundColor(.red)
-            }
+
         } label: {
             HStack {
                 Text("Manage")
@@ -1203,19 +1200,19 @@ struct AfterpartyCard: View {
                 refreshAfterpartyData()
             }
         }
-        .alert("Stop Invitation?", isPresented: $showingDeleteConfirmation) {
+        .alert("End Party?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
-            Button("Stop", role: .destructive) {
+            Button("End Party", role: .destructive) {
                 Task {
                     do {
-                        try await afterpartyManager.deleteAfterparty(afterparty)
+                        await RatingManager.shared.hostEndParty(afterparty)
                     } catch {
-                        
+                        print("Error ending party: \(error)")
                     }
                 }
             }
         } message: {
-            Text("Are you sure you want to stop this invitation? This action cannot be undone.")
+            Text("This will end your party and start the rating process for all guests.")
         }
     }
     

@@ -7,7 +7,6 @@ struct FixedActionButtonsView: View {
     let isHost: Bool
     @Binding var showingGuestList: Bool
     @Binding var showingEditSheet: Bool
-    @Binding var showingDeleteConfirmation: Bool
     @Binding var showingShareSheet: Bool
     @Binding var showingContactHost: Bool
     @Binding var showingPaymentSheet: Bool
@@ -35,15 +34,11 @@ struct FixedActionButtonsView: View {
     private var hostControlsMenu: some View {
         Menu {
             Button(action: { showingGuestList = true }) {
-                Label("Manage Guests (\(guestRequestCount))", systemImage: "person.2.fill")
+                Label("Guest Management (\(afterparty.pendingApprovalCount))", systemImage: "person.2.fill")
             }
             
             Button(action: { showingEditSheet = true }) {
                 Label("Edit Party", systemImage: "pencil")
-            }
-            
-            Button(action: { showingDeleteConfirmation = true }) {
-                Label("Cancel Party", systemImage: "xmark.circle")
             }
         } label: {
             HStack {
