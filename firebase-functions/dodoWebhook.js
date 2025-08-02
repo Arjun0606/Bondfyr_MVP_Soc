@@ -63,7 +63,9 @@ exports.dodoWebhook = functions.https.onRequest(async (req, res) => {
                 await createPartyFromPendingData(afterpartyId, userId, paymentId, metadata);
                 console.log('✅ Party created successfully');
             } else {
-                console.log('👥 This is a guest payment - not implemented yet');
+                console.log('👥 Processing guest payment');
+                await processGuestPayment(afterpartyId, userId, paymentId, metadata);
+                console.log('✅ Guest payment processed successfully');
             }
             
             res.status(200).json({ received: true, processed: true });
@@ -161,5 +163,102 @@ async function sendPartyCreatedNotification(userId, partyTitle) {
     } catch (error) {
         console.error('❌ Error sending notification:', error);
         // Don't throw - notification failure shouldn't break party creation
+    }
+} 
+
+// Process guest payment and add to activeUsers
+async function processGuestPayment(afterpartyId, userId, paymentId, metadata) {
+    try {
+        console.log('🔍 Processing guest payment for party:', afterpartyId);
+    
+        // Get the afterparty
+        const afterpartyRef = db.collection('afterparties').doc(afterpartyId);
+        const afterpartyDoc = await afterpartyRef.get();
+        
+        if (!afterpartyDoc.exists) {
+            console.error('❌ Afterparty not found:', afterpartyId);
+            throw new Error('Afterparty not found');
+        }
+        
+        const afterpartyData = afterpartyDoc.data();
+        console.log('✅ Found afterparty data');
+        
+        // Update guest request payment status and add to activeUsers
+        const guestRequests = afterpartyData.guestRequests || [];
+        const activeUsers = afterpartyData.activeUsers || [];
+        
+        // Find and update the guest request
+        const updatedRequests = guestRequests.map(request => {
+            if (request.userId === userId) {
+                return {
+                    ...request,
+                    paymentStatus: 'paid',
+                    dodoPaymentId: paymentId,
+                    paidAt: admin.firestore.FieldValue.serverTimestamp()
+                };
+            }
+            return request;
+        });
+        
+        // Add user to activeUsers if not already there
+        const updatedActiveUsers = [...activeUsers];
+        if (!updatedActiveUsers.includes(userId)) {
+            updatedActiveUsers.push(userId);
+            console.log('✅ Added user to activeUsers:', userId);
+        }
+        
+        // Update the afterparty document
+        await afterpartyRef.update({
+            guestRequests: updatedRequests,
+            activeUsers: updatedActiveUsers
+        });
+        
+        console.log('✅ Guest payment processed and user added to activeUsers');
+        
+        // Send confirmation notification to guest
+        await sendGuestPaymentConfirmation(userId, afterpartyData.title);
+        console.log('✅ Payment confirmation sent');
+        
+    } catch (error) {
+        console.error('❌ Error processing guest payment:', error);
+        throw error;
+    }
+} 
+
+// Send payment confirmation to guest
+async function sendGuestPaymentConfirmation(userId, partyTitle) {
+    try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        
+        if (!userDoc.exists) {
+            console.log('❌ User not found for notification:', userId);
+            return;
+        }
+        
+        const userData = userDoc.data();
+        const fcmToken = userData.fcmToken;
+        
+        if (!fcmToken) {
+            console.log('❌ No FCM token for user:', userId);
+            return;
+        }
+        
+        const message = {
+            token: fcmToken,
+            notification: {
+                title: '🎉 Payment Confirmed!',
+                body: `You're all set for "${partyTitle}". See you there!`
+            },
+            data: {
+                type: 'payment_confirmed',
+                partyTitle: partyTitle
+            }
+        };
+        
+        await admin.messaging().send(message);
+        console.log('✅ Payment confirmation sent to:', userId);
+        
+    } catch (error) {
+        console.error('❌ Error sending payment confirmation:', error);
     }
 } 
