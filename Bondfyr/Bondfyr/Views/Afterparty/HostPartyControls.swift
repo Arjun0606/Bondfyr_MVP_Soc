@@ -115,6 +115,8 @@ struct HostPartyControls: View {
                         await RatingManager.shared.hostEndParty(afterparty)
                         
                         await MainActor.run {
+                            // Post notification to refresh party data in other views
+                            NotificationCenter.default.post(name: Notification.Name("PartyEnded"), object: afterparty.id)
                             alertMessage = "🏁 Party ended! Guests will be asked to rate their experience."
                             showingAlert = true
                         }

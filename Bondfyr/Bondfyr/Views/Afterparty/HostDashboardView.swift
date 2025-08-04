@@ -537,7 +537,7 @@ struct PartyManagementSheet: View {
                 }
             }
         } message: {
-            Text("This will mark your party as ended. Guests will be notified.")
+            Text("This will end your party and start the rating process for all guests.")
         }
     }
     
@@ -545,9 +545,14 @@ struct PartyManagementSheet: View {
         do {
             // Call RatingManager to properly end party and trigger rating flow
             await RatingManager.shared.hostEndParty(party)
+            
             await MainActor.run {
+                // Post notification to refresh party data in other views
+                NotificationCenter.default.post(name: Notification.Name("PartyEnded"), object: party.id)
                 presentationMode.wrappedValue.dismiss()
             }
+            
+            print("✅ Party successfully ended and UI notified")
         } catch {
             print("🔴 Error ending party: \(error)")
         }

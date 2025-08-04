@@ -263,7 +263,7 @@ class RatingManager: ObservableObject {
         
         do {
             try await partyRef.updateData([
-                "completionStatus": "hostEnded",
+                "completionStatus": "host_ended",
                 "endedAt": FieldValue.serverTimestamp(),
                 "endedBy": party.userId,
                 "ratingsRequired": party.activeUsers.count,

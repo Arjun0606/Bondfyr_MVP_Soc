@@ -448,6 +448,20 @@ struct AfterpartyTabView: View {
                 }
             }
             
+            // Listen for party ended notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PartyEnded"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let partyId = notification.object as? String {
+                    print("🔔 FEED: Party \(partyId) ended - refreshing marketplace")
+                    Task {
+                        await loadMarketplaceAfterparties()
+                    }
+                }
+            }
+            
             // Listen for guest approval notifications  
             NotificationCenter.default.addObserver(
                 forName: Notification.Name("GuestApproved"),

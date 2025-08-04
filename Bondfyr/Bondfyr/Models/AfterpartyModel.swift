@@ -205,6 +205,10 @@ struct Afterparty: Identifiable, Codable {
         return max(0, maxGuestCount - confirmedGuestsCount)
     }
     
+    var isEnded: Bool {
+        return completionStatus != nil && completionStatus != .ongoing
+    }
+    
     var timeUntilStart: String {
         let now = Date()
         let components = Calendar.current.dateComponents([.hour, .minute], from: now, to: startTime)
