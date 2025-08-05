@@ -95,25 +95,119 @@ class FCMNotificationManager: NSObject, ObservableObject {
             "platform": "ios"
         ]
         
-        // Call Firebase Cloud Function
+        // PRODUCTION MONITORING: Track notification attempts
+        await logNotificationAttempt(userId: userId, title: title, type: data["type"] as? String ?? "unknown")
+        
+        // Use existing Firebase Cloud Function callable methods
         do {
-            let functionsUrl = "https://us-central1-bondfyr-da123.cloudfunctions.net/sendPushNotification"
+            let functionsUrl = "https://us-central1-bondfyr-da123.cloudfunctions.net/sendPushNotificationHTTP"
             
             var request = URLRequest(url: URL(string: functionsUrl)!)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: notificationData)
             
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                print("🟢 FCM: Notification sent successfully to \(userId)")
-            } else {
-                print("🔴 FCM: Failed to send notification to \(userId)")
+            if let httpResponse = response as? HTTPURLResponse {
+                print("🔔 FCM: HTTP Status: \(httpResponse.statusCode)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("🔔 FCM: Response: \(responseString)")
+                }
+                
+                if httpResponse.statusCode == 200 {
+                    print("🟢 FCM: Notification sent successfully to \(userId)")
+                    // PRODUCTION MONITORING: Track successful delivery
+                    await logNotificationSuccess(userId: userId, title: title, type: notificationData["type"] as? String ?? "unknown")
+                } else {
+                    print("🔴 FCM: Failed to send notification to \(userId) - Status: \(httpResponse.statusCode)")
+                    // PRODUCTION MONITORING: Track delivery failures
+                    await logNotificationFailure(userId: userId, title: title, error: "HTTP \(httpResponse.statusCode)", type: notificationData["type"] as? String ?? "unknown")
+                }
             }
             
         } catch {
             print("🔴 FCM: Error sending notification: \(error)")
+            // PRODUCTION MONITORING: Track network errors
+            await logNotificationFailure(userId: userId, title: title, error: error.localizedDescription, type: data["type"] as? String ?? "unknown")
+        }
+    }
+    
+    // MARK: - Production Monitoring
+    
+    /// Log notification attempt for analytics
+    private func logNotificationAttempt(userId: String, title: String, type: String) async {
+        do {
+            let logData: [String: Any] = [
+                "userId": userId,
+                "title": title,
+                "type": type,
+                "status": "attempted",
+                "timestamp": FieldValue.serverTimestamp(),
+                "platform": "ios"
+            ]
+            
+            try await db.collection("notificationAnalytics").addDocument(data: logData)
+        } catch {
+            print("🔴 FCM: Failed to log notification attempt: \(error)")
+        }
+    }
+    
+    /// Log successful notification delivery
+    private func logNotificationSuccess(userId: String, title: String, type: String) async {
+        do {
+            let logData: [String: Any] = [
+                "userId": userId,
+                "title": title,
+                "type": type,
+                "status": "delivered",
+                "timestamp": FieldValue.serverTimestamp(),
+                "platform": "ios"
+            ]
+            
+            try await db.collection("notificationAnalytics").addDocument(data: logData)
+        } catch {
+            print("🔴 FCM: Failed to log notification success: \(error)")
+        }
+    }
+    
+    /// Log failed notification delivery
+    private func logNotificationFailure(userId: String, title: String, error: String, type: String) async {
+        do {
+            let logData: [String: Any] = [
+                "userId": userId,
+                "title": title,
+                "type": type,
+                "status": "failed",
+                "error": error,
+                "timestamp": FieldValue.serverTimestamp(),
+                "platform": "ios"
+            ]
+            
+            try await db.collection("notificationAnalytics").addDocument(data: logData)
+        } catch {
+            print("🔴 FCM: Failed to log notification failure: \(error)")
+        }
+    }
+    
+    /// Track notification open/tap for engagement analytics
+    func trackNotificationOpened(type: String, partyId: String? = nil) async {
+        guard let currentUser = Auth.auth().currentUser else { return }
+        
+        do {
+            let logData: [String: Any] = [
+                "userId": currentUser.uid,
+                "type": type,
+                "action": "opened",
+                "partyId": partyId ?? "",
+                "timestamp": FieldValue.serverTimestamp(),
+                "platform": "ios"
+            ]
+            
+            try await db.collection("notificationEngagement").addDocument(data: logData)
+            print("📊 FCM: Tracked notification open - type: \(type)")
+        } catch {
+            print("🔴 FCM: Failed to track notification open: \(error)")
         }
     }
     
@@ -214,7 +308,7 @@ class FCMNotificationManager: NSObject, ObservableObject {
     
     // MARK: - Guest Notifications
     
-    /// Notify GUEST when request is approved
+    /// Send guest approval notification
     func notifyGuestOfApproval(
         guestUserId: String,
         partyId: String,
@@ -229,19 +323,18 @@ class FCMNotificationManager: NSObject, ObservableObject {
             "partyId": partyId,
             "partyTitle": partyTitle,
             "hostName": hostName,
-            "amount": amount,
-            "action": "complete_payment"
+            "amount": amount
         ]
         
         await sendNotificationToUser(
             userId: guestUserId,
-            title: "🎉 Request Approved!",
-            body: "You're approved for \(partyTitle)! Complete payment ($\(Int(amount))) to secure your spot.",
+            title: "🎉 You're Going!",
+            body: "Your request for \(partyTitle) was approved! Pay $\(String(format: "%.0f", amount)) directly to \(hostName) to secure your spot.",
             data: data
         )
     }
     
-    /// NEW: Notify GUEST when approved as VIP (free entry)
+    /// Send VIP guest approval notification  
     func notifyGuestOfVIPApproval(
         guestUserId: String,
         partyId: String,
@@ -254,46 +347,44 @@ class FCMNotificationManager: NSObject, ObservableObject {
             "type": "vip_approved",
             "partyId": partyId,
             "partyTitle": partyTitle,
-            "hostName": hostName,
-            "action": "party_access"
+            "hostName": hostName
         ]
         
         await sendNotificationToUser(
             userId: guestUserId,
-            title: "⭐ VIP Access Granted!",
-            body: "You've been approved as VIP for \(partyTitle)! No payment required - you're all set!",
+            title: "👑 VIP Access Approved!",
+            body: "You've been approved for VIP access to \(partyTitle)! Contact \(hostName) for payment details.",
             data: data
         )
     }
     
-    /// Notify GUEST when payment is verified  
+    /// Send payment verification notification to guest
     func notifyGuestOfPaymentVerification(
         guestUserId: String,
         partyId: String,
         partyTitle: String,
-        approved: Bool
+        isApproved: Bool
     ) async {
-        print("🔔 FCM: Notifying GUEST \(guestUserId) of payment verification: \(approved)")
+        print("🔔 FCM: Notifying GUEST \(guestUserId) of payment verification")
         
         let data: [String: Any] = [
-            "type": approved ? "payment_approved" : "payment_rejected",
+            "type": isApproved ? "payment_approved" : "payment_rejected",
             "partyId": partyId,
-            "partyTitle": partyTitle,
-            "approved": approved
+            "partyTitle": partyTitle
         ]
         
-        if approved {
+        if isApproved {
             await sendNotificationToUser(
                 userId: guestUserId,
-                title: "✅ You're Going!",
-                body: "Your payment for \(partyTitle) has been verified. See you at the party! 🎉",
+                title: "✅ Payment Confirmed!",
+                body: "Your payment for \(partyTitle) has been confirmed. You're all set for the party!",
                 data: data
             )
         } else {
             await sendNotificationToUser(
                 userId: guestUserId,
-                title: "⚠️ Payment Issue",
-                body: "There was an issue with your payment proof for \(partyTitle). Please resubmit.",
+                title: "❌ Payment Issue",
+                body: "There was an issue with your payment for \(partyTitle). Please contact the host to resolve.",
                 data: data
             )
         }
@@ -417,12 +508,20 @@ extension FCMNotificationManager: UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
         
-        // Handle notification tap
+        // PRODUCTION MONITORING: Track notification engagement
+        if let type = userInfo["type"] as? String {
+            let partyId = userInfo["partyId"] as? String
+            Task {
+                await trackNotificationOpened(type: type, partyId: partyId)
+            }
+        }
+        
+        // Handle notification tap navigation
         if let type = userInfo["type"] as? String,
            let partyId = userInfo["partyId"] as? String {
             
             switch type {
-            case "guest_request", "payment_proof":
+            case "guest_request", "payment_proof", "payment_received":
                 // Navigate to host dashboard
                 NotificationCenter.default.post(
                     name: Notification.Name("NavigateToHostDashboard"),
@@ -430,8 +529,8 @@ extension FCMNotificationManager: UNUserNotificationCenterDelegate {
                     userInfo: ["partyId": partyId]
                 )
                 
-            case "request_approved", "payment_approved", "payment_rejected":
-                // Navigate to party details
+            case "request_approved", "payment_approved", "payment_rejected", "guest_payment_confirmed":
+                // Navigate to party details  
                 NotificationCenter.default.post(
                     name: Notification.Name("NavigateToPartyDetails"),
                     object: nil,
@@ -454,7 +553,16 @@ extension FCMNotificationManager: UNUserNotificationCenterDelegate {
                     userInfo: ["type": type]
                 )
                 
+            case "listing_fee_confirmed":
+                // Navigate to party feed to see live party
+                NotificationCenter.default.post(
+                    name: Notification.Name("NavigateToPartyFeed"),
+                    object: nil,
+                    userInfo: ["type": type]
+                )
+                
             default:
+                print("🔔 FCM: Unknown notification type: \(type)")
                 break
             }
         }

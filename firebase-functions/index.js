@@ -13,15 +13,30 @@ const { dodoWebhook } = require('./dodoWebhook');
 exports.dodoWebhook = dodoWebhook;
 
 // Export NEW FCM notification functions
-const { 
-    sendPushNotification, 
-    sendPushNotificationHTTP, 
-    testFCMNotification 
+const {
+    notifyHostOfGuestRequest,
+    notifyGuestOfApproval,
+    notifyHostOfPayment,
+    sendPushNotification,
+    sendPushNotificationHTTP,
+    sendTestPushNotification,
+    testFCMNotification,
+    generateNotificationAnalytics
 } = require('./fcmNotifications');
 
+// Authentication & User Management
+exports.notifyHostOfGuestRequest = notifyHostOfGuestRequest;
+exports.notifyGuestOfApproval = notifyGuestOfApproval;
+exports.notifyHostOfPayment = notifyHostOfPayment;
+
+// Push Notifications
 exports.sendPushNotification = sendPushNotification;
 exports.sendPushNotificationHTTP = sendPushNotificationHTTP;
+exports.sendTestPushNotification = sendTestPushNotification;
 exports.testFCMNotification = testFCMNotification;
+
+// Production Monitoring
+exports.generateNotificationAnalytics = generateNotificationAnalytics;
 
 // LemonSqueezy integration removed per user request
 

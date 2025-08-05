@@ -292,3 +292,131 @@ exports.testFCMNotification = functions.https.onCall(async (data, context) => {
         );
     }
 }); 
+
+/**
+ * Generate notification analytics report for production monitoring
+ */
+exports.generateNotificationAnalytics = functions.https.onCall(async (data, context) => {
+    console.log('📊 Analytics: generateNotificationAnalytics called');
+    
+    try {
+        const { timeRange = '7d' } = data;
+        
+        // Calculate date range
+        const now = new Date();
+        let startDate;
+        
+        switch(timeRange) {
+            case '1d':
+                startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                break;
+            case '7d':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case '30d':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            default:
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        }
+        
+        // Get notification analytics
+        const analyticsQuery = await db.collection('notificationAnalytics')
+            .where('timestamp', '>=', admin.firestore.Timestamp.fromDate(startDate))
+            .get();
+        
+        // Get engagement data
+        const engagementQuery = await db.collection('notificationEngagement')
+            .where('timestamp', '>=', admin.firestore.Timestamp.fromDate(startDate))
+            .get();
+        
+        // Process analytics data
+        const analytics = {
+            totalAttempts: 0,
+            totalDelivered: 0,
+            totalFailed: 0,
+            totalOpened: 0,
+            deliveryRate: 0,
+            openRate: 0,
+            typeBreakdown: {},
+            dailyStats: {},
+            errors: {}
+        };
+        
+        // Process notification attempts/delivery
+        analyticsQuery.forEach(doc => {
+            const data = doc.data();
+            const type = data.type || 'unknown';
+            const status = data.status || 'unknown';
+            const date = data.timestamp?.toDate()?.toISOString()?.split('T')[0] || 'unknown';
+            
+            // Initialize type breakdown
+            if (!analytics.typeBreakdown[type]) {
+                analytics.typeBreakdown[type] = { attempted: 0, delivered: 0, failed: 0, opened: 0 };
+            }
+            
+            // Initialize daily stats
+            if (!analytics.dailyStats[date]) {
+                analytics.dailyStats[date] = { attempted: 0, delivered: 0, failed: 0, opened: 0 };
+            }
+            
+            // Count totals
+            if (status === 'attempted') {
+                analytics.totalAttempts++;
+                analytics.typeBreakdown[type].attempted++;
+                analytics.dailyStats[date].attempted++;
+            } else if (status === 'delivered') {
+                analytics.totalDelivered++;
+                analytics.typeBreakdown[type].delivered++;
+                analytics.dailyStats[date].delivered++;
+            } else if (status === 'failed') {
+                analytics.totalFailed++;
+                analytics.typeBreakdown[type].failed++;
+                analytics.dailyStats[date].failed++;
+                
+                // Track error types
+                const error = data.error || 'unknown';
+                analytics.errors[error] = (analytics.errors[error] || 0) + 1;
+            }
+        });
+        
+        // Process engagement data
+        engagementQuery.forEach(doc => {
+            const data = doc.data();
+            const type = data.type || 'unknown';
+            const date = data.timestamp?.toDate()?.toISOString()?.split('T')[0] || 'unknown';
+            
+            analytics.totalOpened++;
+            
+            if (analytics.typeBreakdown[type]) {
+                analytics.typeBreakdown[type].opened++;
+            }
+            
+            if (analytics.dailyStats[date]) {
+                analytics.dailyStats[date].opened++;
+            }
+        });
+        
+        // Calculate rates
+        analytics.deliveryRate = analytics.totalAttempts > 0 
+            ? Math.round((analytics.totalDelivered / analytics.totalAttempts) * 100) 
+            : 0;
+        analytics.openRate = analytics.totalDelivered > 0 
+            ? Math.round((analytics.totalOpened / analytics.totalDelivered) * 100) 
+            : 0;
+        
+        console.log('📊 Analytics: Report generated successfully');
+        console.log(`📊 Analytics: ${analytics.totalAttempts} attempts, ${analytics.totalDelivered} delivered, ${analytics.totalOpened} opened`);
+        
+        return {
+            success: true,
+            timeRange,
+            analytics,
+            generatedAt: new Date().toISOString()
+        };
+        
+    } catch (error) {
+        console.error('❌ Analytics: Error generating report:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to generate analytics report');
+    }
+}); 

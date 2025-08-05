@@ -210,10 +210,16 @@ class AfterpartyManager: NSObject, ObservableObject {
                 var docData = data
                 docData["id"] = doc.documentID
                 
-                // Check if the afterparty is still active
+                // Check if the afterparty is still active (natural end time)
                 if let endTime = (data["endTime"] as? Timestamp)?.dateValue(),
                    endTime < Date() {
                     
+                    return nil
+                }
+                
+                // CRITICAL FIX: Skip parties that have been ended by host
+                if let completionStatus = data["completionStatus"] as? String,
+                   completionStatus != "ongoing" && !completionStatus.isEmpty {
                     return nil
                 }
                 
@@ -705,6 +711,13 @@ class AfterpartyManager: NSObject, ObservableObject {
         let afterparties = snapshot.documents.compactMap { doc -> Afterparty? in
             var docData = doc.data()
             docData["id"] = doc.documentID
+            
+            // CRITICAL FIX: Skip parties that have been ended by host
+            if let completionStatus = docData["completionStatus"] as? String,
+               completionStatus != "ongoing" && !completionStatus.isEmpty {
+                return nil
+            }
+            
             return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
         }
         
@@ -734,9 +747,15 @@ class AfterpartyManager: NSObject, ObservableObject {
             var docData = doc.data()
             docData["id"] = doc.documentID
             
-            // Skip expired afterparties
+            // Skip expired afterparties (natural end time)
             if let endTime = (docData["endTime"] as? Timestamp)?.dateValue(),
                endTime < Date() {
+                return nil
+            }
+            
+            // CRITICAL FIX: Skip parties that have been ended by host
+            if let completionStatus = docData["completionStatus"] as? String,
+               completionStatus != "ongoing" && !completionStatus.isEmpty {
                 return nil
             }
             

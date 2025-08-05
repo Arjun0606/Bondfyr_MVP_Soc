@@ -225,13 +225,13 @@ async function processGuestPayment(afterpartyId, userId, paymentId, metadata) {
     }
 } 
 
-// Send payment confirmation to guest
-async function sendGuestPaymentConfirmation(userId, partyTitle) {
+async function sendHostListingFeeConfirmation(userId, amount) {
+    console.log(`🎉 DODO: Sending listing fee confirmation to host ${userId}`);
+    
     try {
         const userDoc = await db.collection('users').doc(userId).get();
-        
         if (!userDoc.exists) {
-            console.log('❌ User not found for notification:', userId);
+            console.log('❌ DODO: User not found for listing fee confirmation');
             return;
         }
         
@@ -239,7 +239,54 @@ async function sendGuestPaymentConfirmation(userId, partyTitle) {
         const fcmToken = userData.fcmToken;
         
         if (!fcmToken) {
-            console.log('❌ No FCM token for user:', userId);
+            console.log('❌ DODO: No FCM token for listing fee confirmation');
+            return;
+        }
+        
+        const message = {
+            token: fcmToken,
+            notification: {
+                title: '✅ Listing Fee Paid',
+                body: `Your $${amount} listing fee has been processed. Your party is now live on Bondfyr!`
+            },
+            data: {
+                type: 'listing_fee_confirmed',
+                amount: amount.toString(),
+                sentAt: new Date().toISOString()
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1
+                    }
+                }
+            }
+        };
+        
+        const response = await admin.messaging().send(message);
+        console.log('✅ DODO: Listing fee confirmation sent:', response);
+        
+    } catch (error) {
+        console.error('❌ DODO: Error sending listing fee confirmation:', error);
+    }
+}
+
+async function sendGuestPaymentConfirmation(userId, partyTitle) {
+    console.log(`🎉 DODO: Sending guest payment confirmation to ${userId}`);
+    
+    try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) {
+            console.log('❌ DODO: User not found for guest payment confirmation');
+            return;
+        }
+        
+        const userData = userDoc.data();
+        const fcmToken = userData.fcmToken;
+        
+        if (!fcmToken) {
+            console.log('❌ DODO: No FCM token for guest payment confirmation');
             return;
         }
         
@@ -247,18 +294,27 @@ async function sendGuestPaymentConfirmation(userId, partyTitle) {
             token: fcmToken,
             notification: {
                 title: '🎉 Payment Confirmed!',
-                body: `You're all set for "${partyTitle}". See you there!`
+                body: `Your payment for ${partyTitle} has been confirmed. You're officially going!`
             },
             data: {
-                type: 'payment_confirmed',
-                partyTitle: partyTitle
+                type: 'guest_payment_confirmed',
+                partyTitle: partyTitle,
+                sentAt: new Date().toISOString()
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1
+                    }
+                }
             }
         };
         
-        await admin.messaging().send(message);
-        console.log('✅ Payment confirmation sent to:', userId);
+        const response = await admin.messaging().send(message);
+        console.log('✅ DODO: Guest payment confirmation sent:', response);
         
     } catch (error) {
-        console.error('❌ Error sending payment confirmation:', error);
+        console.error('❌ DODO: Error sending guest payment confirmation:', error);
     }
 } 
