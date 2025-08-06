@@ -1655,7 +1655,7 @@ class AfterpartyManager: NSObject, ObservableObject {
                     guestUserId: originalRequest.userId,
                     partyId: afterpartyId,
                     partyTitle: afterparty.title,
-                    approved: true
+                    isApproved: true
                 )
             }
             
@@ -1696,7 +1696,7 @@ class AfterpartyManager: NSObject, ObservableObject {
                     guestUserId: originalRequest.userId,
                     partyId: afterpartyId,
                     partyTitle: afterparty.title,
-                    approved: false
+                    isApproved: false
                 )
             }
         }
