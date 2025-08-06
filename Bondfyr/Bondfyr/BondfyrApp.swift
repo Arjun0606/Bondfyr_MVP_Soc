@@ -38,9 +38,9 @@ struct BondfyrApp: App {
         settings.isPersistenceEnabled = true
         Firestore.firestore().settings = settings
         
-        // Enable AppCheck for production
-        let providerFactory = DeviceCheckProviderFactory()
-        AppCheck.setAppCheckProviderFactory(providerFactory)
+        // TEMPORARILY DISABLE: Enable AppCheck for production
+        // let providerFactory = DeviceCheckProviderFactory()
+        // AppCheck.setAppCheckProviderFactory(providerFactory)
         
         // FIXED: Use new notification system instead of broken one
         Task {

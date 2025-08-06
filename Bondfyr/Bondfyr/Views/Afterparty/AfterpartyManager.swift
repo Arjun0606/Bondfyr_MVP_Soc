@@ -59,6 +59,13 @@ class AfterpartyManager: NSObject, ObservableObject {
                 return false
             }
             
+            // CRITICAL FIX: Check if the party has been ended
+            if let completionStatus = data["completionStatus"] as? String, 
+               completionStatus != "ongoing" && !completionStatus.isEmpty {
+                // Party has been ended, so it's not active
+                return false
+            }
+            
             // Party is active if:
             // 1. It's currently happening (between start and end time)
             // 2. It starts within the next 2 hours
