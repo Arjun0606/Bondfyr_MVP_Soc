@@ -150,6 +150,7 @@ struct AfterpartyTabView: View {
     
     private var filteredAfterparties: [Afterparty] {
         var parties = marketplaceAfterparties
+        print("🔍 FILTERED DEBUG: Starting with \(parties.count) marketplace parties")
         
         // Apply search filter
         if !searchText.isEmpty {
@@ -159,14 +160,51 @@ struct AfterpartyTabView: View {
                 afterparty.vibeTag.localizedCaseInsensitiveContains(searchText) ||
                 afterparty.address.localizedCaseInsensitiveContains(searchText)
             }
+            print("🔍 FILTERED DEBUG: After search filter: \(parties.count) parties")
+        }
+        
+        // CRITICAL FIX: Get user's active party BEFORE distance filtering
+        let currentUserId = authViewModel.currentUser?.uid
+        var userActiveParty: Afterparty? = nil
+        
+        print("🔍 FILTERED DEBUG: Current user ID: \(currentUserId ?? "nil")")
+        print("🔍 FILTERED DEBUG: Checking \(parties.count) parties for user's active party")
+        
+        if let userId = currentUserId {
+            // Debug: Print all party user IDs and completion status
+            for (index, party) in parties.enumerated() {
+                let isUserParty = party.userId == userId
+                let statusMatch = (party.completionStatus == nil || party.completionStatus == .ongoing)
+                print("🔍 FILTERED DEBUG: Party \(index): '\(party.title)' - userId: \(party.userId) - isUserParty: \(isUserParty) - completionStatus: \(party.completionStatus?.rawValue ?? "nil") - statusMatch: \(statusMatch)")
+            }
+            
+            userActiveParty = parties.first { party in
+                return party.userId == userId && (party.completionStatus == nil || party.completionStatus == .ongoing)
+            }
+            
+            if let activeParty = userActiveParty {
+                print("🔍 FILTERED DEBUG: ✅ Found user's active party: '\(activeParty.title)' (ID: \(activeParty.id))")
+            } else {
+                print("🔍 FILTERED DEBUG: ❌ No active party found for user \(userId)")
+            }
         }
         
         // Apply distance filter
         guard let userLocation = locationManager.location?.coordinate else {
+            print("🔍 FILTERED DEBUG: No user location - returning \(parties.count) parties without distance filter")
             return parties
         }
         
+        print("🔍 FILTERED DEBUG: User location: \(userLocation.latitude), \(userLocation.longitude)")
+        print("🔍 FILTERED DEBUG: Selected radius: \(selectedRadius) miles")
+        
         let distanceFilteredParties = parties.filter { afterparty in
+            // CRITICAL FIX: Don't filter out user's own active party by distance
+            if let activeParty = userActiveParty, afterparty.id == activeParty.id {
+                print("🔍 FILTERED DEBUG: Party '\(afterparty.title)' is user's active party - ALWAYS INCLUDED")
+                return true
+            }
+            
             let afterpartyLocation = CLLocation(
                 latitude: afterparty.coordinate.latitude,
                 longitude: afterparty.coordinate.longitude
@@ -176,27 +214,23 @@ struct AfterpartyTabView: View {
                 longitude: userLocation.longitude
             )
             let distance = afterpartyLocation.distance(from: userCLLocation) / 1609.34 // Convert meters to miles
-            return distance <= selectedRadius
+            let passesFilter = distance <= selectedRadius
+            print("🔍 FILTERED DEBUG: Party '\(afterparty.title)' stored coordinates: \(afterparty.coordinate.latitude), \(afterparty.coordinate.longitude)")
+            print("🔍 FILTERED DEBUG: Party '\(afterparty.title)' distance: \(String(format: "%.1f", distance)) miles - \(passesFilter ? "INCLUDED" : "FILTERED OUT")")
+            return passesFilter
         }
+        
+        print("🔍 FILTERED DEBUG: After distance filter: \(distanceFilteredParties.count) parties")
         
         // PIN USER'S ACTIVE PARTY TO TOP
-        guard let currentUserId = authViewModel.currentUser?.uid else {
-            return distanceFilteredParties
-        }
-        
-        // Find user's active party
-        let userActiveParties = distanceFilteredParties.filter { party in
-            return party.userId == currentUserId && (party.completionStatus == nil || party.completionStatus == .ongoing)
-        }
-        let activePartyForUser = userActiveParties.first
-        
-        // If user has an active party, pin it to the top
-        if let activeParty = activePartyForUser {
+        if let activeParty = userActiveParty {
             var reorderedParties = distanceFilteredParties.filter { $0.id != activeParty.id }
             reorderedParties.insert(activeParty, at: 0)
+            print("🔍 FILTERED DEBUG: Pinned host party '\(activeParty.title)' to top - final count: \(reorderedParties.count)")
             return reorderedParties
         }
         
+        print("🔍 FILTERED DEBUG: Final result: \(distanceFilteredParties.count) parties")
         return distanceFilteredParties
     }
     
@@ -545,8 +579,12 @@ struct AfterpartyTabView: View {
                 vibes: activeFilters.vibes,
                 timeFilter: activeFilters.timeFilter
             )
+            print("🔍 MARKETPLACE DEBUG: Loaded \(afterparties.count) parties from Firebase")
+            for (index, party) in afterparties.enumerated() {
+                print("🔍 MARKETPLACE DEBUG: Party \(index): \(party.title) - Price: $\(party.ticketPrice) - Visibility: \(party.visibility.rawValue)")
+            }
         } catch {
-            
+            print("🔴 MARKETPLACE DEBUG: Error loading parties: \(error)")
             // Continue with empty array to show proper empty state
         }
         
@@ -555,8 +593,12 @@ struct AfterpartyTabView: View {
         
         // Apply price range filter
         filteredResults = filteredResults.filter { afterparty in
-            afterparty.ticketPrice >= activeFilters.priceRange.lowerBound &&
+            let passesFilter = afterparty.ticketPrice >= activeFilters.priceRange.lowerBound &&
             afterparty.ticketPrice <= activeFilters.priceRange.upperBound
+            if !passesFilter {
+                print("🔍 MARKETPLACE DEBUG: \(afterparty.title) filtered out by price: $\(afterparty.ticketPrice) not in \(activeFilters.priceRange)")
+            }
+            return passesFilter
         }
         
         // Apply vibe filters
@@ -573,10 +615,24 @@ struct AfterpartyTabView: View {
         }
         
         if activeFilters.showOnlyAvailable {
-            filteredResults = filteredResults.filter { !$0.isSoldOut }
+            let beforeAvailableFilter = filteredResults.count
+            filteredResults = filteredResults.filter { 
+                let isAvailable = !$0.isSoldOut
+                if !isAvailable {
+                    print("🔍 MARKETPLACE DEBUG: \($0.title) filtered out - sold out (\($0.confirmedGuestsCount)/\($0.maxGuestCount))")
+                }
+                return isAvailable
+            }
+            print("🔍 MARKETPLACE DEBUG: Available filter: \(beforeAvailableFilter) -> \(filteredResults.count) parties")
         }
         
-        filteredResults = filteredResults.filter { $0.maxGuestCount <= activeFilters.maxGuestCount }
+        filteredResults = filteredResults.filter { 
+            let passesFilter = $0.maxGuestCount <= activeFilters.maxGuestCount
+            if !passesFilter {
+                print("🔍 MARKETPLACE DEBUG: \($0.title) filtered out by max guest count: \($0.maxGuestCount) > \(activeFilters.maxGuestCount)")
+            }
+            return passesFilter
+        }
         
         // Apply search filter
         if !searchText.isEmpty {
@@ -588,9 +644,10 @@ struct AfterpartyTabView: View {
             }
         }
         
+        print("🔍 MARKETPLACE DEBUG: Final filtered results: \(filteredResults.count) parties")
+        
         await MainActor.run {
             marketplaceAfterparties = filteredResults
-            
         }
     }
 
