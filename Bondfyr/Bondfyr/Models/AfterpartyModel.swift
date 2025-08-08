@@ -5,10 +5,12 @@ import CoreLocation
 // MARK: - Enums for the new marketplace features
 enum PartyVisibility: String, CaseIterable, Codable {
     case publicFeed = "public"
+    case unlisted = "unlisted"
     
     var displayName: String {
         switch self {
         case .publicFeed: return "Public (on feed)"
+        case .unlisted: return "Unlisted (link-only)"
         }
     }
 }

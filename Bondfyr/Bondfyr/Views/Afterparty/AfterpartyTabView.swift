@@ -2598,7 +2598,8 @@ struct CreateAfterpartyView: View {
             "ticketPrice": ticketPrice,
             "coverPhotoURL": coverPhotoURL.isEmpty ? nil : coverPhotoURL,
             "maxGuestCount": maxGuestCount,
-            "visibility": visibility.rawValue,
+            // If auto-approve, default party visibility to unlisted (link-only)
+            "visibility": (approvalType == .automatic ? PartyVisibility.unlisted.rawValue : visibility.rawValue),
             "approvalType": approvalType.rawValue,
             "ageRestriction": ageRestriction,
             "maxMaleRatio": maxMaleRatio,

@@ -394,21 +394,85 @@ class AfterpartyManager: NSObject, ObservableObject {
                 return nil
         }
         
-            // Add the new request
+            // Decide path: auto-approve vs manual
             var updatedRequests = currentAfterparty.guestRequests
-            updatedRequests.append(guestRequest)
-            
-            print("🟡 BACKEND: Adding request to party - new total: \(updatedRequests.count)")
-        
-            // Update within transaction
-            do {
-                let encodedRequests = try updatedRequests.map { try Firestore.Encoder().encode($0) }
-                transaction.updateData(["guestRequests": encodedRequests], forDocument: afterpartyRef)
-                print("🟢 BACKEND: Transaction update successful")
-            } catch {
-                print("🔴 BACKEND: Failed to encode/update requests: \(error.localizedDescription)")
-                errorPointer?.pointee = error as NSError
-                return nil
+            var updatedActiveUsers = currentAfterparty.activeUsers
+            var requestToStore = guestRequest
+
+            let isAutoApprove = (currentAfterparty.approvalType == .automatic)
+            let capacityRemaining = currentAfterparty.maxGuestCount - (updatedActiveUsers.count)
+
+            // Optional gender ratio check
+            var genderPasses = true
+            if let currentUser = Auth.auth().currentUser { // best-effort gender lookup
+                // We will try to read gender from users collection; if missing we allow
+                let genderDoc = try? transaction.getDocument(self.db.collection("users").document(currentUser.uid))
+                if let data = genderDoc?.data(),
+                   let gender = data["gender"] as? String,
+                   currentAfterparty.maxMaleRatio < 1.0 {
+                    // crude estimate: count existing male attendees
+                    var maleCount = 0
+                    for uid in updatedActiveUsers {
+                        if let udata = try? transaction.getDocument(self.db.collection("users").document(uid)).data(),
+                           let g = udata?["gender"] as? String, g.lowercased() == "male" {
+                            maleCount += 1
+                        }
+                    }
+                    let totalIfAdded = updatedActiveUsers.count + 1
+                    let maleIfAdded = maleCount + (gender.lowercased() == "male" ? 1 : 0)
+                    let ratio = totalIfAdded > 0 ? Double(maleIfAdded) / Double(totalIfAdded) : 0
+                    genderPasses = ratio <= currentAfterparty.maxMaleRatio
+                }
+            }
+
+            if isAutoApprove && capacityRemaining > 0 && genderPasses {
+                // Auto-approve immediately
+                requestToStore = GuestRequest(
+                    id: guestRequest.id,
+                    userId: guestRequest.userId,
+                    userName: guestRequest.userName,
+                    userHandle: guestRequest.userHandle,
+                    introMessage: guestRequest.introMessage,
+                    requestedAt: guestRequest.requestedAt,
+                    paymentStatus: .pending,
+                    approvalStatus: .approved,
+                    paypalOrderId: guestRequest.paypalOrderId,
+                    dodoPaymentIntentId: guestRequest.dodoPaymentIntentId,
+                    paidAt: nil,
+                    refundedAt: nil,
+                    approvedAt: Date(),
+                    paymentProofImageURL: guestRequest.paymentProofImageURL,
+                    proofSubmittedAt: guestRequest.proofSubmittedAt,
+                    verificationImageURL: guestRequest.verificationImageURL
+                )
+                updatedRequests.append(requestToStore)
+                updatedActiveUsers.append(userId)
+
+                do {
+                    let encodedRequests = try updatedRequests.map { try Firestore.Encoder().encode($0) }
+                    transaction.updateData([
+                        "guestRequests": encodedRequests,
+                        "activeUsers": updatedActiveUsers
+                    ], forDocument: afterpartyRef)
+                    print("🟢 BACKEND: Auto-approved guest and added to activeUsers")
+                } catch {
+                    print("🔴 BACKEND: Failed to encode/update auto-approve: \(error.localizedDescription)")
+                    errorPointer?.pointee = error as NSError
+                    return nil
+                }
+            } else {
+                // Manual path: append pending request only
+                updatedRequests.append(requestToStore)
+                print("🟡 BACKEND: Adding pending request to party - new total: \(updatedRequests.count)")
+                do {
+                    let encodedRequests = try updatedRequests.map { try Firestore.Encoder().encode($0) }
+                    transaction.updateData(["guestRequests": encodedRequests], forDocument: afterpartyRef)
+                    print("🟢 BACKEND: Transaction update successful (pending)")
+                } catch {
+                    print("🔴 BACKEND: Failed to encode/update requests: \(error.localizedDescription)")
+                    errorPointer?.pointee = error as NSError
+                    return nil
+                }
             }
             
             return nil
@@ -416,15 +480,33 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         print("🟢 BACKEND: Transaction completed successfully")
         
-        // NEW: Send FCM push notification to HOST about new guest request
+        // Notify host or guest depending on path
         Task {
-            print("🔔 FCM: Sending push notification to host about new guest request")
-            await FCMNotificationManager.shared.notifyHostOfGuestRequest(
-                hostUserId: hostUserId,
-                partyId: afterpartyId,
-                partyTitle: partyTitle,
-                guestName: guestRequest.userHandle
-            )
+            do {
+                let doc = try await db.collection("afterparties").document(afterpartyId).getDocument()
+                if let data = doc.data(), let party = try? Firestore.Decoder().decode(Afterparty.self, from: data) {
+                    if party.guestRequests.contains(where: { $0.id == guestRequest.id && $0.approvalStatus == .approved }) {
+                        // Auto-approve path → notify guest they're in
+                        await FCMNotificationManager.shared.notifyGuestOfApproval(
+                            guestUserId: guestRequest.userId,
+                            partyId: afterpartyId,
+                            partyTitle: party.title,
+                            hostName: party.hostHandle,
+                            amount: party.ticketPrice
+                        )
+                    } else {
+                        // Pending path → notify host of new request
+                        await FCMNotificationManager.shared.notifyHostOfGuestRequest(
+                            hostUserId: hostUserId,
+                            partyId: afterpartyId,
+                            partyTitle: partyTitle,
+                            guestName: guestRequest.userHandle
+                        )
+                    }
+                }
+            } catch {
+                print("🔔 FCM: Notification branching failed: \(error)")
+            }
         }
         
         print("🟢 BACKEND: submitGuestRequest() completed successfully")

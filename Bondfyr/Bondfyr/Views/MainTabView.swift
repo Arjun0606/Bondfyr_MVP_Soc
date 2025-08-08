@@ -18,6 +18,7 @@ struct MainTabView: View {
     @State private var navigationPartyId: String?
     @State private var showPartyManagement = false
     @State private var partyForRating: Afterparty?
+    @State private var partyForDetails: Afterparty? // NEW: party details payload
 
     init() {
         let tabBarAppearance = UITabBarAppearance()
@@ -69,7 +70,7 @@ struct MainTabView: View {
             if let partyId = notification.userInfo?["partyId"] as? String {
                 navigationPartyId = partyId
                 tabSelection.selectedTab = .tickets // Navigate to tickets to see party details
-                showPartyDetails = true
+                fetchPartyForDetails(partyId: partyId) // NEW: fetch payload and present
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPartyRating"))) { notification in
@@ -131,6 +132,23 @@ struct MainTabView: View {
                 )
             }
         }
+        .sheet(isPresented: $showPartyDetails) { // NEW: present party details
+            if let party = partyForDetails {
+                NavigationView {
+                    AfterpartyDetailView(afterparty: party)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("Done") {
+                                    showPartyDetails = false
+                                    navigationPartyId = nil
+                                    partyForDetails = nil
+                                }
+                            }
+                        }
+                }
+            }
+        }
     }
     
     private func fetchPartyForRating(partyId: String) {
@@ -158,6 +176,36 @@ struct MainTabView: View {
                 
             } catch {
                 print("🔴 RATING: Failed to fetch party \(partyId): \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // NEW: fetch details payload
+    private func fetchPartyForDetails(partyId: String) {
+        Task {
+            do {
+                let db = Firestore.firestore()
+                let document = try await db.collection("afterparties").document(partyId).getDocument()
+                
+                guard let data = document.data() else {
+                    print("🔴 DETAILS: No data found for party \(partyId)")
+                    return
+                }
+                
+                var partyData = data
+                partyData["id"] = document.documentID
+                
+                let party = try Firestore.Decoder().decode(Afterparty.self, from: partyData)
+                
+                await MainActor.run {
+                    partyForDetails = party
+                    showPartyDetails = true
+                }
+                
+                print("✅ DETAILS: Successfully fetched party '\(party.title)' for details")
+                
+            } catch {
+                print("🔴 DETAILS: Failed to fetch party \(partyId): \(error.localizedDescription)")
             }
         }
     }
