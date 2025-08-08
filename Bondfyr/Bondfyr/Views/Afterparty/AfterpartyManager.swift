@@ -111,7 +111,8 @@ class AfterpartyManager: NSObject, ObservableObject {
         venmoHandle: String? = nil,
         zelleInfo: String? = nil,
         cashAppHandle: String? = nil,
-        acceptsApplePay: Bool? = nil
+        acceptsApplePay: Bool? = nil,
+        collectInPerson: Bool? = nil
     ) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
             throw NSError(domain: "AfterpartyError", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
@@ -162,6 +163,7 @@ class AfterpartyManager: NSObject, ObservableObject {
             zelleInfo: zelleInfo,
             cashAppHandle: cashAppHandle,
             acceptsApplePay: acceptsApplePay,
+            collectInPerson: collectInPerson,
             
             // Stats processing (Realistic Metrics System)
             statsProcessed: false  // New parties haven't processed stats yet
@@ -406,15 +408,17 @@ class AfterpartyManager: NSObject, ObservableObject {
             var genderPasses = true
             if let currentUser = Auth.auth().currentUser { // best-effort gender lookup
                 // We will try to read gender from users collection; if missing we allow
-                let genderDoc = try? transaction.getDocument(self.db.collection("users").document(currentUser.uid))
-                if let data = genderDoc?.data(),
+                let userDoc = try? transaction.getDocument(self.db.collection("users").document(currentUser.uid))
+                let data = userDoc?.data()
+                if let data = data,
                    let gender = data["gender"] as? String,
                    currentAfterparty.maxMaleRatio < 1.0 {
                     // crude estimate: count existing male attendees
                     var maleCount = 0
                     for uid in updatedActiveUsers {
-                        if let udata = try? transaction.getDocument(self.db.collection("users").document(uid)).data(),
-                           let g = udata?["gender"] as? String, g.lowercased() == "male" {
+                        let doc = try? transaction.getDocument(self.db.collection("users").document(uid))
+                        let udata = doc?.data()
+                        if let g = udata?["gender"] as? String, g.lowercased() == "male" {
                             maleCount += 1
                         }
                     }

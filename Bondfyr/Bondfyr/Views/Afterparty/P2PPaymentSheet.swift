@@ -17,10 +17,14 @@ struct P2PPaymentSheet: View {
                 VStack(spacing: 24) {
                     headerSection
                     amountSection
-                    contactInfoSection
-                    instructionsSection
-                    proofUploadSection
-                    confirmButtonSection
+                    if afterparty.collectInPerson != true {
+                        contactInfoSection
+                        instructionsSection
+                        proofUploadSection
+                        confirmButtonSection
+                    } else {
+                        irlInfoSection
+                    }
                 }
                 .padding()
             }
@@ -102,6 +106,29 @@ struct P2PPaymentSheet: View {
         
         print("🟢 PAYMENT PROOF: Uploaded to \(downloadURL.absoluteString)")
         return downloadURL.absoluteString
+    }
+    
+    private var irlInfoSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Collect In Person")
+                .font(.headline)
+                .fontWeight(.bold)
+            Text("This host is collecting payment in person. No payment proof is required here.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            Button("OK, Got It") {
+                presentationMode.wrappedValue.dismiss()
+                onPaymentComplete()
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.pink)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+        }
+        .padding()
+        .background(Color(.systemGray6).opacity(0.1))
+        .cornerRadius(12)
     }
     
     // MARK: - View Components

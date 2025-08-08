@@ -108,7 +108,7 @@ struct WorkingGuestFlow: View {
         case .pending:
             return "Request Pending..."
         case .approved:
-            return "Complete Payment ($\(Int(afterparty.ticketPrice)))"
+            return afterparty.collectInPerson == true ? "You're Approved!" : "Complete Payment ($\(Int(afterparty.ticketPrice)))"
         case .proofSubmitted:
             return "Payment Pending Verification..."
         case .paid:
@@ -125,7 +125,7 @@ struct WorkingGuestFlow: View {
         case .pending:
             return "clock"
         case .approved:
-            return "creditcard"
+            return afterparty.collectInPerson == true ? "checkmark.seal" : "creditcard"
         case .proofSubmitted:
             return "hourglass"
         case .paid:

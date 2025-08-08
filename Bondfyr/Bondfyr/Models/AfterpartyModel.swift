@@ -140,6 +140,7 @@ struct Afterparty: Identifiable, Codable {
     let zelleInfo: String? // Host's Zelle phone/email
     let cashAppHandle: String? // Host's Cash App handle ($username)
     let acceptsApplePay: Bool? // Whether host accepts Apple Pay via phone
+    let collectInPerson: Bool? // If true, host collects IRL; hide P2P flow
     
     // MARK: - Dodo Payment Integration (for listing fees)
     let paymentId: String? // Dodo payment ID for listing fee
@@ -266,7 +267,7 @@ struct Afterparty: Identifiable, Codable {
         case phoneNumber, instagramHandle, snapchatHandle
         
         // Payment Methods (Critical for P2P payments)
-        case venmoHandle, zelleInfo, cashAppHandle, acceptsApplePay
+        case venmoHandle, zelleInfo, cashAppHandle, acceptsApplePay, collectInPerson
         
         // Dodo Payment Integration (for listing fees)
         case paymentId, paymentStatus, listingFeePaid
@@ -326,7 +327,8 @@ struct Afterparty: Identifiable, Codable {
          venmoHandle: String? = nil,
          zelleInfo: String? = nil,
          cashAppHandle: String? = nil,
-         acceptsApplePay: Bool? = nil,
+          acceptsApplePay: Bool? = nil,
+          collectInPerson: Bool? = nil,
          
          // Dodo Payment Integration (for listing fees)
          paymentId: String? = nil,
@@ -395,6 +397,7 @@ struct Afterparty: Identifiable, Codable {
         self.zelleInfo = zelleInfo
         self.cashAppHandle = cashAppHandle
         self.acceptsApplePay = acceptsApplePay
+        self.collectInPerson = collectInPerson
         
         // Dodo Payment Integration (for listing fees)
         self.paymentId = paymentId
@@ -484,6 +487,7 @@ struct Afterparty: Identifiable, Codable {
         zelleInfo = try? container.decode(String.self, forKey: .zelleInfo)
         cashAppHandle = try? container.decode(String.self, forKey: .cashAppHandle)
         acceptsApplePay = (try? container.decode(Bool.self, forKey: .acceptsApplePay)) ?? false
+        collectInPerson = (try? container.decode(Bool.self, forKey: .collectInPerson)) ?? false
         
         // Dodo Payment Integration (for listing fees) - FIXED DECODER
         paymentId = try? container.decode(String.self, forKey: .paymentId)
@@ -612,7 +616,12 @@ struct Afterparty: Identifiable, Codable {
         try container.encode(earnings, forKey: .earnings)
         try container.encode(bondfyrFee, forKey: .bondfyrFee)
         
-        // TESTFLIGHT: Payment details - removed venmoHandle as we use P2P payments
+        // Encode payment methods and collection mode
+        try container.encode(venmoHandle, forKey: .venmoHandle)
+        try container.encode(zelleInfo, forKey: .zelleInfo)
+        try container.encode(cashAppHandle, forKey: .cashAppHandle)
+        try container.encode(acceptsApplePay, forKey: .acceptsApplePay)
+        try container.encode(collectInPerson ?? false, forKey: .collectInPerson)
         
         // Party Chat fields
 

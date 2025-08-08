@@ -2084,6 +2084,7 @@ struct CreateAfterpartyView: View {
     @State private var zelleInfo = ""
     @State private var cashAppHandle = ""
     @State private var acceptsApplePay = false
+    @State private var collectInPerson = false // NEW: IRL collection toggle
     
     // MARK: - NEW: Listing Fee Payment Flow
     @State private var showingListingFeePayment = false
@@ -2160,17 +2161,17 @@ struct CreateAfterpartyView: View {
     
     // MARK: - Form Validation
     private var isFormValid: Bool {
-        let hasPaymentMethod = !venmoHandle.isEmpty || !zelleInfo.isEmpty || !cashAppHandle.isEmpty || acceptsApplePay
+        let hasPaymentMethod = collectInPerson || (!venmoHandle.isEmpty || !zelleInfo.isEmpty || !cashAppHandle.isEmpty || acceptsApplePay)
         
         return !title.isEmpty &&
                !selectedVibes.isEmpty &&
                !address.isEmpty &&
-               !phoneNumber.isEmpty && // NEW: Phone required
-               hasPaymentMethod && // NEW: At least one payment method required
-               idVerificationImage != nil && // NEW: ID verification required
-               ticketPrice >= 5.0 && // Minimum $5
-               maxGuestCount >= 5 && // Minimum 5 guests
-               legalDisclaimerAccepted // Must accept legal responsibility
+               !phoneNumber.isEmpty &&
+               hasPaymentMethod &&
+               idVerificationImage != nil &&
+               ticketPrice >= 0.0 &&
+               maxGuestCount >= 5 &&
+               legalDisclaimerAccepted
     }
     
     // MARK: - NEW: Calculate Listing Fee
@@ -2245,6 +2246,7 @@ struct CreateAfterpartyView: View {
                             zelleInfo: $zelleInfo,
                             cashAppHandle: $cashAppHandle,
                             acceptsApplePay: $acceptsApplePay,
+                            collectInPerson: $collectInPerson,
                             idVerificationImage: $idVerificationImage,
                             showingIdPicker: $showingIdPicker
                         )
@@ -2482,7 +2484,15 @@ struct CreateAfterpartyView: View {
                     legalDisclaimerAccepted: legalDisclaimerAccepted,
                     
                     // TESTFLIGHT: Payment details
-            )
+                     phoneNumber: phoneNumber,
+                     instagramHandle: instagramHandle,
+                     snapchatHandle: snapchatHandle,
+                     venmoHandle: venmoHandle,
+                     zelleInfo: zelleInfo,
+                     cashAppHandle: cashAppHandle,
+                     acceptsApplePay: acceptsApplePay,
+                     collectInPerson: collectInPerson
+                 )
             await MainActor.run {
                     presentationMode.wrappedValue.dismiss()
             }
@@ -2611,6 +2621,7 @@ struct CreateAfterpartyView: View {
             "zelleInfo": zelleInfo,
             "cashAppHandle": cashAppHandle,
             "acceptsApplePay": acceptsApplePay,
+            "collectInPerson": collectInPerson,
             "partyId": partyId
         ]
         
@@ -2687,7 +2698,8 @@ struct CreateAfterpartyView: View {
                     venmoHandle: partyData["venmoHandle"] as? String,
                     zelleInfo: partyData["zelleInfo"] as? String,
                     cashAppHandle: partyData["cashAppHandle"] as? String,
-                    acceptsApplePay: partyData["acceptsApplePay"] as? Bool
+                     acceptsApplePay: partyData["acceptsApplePay"] as? Bool,
+                     collectInPerson: partyData["collectInPerson"] as? Bool
                 )
                 
                 await MainActor.run {
@@ -4190,6 +4202,7 @@ struct HostProfileSection: View {
     @Binding var zelleInfo: String
     @Binding var cashAppHandle: String
     @Binding var acceptsApplePay: Bool
+    @Binding var collectInPerson: Bool
     @Binding var idVerificationImage: UIImage?
     @Binding var showingIdPicker: Bool
     
@@ -4252,6 +4265,14 @@ struct HostProfileSection: View {
                     .font(.caption)
                     .foregroundColor(.gray)
                 
+                Toggle(isOn: $collectInPerson) {
+                    Text("Collect in person (no P2P details)")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                }
+                .toggleStyle(SwitchToggleStyle(tint: .green))
+                
+                if !collectInPerson {
                 TextField("@venmo-handle", text: $venmoHandle)
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding()
@@ -4303,11 +4324,14 @@ struct HostProfileSection: View {
                         .foregroundColor(.white)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: .green))
+                } // end if !collectInPerson
                 
+                if !collectInPerson {
                 Text("⚠️ At least one payment method is required")
                     .font(.caption)
                     .foregroundColor(.orange)
                     .fontWeight(.medium)
+                }
             }
             
             // ID Verification (Required)
