@@ -519,12 +519,27 @@ struct AfterpartyTabView: View {
                     await loadMarketplaceAfterparties()
                 }
             }
+            
+            // Listen for party updated notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PartyUpdated"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let partyId = notification.object as? String {
+                    print("🔔 FEED: Party \(partyId) updated - refreshing marketplace")
+                    Task {
+                        await loadMarketplaceAfterparties()
+                    }
+                }
+            }
         }
         .onDisappear {
             // Clean up notification observers
             NotificationCenter.default.removeObserver(self, name: Notification.Name("PartyCreated"), object: nil)
             NotificationCenter.default.removeObserver(self, name: Notification.Name("GuestApproved"), object: nil)
             NotificationCenter.default.removeObserver(self, name: Notification.Name("PaymentCompleted"), object: nil)
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("PartyUpdated"), object: nil)
         }
         .alert("Active Afterparty Exists", isPresented: $showingActivePartyAlert) {
                 Button("OK", role: .cancel) { }
@@ -1939,6 +1954,7 @@ struct EditAfterpartyView: View {
     @State private var address = ""
     @State private var googleMapsLink = ""
     @State private var showingSaveError = false
+    @State private var isSaving = false
     
     var body: some View {
         NavigationView {
@@ -1969,12 +1985,50 @@ struct EditAfterpartyView: View {
                     presentationMode.wrappedValue.dismiss()
                 },
                 trailing: Button("Save") {
-                    // TODO: Implement save functionality
-                    presentationMode.wrappedValue.dismiss()
+                    Task {
+                        await saveChanges()
+                    }
                 }
+                .disabled(isSaving)
             )
         }
         .preferredColorScheme(.dark)
+        .alert("Save Error", isPresented: $showingSaveError) {
+            Button("OK") { }
+        } message: {
+            Text("Failed to save changes. Please try again.")
+        }
+    }
+    
+    private func saveChanges() async {
+        isSaving = true
+        
+        do {
+            let db = Firestore.firestore()
+            let updateData: [String: Any] = [
+                "description": description,
+                "address": address,
+                "googleMapsLink": googleMapsLink
+            ]
+            
+            try await db.collection("afterparties").document(afterparty.id).updateData(updateData)
+            
+            await MainActor.run {
+                // Post notification to refresh UI
+                NotificationCenter.default.post(name: Notification.Name("PartyUpdated"), object: afterparty.id)
+                presentationMode.wrappedValue.dismiss()
+            }
+            
+            print("✅ EDIT: Successfully updated party '\(afterparty.title)' with new data")
+            
+        } catch {
+            print("🔴 EDIT: Failed to save changes: \(error.localizedDescription)")
+            await MainActor.run {
+                showingSaveError = true
+            }
+        }
+        
+        isSaving = false
     }
 }
 

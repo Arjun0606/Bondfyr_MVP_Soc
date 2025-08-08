@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct MainTabView: View {
     @EnvironmentObject var tabSelection: TabSelection
@@ -16,6 +17,7 @@ struct MainTabView: View {
     @State private var showPartyRating = false
     @State private var navigationPartyId: String?
     @State private var showPartyManagement = false
+    @State private var partyForRating: Afterparty?
 
     init() {
         let tabBarAppearance = UITabBarAppearance()
@@ -73,7 +75,7 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPartyRating"))) { notification in
             if let partyId = notification.userInfo?["partyId"] as? String {
                 navigationPartyId = partyId
-                showPartyRating = true
+                fetchPartyForRating(partyId: partyId)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToProfile"))) { _ in
@@ -118,40 +120,44 @@ struct MainTabView: View {
             }
         }
         .sheet(isPresented: $showPartyRating) {
-            if let partyId = navigationPartyId {
-                NavigationView {
-                    VStack(spacing: 20) {
-                        Text("🌟 Rate Your Experience")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        Text("Rate Party: \(partyId)")
-                            .font(.headline)
-                        
-                        Text("How was the party? Your rating helps the community!")
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                        
-                        Button("Close") {
-                            showPartyRating = false
-                            navigationPartyId = nil
-                        }
-                        .padding()
-                        .background(Color.pink)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+            if let party = partyForRating {
+                PostPartyRatingView(
+                    party: party,
+                    onRatingSubmitted: {
+                        showPartyRating = false
+                        navigationPartyId = nil
+                        partyForRating = nil
                     }
-                    .padding()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
-                                showPartyRating = false
-                                navigationPartyId = nil
-                            }
-                        }
-                    }
+                )
+            }
+        }
+    }
+    
+    private func fetchPartyForRating(partyId: String) {
+        Task {
+            do {
+                let db = Firestore.firestore()
+                let document = try await db.collection("afterparties").document(partyId).getDocument()
+                
+                guard let data = document.data() else {
+                    print("🔴 RATING: No data found for party \(partyId)")
+                    return
                 }
+                
+                var partyData = data
+                partyData["id"] = document.documentID
+                
+                let party = try Firestore.Decoder().decode(Afterparty.self, from: partyData)
+                
+                await MainActor.run {
+                    partyForRating = party
+                    showPartyRating = true
+                }
+                
+                print("✅ RATING: Successfully fetched party '\(party.title)' for rating")
+                
+            } catch {
+                print("🔴 RATING: Failed to fetch party \(partyId): \(error.localizedDescription)")
             }
         }
     }
