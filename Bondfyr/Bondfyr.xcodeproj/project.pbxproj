@@ -23,6 +23,7 @@
 		DC40AC872DA5790F00D78A39 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = DC40AC862DA5790F00D78A39 /* FirebaseMessaging */; };
 		DC9A4B752DB927C300A44426 /* SDWebImage in Frameworks */ = {isa = PBXBuildFile; productRef = DC9A4B742DB927C300A44426 /* SDWebImage */; };
 		DC9A4B772DB927C300A44426 /* SDWebImageMapKit in Frameworks */ = {isa = PBXBuildFile; productRef = DC9A4B762DB927C300A44426 /* SDWebImageMapKit */; };
+		DCCB25442E4755280026085B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DCCB25432E4755280026085B /* StoreKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +52,7 @@
 		DCBA6B5C2D90FA0E00214DC5 /* Bondfyr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bondfyr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBA6B6C2D90FA0F00214DC5 /* BondfyrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BondfyrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCBA6B762D90FA0F00214DC5 /* BondfyrUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BondfyrUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCCB25432E4755280026085B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		F1F431CD83BDB66673178850 /* Pods-BondfyrTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BondfyrTests.release.xcconfig"; path = "Target Support Files/Pods-BondfyrTests/Pods-BondfyrTests.release.xcconfig"; sourceTree = "<group>"; };
 		F6278F11241E352642B394BB /* Pods_Bondfyr.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bondfyr.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -105,6 +107,7 @@
 				DC9A4B752DB927C300A44426 /* SDWebImage in Frameworks */,
 				DC40AA742D9185E000D78A39 /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 				DC9A4B772DB927C300A44426 /* SDWebImageMapKit in Frameworks */,
+				DCCB25442E4755280026085B /* StoreKit.framework in Frameworks */,
 				DC1AAC6C2DD4A153000B9918 /* BondfyrPhotos in Frameworks */,
 				DC40AA932D91934800D78A39 /* GoogleSignIn in Frameworks */,
 			);
@@ -143,6 +146,7 @@
 		8CCA890ABC8C14DC346B7D74 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				DCCB25432E4755280026085B /* StoreKit.framework */,
 				F6278F11241E352642B394BB /* Pods_Bondfyr.framework */,
 			);
 			name = Frameworks;
