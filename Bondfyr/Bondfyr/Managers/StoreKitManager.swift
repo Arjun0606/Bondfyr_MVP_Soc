@@ -99,39 +99,31 @@ actor ListingCreditWallet {
     }
 
     func addSubcredits(userId: String, subcreditsToAdd: Int) async throws {
-        try await db.runTransaction { (transaction, errorPointer) -> Any? in
+        try await db.runTransaction { transaction, _ in
             let ref = self.db.collection("wallets").document(userId)
             let snapshot: DocumentSnapshot
-            do { snapshot = try transaction.getDocument(ref) } catch { 
-                errorPointer?.pointee = error as NSError
-                return nil 
-            }
-            let current = (snapshot.data()?["listingSubcredits"] as? Int)
-                ?? (((snapshot.data()?["listingCredits"] as? Int) ?? 0) * 100)
+            do { snapshot = try transaction.getDocument(ref) } catch { throw error }
+            let current = (snapshot.data()? ["listingSubcredits"] as? Int)
+                ?? (((snapshot.data()? ["listingCredits"] as? Int)?.advanced(by: 0))?.multipliedReportingOverflow(by: 100).partialValue ?? 0)
             let updated = max(0, current + subcreditsToAdd)
             transaction.setData(["listingSubcredits": updated], forDocument: ref, merge: true)
-            return nil
+            return ()
         }
     }
 
     func deductSubcredits(userId: String, subcreditsToDeduct: Int) async throws {
-        try await db.runTransaction { (transaction, errorPointer) -> Any? in
+        try await db.runTransaction { transaction, _ in
             let ref = self.db.collection("wallets").document(userId)
             let snapshot: DocumentSnapshot
-            do { snapshot = try transaction.getDocument(ref) } catch { 
-                errorPointer?.pointee = error as NSError
-                return nil 
-            }
-            let current = (snapshot.data()?["listingSubcredits"] as? Int)
-                ?? (((snapshot.data()?["listingCredits"] as? Int) ?? 0) * 100)
+            do { snapshot = try transaction.getDocument(ref) } catch { throw error }
+            let current = (snapshot.data()? ["listingSubcredits"] as? Int)
+                ?? (((snapshot.data()? ["listingCredits"] as? Int)?.advanced(by: 0))?.multipliedReportingOverflow(by: 100).partialValue ?? 0)
             guard current >= subcreditsToDeduct else {
-                let error = NSError(domain: "IAP", code: 402, userInfo: [NSLocalizedDescriptionKey: "Insufficient credits (subcredits)"])
-                errorPointer?.pointee = error
-                return nil
+                throw NSError(domain: "IAP", code: 402, userInfo: [NSLocalizedDescriptionKey: "Insufficient credits (subcredits)"])
             }
             let updated = current - subcreditsToDeduct
             transaction.setData(["listingSubcredits": updated], forDocument: ref, merge: true)
-            return nil
+            return ()
         }
     }
 }
