@@ -2086,13 +2086,10 @@ struct CreateAfterpartyView: View {
     @State private var acceptsApplePay = false
     @State private var collectInPerson = false // NEW: IRL collection toggle
     
-    // MARK: - NEW: Listing Fee Payment Flow
-    @State private var showingListingFeePayment = false
-    @State private var listingFeePaid = false
-    @State private var listingFeeAmount: Double = 0.0
+    // MARK: - Submission flow (web portal handles listing fee)
     @State private var pendingPartyData: [String: Any]?
-    @State private var isProcessingPayment = false
-    @State private var paymentSuccess = false
+    @State private var isSubmittingForPublish = false
+    @State private var submitSuccess = false
     
     init(currentLocation: CLLocationCoordinate2D?, currentCity: String) {
         self.currentLocation = currentLocation
@@ -2302,22 +2299,22 @@ struct CreateAfterpartyView: View {
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
                         
-                    // Create Button (NEW: Shows listing fee)
-                    Button(action: initiateListingFeePayment) {
+                    // Submit button (web portal completes payment; no in-app purchase)
+                    Button(action: submitForPublish) {
                         CreateButtonContentNew(
                             listingFee: calculatedListingFee,
                             isCreating: isCreating,
                             isUploadingImage: isUploadingImage,
-                            isProcessingPayment: isProcessingPayment,
-                            paymentSuccess: paymentSuccess
+                            isProcessingPayment: isSubmittingForPublish,
+                            paymentSuccess: submitSuccess
                         )
-                        }
+                    }
                                 .frame(maxWidth: .infinity)
                                 .padding()
                     .background(createButtonBackground)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
-                    .disabled(isCreating || isUploadingImage || isProcessingPayment || !isFormValid)
+                    .disabled(isCreating || isUploadingImage || isSubmittingForPublish || !isFormValid)
                     .padding(.top, 24)
                     }
                     .padding()
@@ -2352,35 +2349,7 @@ struct CreateAfterpartyView: View {
                     idVerificationImage = image
                 }
             }
-                    .sheet(isPresented: $showingListingFeePayment) {
-            DodoPaymentSheet(
-                afterparty: createMockAfterpartyForListingFee(),
-                onCompletion: {
-                    listingFeePaid = true
-                    showingListingFeePayment = false
-                    // Now create the party after payment
-                    createAfterpartyAfterPayment()
-                }
-            )
-            }
-            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PaymentCompleted"))) { notification in
-                // Payment completed - reset form and show success
-                print("🎉 CREATE VIEW: Payment completed! Resetting form...")
-                isProcessingPayment = false
-                paymentSuccess = true
-                listingFeePaid = true
-                showingListingFeePayment = false
-                
-                // Show success message
-                errorMessage = "🎉 Party created successfully! Your listing is now live."
-                showingError = true
-                
-                // Reset form after a short delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    resetForm()
-                    presentationMode.wrappedValue.dismiss()
-                }
-            }
+            // No in-app payment sheets or linking.
         }
     }
     
@@ -2508,21 +2477,19 @@ struct CreateAfterpartyView: View {
     
     // MARK: - NEW: Listing Fee Payment Flow
     
-    private func initiateListingFeePayment() {
+    private func submitForPublish() {
         guard let location = currentLocation else { return }
+        isSubmittingForPublish = true
+        submitSuccess = false
         
-        // Set processing state
-        isProcessingPayment = true
-        paymentSuccess = false
-        
-        // Calculate listing fee
-        listingFeeAmount = calculatedListingFee
-        
-        // Store party data for after payment
+        // Store pending party and signal host to complete payment on the web portal
         storePendingPartyData(location: location)
         
-        // Show listing fee payment sheet
-        showingListingFeePayment = true
+        // Immediately show confirmation
+        isSubmittingForPublish = false
+        submitSuccess = true
+        errorMessage = "We saved your draft. Complete payment on the host web portal to publish."
+        showingError = true
     }
     
     private func createMockAfterpartyForListingFee() -> Afterparty {
@@ -2575,9 +2542,8 @@ struct CreateAfterpartyView: View {
         idVerificationImage = nil
         legalDisclaimerAccepted = false
         pendingPartyData = nil
-        listingFeePaid = false
-        isProcessingPayment = false
-        paymentSuccess = false
+        isSubmittingForPublish = false
+        submitSuccess = false
     }
     
     private func storePendingPartyData(location: CLLocationCoordinate2D) {

@@ -174,5 +174,11 @@ service cloud.firestore {
       // Allow webhook to delete after payment processing
       allow delete: if true;
     }
+    
+    // Wallets collection (for StoreKit listing credits)
+    match /wallets/{userId} {
+      // Users can read and write their own wallet
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 } 
