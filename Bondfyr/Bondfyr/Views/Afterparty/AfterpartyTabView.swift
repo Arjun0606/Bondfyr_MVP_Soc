@@ -2179,11 +2179,6 @@ struct CreateAfterpartyView: View {
         let halfCapacity = Double(maxGuestCount) / 2.0
         return halfCapacity * ticketPrice * 0.20 // 20% of (half capacity * price)
     }
-
-    // MARK: - NEW: Subcredits required for listing fee (1 subcredit = $0.01)
-    private func subcreditsRequiredForListingFee() -> Int {
-        return Int(ceil(calculatedListingFee * 100.0))
-    }
     
     // MARK: - Computed Properties
     private var createButtonBackground: AnyView {
@@ -2307,7 +2302,7 @@ struct CreateAfterpartyView: View {
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
                         
-                    // Create Button (NEW: Shows listing fee via IAP credits)
+                    // Create Button (NEW: Shows listing fee)
                     Button(action: initiateListingFeePayment) {
                         CreateButtonContentNew(
                             listingFee: calculatedListingFee,
@@ -2316,7 +2311,7 @@ struct CreateAfterpartyView: View {
                             isProcessingPayment: isProcessingPayment,
                             paymentSuccess: paymentSuccess
                         )
-                    }
+                        }
                                 .frame(maxWidth: .infinity)
                                 .padding()
                     .background(createButtonBackground)
@@ -2357,19 +2352,16 @@ struct CreateAfterpartyView: View {
                     idVerificationImage = image
                 }
             }
-            .sheet(isPresented: $showingListingFeePayment) {
-                if let userId = authViewModel.currentUser?.uid {
-                    ListingCreditPurchaseSheet(
-                        userId: userId,
-                        listingFeeUSD: calculatedListingFee,
-                        requiredSubcredits: subcreditsRequiredForListingFee(),
-                        onCompleted: {
-                            listingFeePaid = true
-                            showingListingFeePayment = false
-                            createAfterpartyAfterPayment()
-                        }
-                    )
+                    .sheet(isPresented: $showingListingFeePayment) {
+            DodoPaymentSheet(
+                afterparty: createMockAfterpartyForListingFee(),
+                onCompletion: {
+                    listingFeePaid = true
+                    showingListingFeePayment = false
+                    // Now create the party after payment
+                    createAfterpartyAfterPayment()
                 }
+            )
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PaymentCompleted"))) { notification in
                 // Payment completed - reset form and show success
@@ -2529,11 +2521,41 @@ struct CreateAfterpartyView: View {
         // Store party data for after payment
         storePendingPartyData(location: location)
         
-        // Show listing fee payment sheet (IAP credits)
+        // Show listing fee payment sheet
         showingListingFeePayment = true
     }
     
-    // Deprecated Dodo dependency removed in IAP flow
+    private func createMockAfterpartyForListingFee() -> Afterparty {
+        // Use the stored party ID from pending data to ensure webhook can find the data
+        let partyId = pendingPartyData?["partyId"] as? String ?? UUID().uuidString
+        
+        // Create a mock afterparty for Dodo payment processing (listing fee)
+        return Afterparty(
+            id: partyId, // Pass the party ID during initialization
+            userId: authViewModel.currentUser?.uid ?? "",
+            hostHandle: authViewModel.currentUser?.name ?? "Host",
+            coordinate: currentLocation ?? CLLocationCoordinate2D(latitude: 0, longitude: 0),
+            radius: 1000,
+            startTime: Date(),
+            endTime: Date().addingTimeInterval(3600),
+            city: currentCity,
+            locationName: "Listing Fee Payment",
+            description: "Listing fee for \(title)",
+            address: "Platform Fee",
+            googleMapsLink: "",
+            vibeTag: "Platform",
+            title: "Listing Fee - \(title)",
+            ticketPrice: ticketPrice,  // Use actual ticket price, not listing fee!
+            maxGuestCount: maxGuestCount,  // Use actual guest count!
+            phoneNumber: phoneNumber,
+            instagramHandle: instagramHandle,
+            snapchatHandle: snapchatHandle,
+            venmoHandle: venmoHandle,
+            zelleInfo: zelleInfo,
+            cashAppHandle: cashAppHandle,
+            acceptsApplePay: acceptsApplePay
+        )
+    }
     
     private func resetForm() {
         title = ""
