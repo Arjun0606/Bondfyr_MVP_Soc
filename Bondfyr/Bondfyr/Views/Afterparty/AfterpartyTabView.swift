@@ -2298,6 +2298,19 @@ struct CreateAfterpartyView: View {
                         
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
+
+                        // MARK: - Listing Fee (information only)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "creditcard.fill").foregroundColor(.green)
+                                Text("Listing fee (pay on Host Web): $")
+                                    .foregroundColor(.white)
+                                + Text(String(format: "%.2f", calculatedListingFee)).foregroundColor(.green)
+                            }
+                            Text("This amount will be paid on the Host Web after you submit. Your party will publish once payment is completed.")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
                         
                     // Submit button (web portal completes payment; no in-app purchase)
                     Button(action: submitForPublish) {
@@ -4350,7 +4363,7 @@ struct CreateButtonContentNew: View {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(0.8)
             } else if isProcessingPayment {
-                Text("Processing Payment...")
+                Text("Submitting...")
                     .fontWeight(.semibold)
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -4364,10 +4377,10 @@ struct CreateButtonContentNew: View {
             } else if paymentSuccess {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
-                Text("Party Created!")
+                Text("Submitted!")
                     .fontWeight(.semibold)
             } else {
-                Text("Pay Listing Fee • $\(String(format: "%.2f", listingFee))")
+                Text("Submit and Pay on Host Web")
                     .fontWeight(.semibold)
             }
         }
