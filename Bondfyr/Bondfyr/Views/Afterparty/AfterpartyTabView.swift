@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreLocation
 import FirebaseFirestore
+import FirebaseAuth
 import FirebaseStorage
 import CoreLocationUI
 
@@ -2310,6 +2311,15 @@ struct CreateAfterpartyView: View {
                             Text("This amount will be paid on the Host Web after you submit. Your party will publish once payment is completed.")
                                 .font(.caption)
                                 .foregroundColor(.gray)
+                            // Optional shortcut to host portal for a seamless flow
+                            Button(action: openHostWeb) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "link")
+                                    Text("Open Host Web")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.green)
                         }
                         
                     // Submit button (web portal completes payment; no in-app purchase)
@@ -2498,11 +2508,34 @@ struct CreateAfterpartyView: View {
         // Store pending party and signal host to complete payment on the web portal
         storePendingPartyData(location: location)
         
-        // Immediately show confirmation
+        // Open Host Web directly for payment right after submission (with Firebase ID token for silent sign-in)
+        if let partyId = pendingPartyData?["partyId"] as? String,
+           let uid = authViewModel.currentUser?.uid {
+            if let user = Auth.auth().currentUser {
+                user.getIDToken { token, _ in
+                    var urlString = "https://bondfyr-da123.firebaseapp.com?partyId=\(partyId)&uid=\(uid)"
+                    if let token = token {
+                        // Pass ID token so the portal can authenticate without showing Google UI
+                        urlString += "&idToken=\(token)"
+                    }
+                    if let url = URL(string: urlString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            } else if let url = URL(string: "https://bondfyr-da123.firebaseapp.com?partyId=\(partyId)&uid=\(uid)") {
+                UIApplication.shared.open(url)
+            }
+        }
+        
+        // Confirmation state
         isSubmittingForPublish = false
         submitSuccess = true
-        errorMessage = "We saved your draft. Complete payment on the host web portal to publish."
-        showingError = true
+    }
+
+    private func openHostWeb() {
+        if let url = URL(string: "https://bondfyr-da123.web.app") {
+            UIApplication.shared.open(url)
+        }
     }
     
     private func createMockAfterpartyForListingFee() -> Afterparty {

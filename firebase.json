@@ -5,5 +5,13 @@
   },
   "functions": {
     "source": "firebase-functions"
+  },
+  "hosting": {
+    "public": "host-portal",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {"source": "**/*.css", "headers": [{"key": "Cache-Control", "value": "public, max-age=3600"}]},
+      {"source": "**/*.js", "headers": [{"key": "Cache-Control", "value": "public, max-age=3600"}]}
+    ]
   }
 } 

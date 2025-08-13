@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bondfyr Host Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">🔥 Bondfyr • Host Portal</div>
+      <div id="userArea" class="user-area">
+        <button id="signInBtn" class="btn primary">Sign in with Google to Pay</button>
+        <div id="userInfo" class="user-info hidden">
+          <img id="userAvatar" class="avatar" alt="avatar" />
+          <span id="userName"></span>
+          <button id="signOutBtn" class="btn subtle">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h2>Pending Listings</h2>
+        <p class="muted">Submit payment to publish your party. Amount shown is final and charged via Dodo Payments.</p>
+        <div id="pendingList" class="list"></div>
+        <div id="emptyState" class="muted">No pending listings.</div>
+        <div id="errorState" class="muted" style="color:#ff6b6b;display:none"></div>
+      </section>
+
+      <section class="card">
+        <h2>How it works</h2>
+        <ol class="muted">
+          <li>Create your party in the iOS app and tap “Submit and Pay on Host Web”.</li>
+          <li>Sign in with your Google account and you’ll be redirected to pay.</li>
+          <li>After payment, your listing goes live automatically.</li>
+        </ol>
+      </section>
+    </main>
+
+    <!-- Firebase v10 CDN -->
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js"></script>
+    <script type="module" src="app.js?v=20250811-2"></script>
+  </body>
+  </html>
+
+

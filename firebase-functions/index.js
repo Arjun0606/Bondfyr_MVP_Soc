@@ -2,6 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const crypto = require('crypto');
+const cors = require('cors')({ origin: ['https://bondfyr-da123.web.app', 'https://bondfyr-da123.firebaseapp.com'], methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type'] });
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -37,6 +38,298 @@ exports.testFCMNotification = testFCMNotification;
 
 // Production Monitoring
 exports.generateNotificationAnalytics = generateNotificationAnalytics;
+
+// --- Listing checkout (Host Web portal) ---
+// Creates a Dodo live checkout for a pending party. Auth required.
+exports.createListingCheckout = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be signed in');
+  }
+  const userId = context.auth.uid;
+  const partyId = data?.partyId;
+  if (!partyId) {
+    throw new functions.https.HttpsError('invalid-argument', 'partyId required');
+  }
+
+  const db = admin.firestore();
+  const pendingRef = db.collection('pendingParties').doc(partyId);
+  const snap = await pendingRef.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Pending party not found');
+  }
+  const p = snap.data();
+  if (!p.hostId || p.hostId !== userId) {
+    throw new functions.https.HttpsError('permission-denied', 'Not your party');
+  }
+
+  // Recompute listing fee server-side (authoritative)
+  const ticketPrice = Number(p.ticketPrice || 0);
+  const maxGuestCount = Number(p.maxGuestCount || 0);
+  const halfCapacity = maxGuestCount / 2.0;
+  const platformFee = halfCapacity * ticketPrice * 0.20;
+  const amountInCents = Math.round(platformFee * 100);
+
+  // Create Dodo live checkout
+  const DODO_API_KEY = 'epFmjxZK0Ka34YDf.vI_rvcu9m-o5PcTau3rk3Q5VkxeKUVJRt8Diteu8WrCPUiB4';
+  const BASE_URL = 'https://live.dodopayments.com';
+
+  // Fetch user info for customer details
+  let customer = {};
+  try {
+    const userRecord = await admin.auth().getUser(userId);
+    if (userRecord) {
+      if (userRecord.displayName) customer.name = userRecord.displayName;
+      if (userRecord.email) customer.email = userRecord.email;
+    }
+  } catch (e) {
+    // Fallbacks
+  }
+  if (!customer.name) customer.name = `Host ${userId.substring(0, 6)}`;
+  if (!customer.email) customer.email = `${userId.substring(0, 6)}@hosts.bondfyr.app`;
+
+  const payload = {
+    payment_link: true,
+    currency: 'USD',
+    amount: amountInCents,
+    description: `Listing Fee - ${p.title || 'Afterparty'}`,
+    callback_url: `https://us-central1-${functions.config().project_id || 'bondfyr-da123'}.cloudfunctions.net/dodoWebhook`,
+    product_cart: [{ product_id: 'pdt_I3q25hrMAAf6yeKkKb1vD', quantity: 1, amount: amountInCents }],
+    customer: {
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone || '',
+      country: 'US'
+    },
+    billing: {
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone || '',
+      country: 'US',
+      state: 'CA',
+      city: 'San Francisco',
+      zipcode: '94105',
+      street: '123 Main St',
+      address: {
+        line1: '123 Main St',
+        line2: '',
+        city: 'San Francisco',
+        state: 'CA',
+        zipcode: '94105',
+        country: 'US'
+      }
+    },
+    // Deep link back into the iOS app after payment
+    return_url: `bondfyr://payment-success?afterpartyId=${partyId}&userId=${userId}`,
+    metadata: {
+      afterpartyId: partyId,
+      userId: userId,
+      hostId: userId,
+      platformFee: platformFee.toFixed(2)
+    }
+  };
+
+  try {
+    const res = await axios.post(`${BASE_URL}/payments`, payload, {
+      headers: {
+        'Authorization': `Bearer ${DODO_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const url = res.data?.payment_link || res.data?.url;
+    if (!url) {
+      throw new Error('No payment link in Dodo response');
+    }
+    // For convenience, persist required fee
+    await pendingRef.set({ requiredListingFeeCents: amountInCents }, { merge: true });
+    return { url, amountInCents };
+  } catch (e) {
+    console.error('createListingCheckout error:', e.response?.data || e.message);
+    throw new functions.https.HttpsError('internal', e.response?.data?.message || e.message);
+  }
+});
+
+// HTTP variant that accepts an ID token (bypasses web auth UI). CORS enabled.
+exports.createListingCheckoutHTTP = functions.https.onRequest(async (req, res) => {
+  return cors(req, res, async () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+    try {
+      const { idToken, partyId } = req.body || {};
+      if (!idToken || !partyId) {
+        res.status(400).json({ error: 'missing_params' });
+        return;
+      }
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const context = { auth: { uid: decoded.uid } };
+      // Reuse logic from callable
+      const snap = await admin.firestore().collection('pendingParties').doc(partyId).get();
+      if (!snap.exists) return res.status(404).json({ error: 'not_found' });
+      const p = snap.data();
+      if (!p.hostId || p.hostId !== context.auth.uid) return res.status(403).json({ error: 'permission_denied' });
+
+      const ticketPrice = Number(p.ticketPrice || 0);
+      const maxGuestCount = Number(p.maxGuestCount || 0);
+      const platformFee = (maxGuestCount / 2.0) * ticketPrice * 0.20;
+      const amountInCents = Math.round(platformFee * 100);
+
+      const DODO_API_KEY = 'epFmjxZK0Ka34YDf.vI_rvcu9m-o5PcTau3rk3Q5VkxeKUVJRt8Diteu8WrCPUiB4';
+      const BASE_URL = 'https://live.dodopayments.com';
+
+      let customer = {};
+      try {
+        const userRecord = await admin.auth().getUser(context.auth.uid);
+        if (userRecord) {
+          if (userRecord.displayName) customer.name = userRecord.displayName;
+          if (userRecord.email) customer.email = userRecord.email;
+        }
+      } catch {}
+      if (!customer.name) customer.name = `Host ${context.auth.uid.substring(0, 6)}`;
+      if (!customer.email) customer.email = `${context.auth.uid.substring(0, 6)}@hosts.bondfyr.app`;
+
+      const payload = {
+        payment_link: true,
+        currency: 'USD',
+        amount: amountInCents,
+        description: `Listing Fee - ${p.title || 'Afterparty'}`,
+        callback_url: `https://us-central1-${functions.config().project_id || 'bondfyr-da123'}.cloudfunctions.net/dodoWebhook`,
+        product_cart: [{ product_id: 'pdt_I3q25hrMAAf6yeKkKb1vD', quantity: 1, amount: amountInCents }],
+        customer: { name: customer.name, email: customer.email, phone: customer.phone || '', country: 'US' },
+        billing: {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone || '',
+          country: 'US', 
+          state: 'CA', 
+          city: 'San Francisco', 
+          zipcode: '94105', 
+          street: '123 Main St',
+          address: { 
+            line1: '123 Main St', 
+            line2: '', 
+            city: 'San Francisco', 
+            state: 'CA', 
+            zipcode: '94105', 
+            country: 'US' 
+          }
+        },
+        return_url: `bondfyr://payment-success?afterpartyId=${partyId}&userId=${context.auth.uid}`,
+        metadata: { afterpartyId: partyId, userId: context.auth.uid, hostId: context.auth.uid, platformFee: platformFee.toFixed(2) }
+      };
+
+      const resp = await axios.post(`${BASE_URL}/payments`, payload, { headers: { 'Authorization': `Bearer ${DODO_API_KEY}`, 'Content-Type': 'application/json' } });
+      const url = resp.data?.payment_link || resp.data?.url;
+      if (!url) return res.status(502).json({ error: 'no_payment_link' });
+      await admin.firestore().collection('pendingParties').doc(partyId).set({ requiredListingFeeCents: amountInCents }, { merge: true });
+      res.status(200).json({ url, amountInCents });
+    } catch (e) {
+      console.error('createListingCheckoutHTTP error:', e.response?.data || e.message);
+      res.status(500).json({ error: 'internal', message: e.response?.data?.message || e.message });
+    }
+  });
+});
+
+// Delete a single pending party (host cleanup)
+exports.deletePendingParty = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be signed in');
+  }
+  const partyId = data?.partyId;
+  if (!partyId) throw new functions.https.HttpsError('invalid-argument', 'partyId required');
+  const ref = admin.firestore().collection('pendingParties').doc(partyId);
+  const snap = await ref.get();
+  if (!snap.exists) return { deleted: false };
+  const p = snap.data();
+  if (p.hostId !== context.auth.uid) {
+    throw new functions.https.HttpsError('permission-denied', 'Not your party');
+  }
+  await ref.delete();
+  return { deleted: true };
+});
+
+// Clear all stale pending parties for the current user (older than 24h)
+exports.clearOldPendingParties = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be signed in');
+  }
+  const uid = context.auth.uid;
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const q = await admin.firestore().collection('pendingParties').where('hostId', '==', uid).get();
+  let deleted = 0;
+  const batch = admin.firestore().batch();
+  q.forEach((doc) => {
+    const createdAt = doc.data().createdAt;
+    const ts = createdAt && createdAt.toMillis ? createdAt.toMillis() : (createdAt instanceof Date ? createdAt.getTime() : 0);
+    if (ts === 0 || ts < cutoff) {
+      batch.delete(doc.ref);
+      deleted++;
+    }
+  });
+  if (deleted > 0) await batch.commit();
+  return { deleted };
+});
+
+// Clear ALL pending parties for the signed-in host (one-time purge)
+exports.clearAllPendingParties = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be signed in');
+  }
+  const uid = context.auth.uid;
+  const q = await admin.firestore().collection('pendingParties').where('hostId', '==', uid).get();
+  let deleted = 0;
+  const batch = admin.firestore().batch();
+  q.forEach((doc) => { batch.delete(doc.ref); deleted++; });
+  if (deleted > 0) await batch.commit();
+  return { deleted };
+});
+
+// Clear all pending parties EXCEPT a given partyId for the signed-in host
+exports.clearAllExceptPending = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be signed in');
+  }
+  const uid = context.auth.uid;
+  const exceptId = data?.partyId;
+  const q = await admin.firestore().collection('pendingParties').where('hostId', '==', uid).get();
+  let deleted = 0;
+  const batch = admin.firestore().batch();
+  q.forEach((doc) => {
+    if (!exceptId || doc.id !== exceptId) {
+      batch.delete(doc.ref);
+      deleted++;
+    }
+  });
+  if (deleted > 0) await batch.commit();
+  return { deleted };
+});
+
+// Create a custom token for the current Firebase user via their ID token (web bootstrap)
+exports.exchangeIdToken = functions.https.onRequest(async (req, res) => {
+  return cors(req, res, async () => {
+    if (req.method === 'OPTIONS') {
+      res.status(204).send('');
+      return;
+    }
+    try {
+      const idToken = req.method === 'POST' ? (req.body && req.body.token) : (req.query && req.query.token);
+      if (!idToken) {
+        res.status(400).json({ error: 'missing_id_token' });
+        return;
+      }
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const customToken = await admin.auth().createCustomToken(decoded.uid);
+      res.status(200).json({ customToken });
+    } catch (e) {
+      console.error('exchangeIdToken error', e);
+      res.status(401).json({ error: 'invalid_id_token', message: e.message });
+    }
+  });
+});
 
 // LemonSqueezy integration removed per user request
 
