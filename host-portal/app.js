@@ -65,44 +65,88 @@ getRedirectResult(auth)
     showError(err.message || 'Sign-in failed');
   });
 
-// Check for direct HTTP checkout BEFORE auth state changes
+// OPTIMIZED: Direct checkout with loading overlay and faster redirect
 (async () => {
   const params = new URLSearchParams(window.location.search);
   const idToken = params.get('idToken');
   const partyId = params.get('partyId');
   
   if (idToken && partyId) {
-    // Show immediate visual feedback
-    document.title = '🚀 Processing Payment...';
-    console.log('🚀 Direct checkout with idToken...');
+    // Hide entire page and show loading overlay for instant feedback
+    document.body.innerHTML = `
+      <div style="
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        color: white; font-family: -apple-system, BlinkMacSystemFont, sans-serif; z-index: 9999;
+      ">
+        <img src="bondfyr-logo.png" alt="Bondfyr" style="
+          width: 120px; height: 120px; margin-bottom: 2rem; border-radius: 20px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3); animation: pulse 2s ease-in-out infinite;
+        ">
+        <h2 style="margin: 0 0 1rem 0; font-weight: 600; font-size: 1.5rem;">Processing Payment...</h2>
+        <p style="margin: 0; opacity: 0.8; font-size: 1rem;">Redirecting to secure payment...</p>
+        <div style="margin-top: 2rem; width: 200px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;">
+          <div style="width: 100%; height: 100%; background: white; border-radius: 2px; animation: slide 1.5s ease-in-out infinite;"></div>
+        </div>
+      </div>
+      <style>
+        @keyframes slide { 0%, 100% { transform: translateX(-100%); } 50% { transform: translateX(100%); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+      </style>
+    `;
+    
+    console.log('🚀 Express checkout with idToken...');
+    
     try {
+      // Start timer for UX tracking
+      const startTime = Date.now();
+      
       const resp = await fetch('https://us-central1-bondfyr-da123.cloudfunctions.net/createListingCheckoutHTTP', {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken, partyId })
       });
       
+      const processingTime = Date.now() - startTime;
+      console.log(`⚡ Payment setup completed in ${processingTime}ms`);
+      
       if (!resp.ok) {
         const errorText = await resp.text();
-        console.error('HTTP checkout failed:', resp.status, errorText);
-        showError(`Payment setup failed: ${resp.status}`);
+        console.error('Payment setup failed:', resp.status, errorText);
+        document.body.innerHTML = `
+          <div style="padding: 2rem; text-align: center; color: #e74c3c; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <img src="bondfyr-logo.png" alt="Bondfyr" style="width: 80px; height: 80px; border-radius: 16px; margin-bottom: 1rem;">
+            <h3 style="color: white; margin: 0 0 1rem 0;">Payment Setup Failed</h3>
+            <p style="color: rgba(255,255,255,0.8); margin: 0 0 2rem 0;">Error ${resp.status}: Please try again</p>
+            <button onclick="window.close()" style="margin-top: 1rem; padding: 0.75rem 1.5rem; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;">Close</button>
+          </div>
+        `;
         return;
       }
       
       const data = await resp.json();
-      console.log('✅ HTTP checkout response:', data);
+      console.log('✅ Payment URL ready:', data.url ? 'Success' : 'Failed');
       
       if (data.url) {
-        console.log('🎯 Redirecting to Dodo:', data.url);
-        document.title = '💳 Redirecting to Payment...';
-        window.location.href = data.url;
-        return;
+        // Add brief delay for smooth transition, then redirect
+        setTimeout(() => {
+          console.log('🎯 Redirecting to Dodo payment...');
+          window.location.href = data.url;
+        }, 500);
       } else {
-        showError('No payment URL received');
+        throw new Error('No payment URL received from server');
       }
     } catch (e) {
-      console.error('❌ Direct HTTP checkout failed:', e);
-      showError(`Payment error: ${e.message}`);
+      console.error('❌ Express checkout failed:', e);
+      document.body.innerHTML = `
+        <div style="padding: 2rem; text-align: center; color: #e74c3c; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <img src="bondfyr-logo.png" alt="Bondfyr" style="width: 80px; height: 80px; border-radius: 16px; margin-bottom: 1rem;">
+          <h3 style="color: white; margin: 0 0 1rem 0;">Connection Error</h3>
+          <p style="color: rgba(255,255,255,0.8); margin: 0 0 2rem 0;">${e.message}</p>
+          <button onclick="window.location.reload()" style="margin-top: 1rem; padding: 0.75rem 1.5rem; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem;">Retry</button>
+        </div>
+      `;
     }
   } else {
     // Debug: show what parameters we received

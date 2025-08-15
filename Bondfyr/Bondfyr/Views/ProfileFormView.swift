@@ -49,7 +49,16 @@ struct ProfileFormView: View {
     // Profile completion check
     private var canContinue: Bool {
         let genderValid = !selectedGender.isEmpty && (selectedGender != "custom" || !customGender.isEmpty)
-        return !username.isEmpty && genderValid
+        let ageValid = isOver18(dob: dob)
+        return !username.isEmpty && genderValid && ageValid
+    }
+    
+    // Age verification helper
+    private func isOver18(dob: Date) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        let ageComponents = calendar.dateComponents([.year], from: dob, to: now)
+        return (ageComponents.year ?? 0) >= 18
     }
     
     // Check if this is editing mode
@@ -313,6 +322,27 @@ struct ProfileFormView: View {
                         .colorScheme(.dark)
                         .disabled(isEditingMode)
                         .opacity(isEditingMode ? 0.6 : 1.0)
+                    
+                    // Age verification warning
+                    if !isOver18(dob: dob) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text("You must be 18 or older to use Bondfyr")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        .padding(.top, 4)
+                    } else {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Age verified")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                        .padding(.top, 4)
+                    }
         }
                 }
 

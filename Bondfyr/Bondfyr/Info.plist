@@ -62,11 +62,11 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>We use your location to show parties and events near you, and to help hosts see nearby guests.</string>
+	<string>Bondfyr uses your location to show nearby parties within your selected radius and help you discover local events. Your exact location is never shared with other users or hosts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Select photos to upload as party cover images and share memories from events.</string>
+	<string>Bondfyr accesses your photo library to let you select cover images for parties you host and to save photos from events you attend. Photos are only uploaded when you choose to share them.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>We need camera access to let you take photos for party cover images and photo contests.</string>
+	<string>Bondfyr uses your camera to take photos for party cover images, event memories, and photo contests. All photos remain private until you choose to share them.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Bondfyr</string>
 	<key>CFBundleShortVersionString</key>

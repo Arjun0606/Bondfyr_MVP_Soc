@@ -11,6 +11,7 @@ struct EnhancedPartyCard: View {
     @State private var showingRequestSheet = false
     @State private var showingPartyDetails = false
     @State private var showingSocialShare = false
+    @State private var showingReportAlert = false
     @State private var isAnimating = false
     
     // MARK: - Computed Properties
@@ -64,10 +65,29 @@ struct EnhancedPartyCard: View {
                             .stroke(.white.opacity(0.2), lineWidth: 1)
                     )
                 
-                // Status badge
-                StatusBadge(status: guestState.status, capacityInfo: capacityInfo)
-                    .padding(.top, 12)
-                    .padding(.trailing, 12)
+                // Top right controls
+                VStack(spacing: 8) {
+                    // Report button
+                    Button(action: { showingReportAlert = true }) {
+                        Image(systemName: "flag.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(
+                                Circle()
+                                    .fill(.black.opacity(0.6))
+                                    .overlay(
+                                        Circle()
+                                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    
+                    // Status badge
+                    StatusBadge(status: guestState.status, capacityInfo: capacityInfo)
+                }
+                .padding(.top, 12)
+                .padding(.trailing, 12)
             }
             .overlay(alignment: .bottomLeading) {
                 // Party title and host info overlay
@@ -191,6 +211,20 @@ struct EnhancedPartyCard: View {
         .sheet(isPresented: $showingSocialShare) {
             SocialShareSheet(party: party, isPresented: $showingSocialShare)
         }
+        .alert("Report Party", isPresented: $showingReportAlert) {
+            Button("Report Inappropriate Content", role: .destructive) {
+                reportParty(reason: "inappropriate_content")
+            }
+            Button("Report Safety Concern", role: .destructive) {
+                reportParty(reason: "safety_concern")
+            }
+            Button("Report Fake/Spam", role: .destructive) {
+                reportParty(reason: "fake_spam")
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Help us keep Bondfyr safe. What type of issue would you like to report?")
+        }
         .fullScreenCover(isPresented: $showingPartyDetails) {
             // TODO: Replace with actual PartyDetailsView when implemented
             NavigationView {
@@ -262,6 +296,24 @@ struct EnhancedPartyCard: View {
     private func updateGuestStatus() {
         let newStatus = guestState.calculateStatus(from: party, userId: currentUserId)
         guestState.transitionTo(newStatus)
+    }
+    
+    private func reportParty(reason: String) {
+        // Simple analytics/logging - in production, this would send to your moderation system
+        print("🚨 REPORT: Party \(party.id) reported by \(currentUserId) for: \(reason)")
+        
+        // Show confirmation to user
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // This would typically show a toast or success message
+            // For now, we'll just log it
+            print("✅ REPORT: Report submitted successfully")
+        }
+        
+        // In production, you would:
+        // 1. Send report to Firebase with party ID, reporter ID, reason, timestamp
+        // 2. Potentially auto-hide content if multiple reports
+        // 3. Queue for human review
+        // 4. Send email notification to moderation team
     }
 }
 

@@ -167,27 +167,32 @@ struct HelpSupportView: View {
             VStack(spacing: 12) {
                 FAQItem(
                     question: "How do I create a party?",
-                    answer: "Tap the 'Host Party' tab at the bottom, set your details, price, and location. Your party will be live immediately!"
+                    answer: "Tap the '+' or create button, fill in your party details, and pay the listing fee on our Host Web portal. Your party goes live after payment!"
                 )
                 
                 FAQItem(
-                    question: "How do refunds work?",
-                    answer: "If a party is cancelled by the host, all guests receive automatic refunds within 3-5 business days."
+                    question: "How do payments work?",
+                    answer: "Hosts pay a listing fee to publish parties. Guests pay hosts directly via Venmo, PayPal, Cash App, or Apple Pay. Bondfyr doesn't handle guest payments."
                 )
                 
                 FAQItem(
-                    question: "How is my safety ensured?",
-                    answer: "All hosts and guests are verified through our reputation system. We also have 24/7 emergency support."
+                    question: "What are listing fees?",
+                    answer: "Listing fees are dynamic based on party size and ticket price. You'll see the exact amount before creating your party."
                 )
                 
                 FAQItem(
-                    question: "What fees does Bondfyr charge?",
-                    answer: "Bondfyr takes a 20% fee from each ticket sale. Hosts keep 80% of their ticket revenue."
+                    question: "How do I find parties near me?",
+                    answer: "Parties within your location radius appear on the main screen. Use the discover tab to browse all nearby events."
                 )
                 
                 FAQItem(
-                    question: "How do I get verified?",
-                    answer: "Host 4 successful parties for Host verification, or attend 8 parties for Guest verification."
+                    question: "Can I report inappropriate content?",
+                    answer: "Yes! Tap the flag icon on any party card to report inappropriate content, safety concerns, or fake listings."
+                )
+                
+                FAQItem(
+                    question: "How do I join a party?",
+                    answer: "Tap on a party card, then tap 'Request to Join'. The host will approve or decline your request."
                 )
             }
         }
@@ -260,6 +265,30 @@ struct HelpSupportView: View {
     
     private func copyEmailToClipboard() {
         UIPasteboard.general.string = "karjunvarma2001@gmail.com"
+    }
+    
+    private func sendEmailHelper(subject: String, body: String) {
+        if MFMailComposeViewController.canSendMail() {
+            let mailComposer = MFMailComposeViewController()
+            mailComposer.setSubject(subject)
+            mailComposer.setToRecipients(["karjunvarma2001@gmail.com"])
+            mailComposer.setMessageBody(body, isHTML: false)
+            
+            // Present the mail composer
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(mailComposer, animated: true)
+            }
+        } else {
+            // Fall back to opening mail app with mailto URL
+            let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let mailtoURL = "mailto:karjunvarma2001@gmail.com?subject=\(encodedSubject)&body=\(encodedBody)"
+            
+            if let url = URL(string: mailtoURL) {
+                UIApplication.shared.open(url)
+            }
+        }
     }
 }
 
@@ -523,7 +552,41 @@ struct FeedbackFormView: View {
     }
     
     private func submitFeedback() {
-        // Here you would typically send the feedback to your backend
+        // Send feedback via email
+        let subject = "Bondfyr Feedback - \(feedbackCategory)"
+        let body = """
+        Rating: \(rating)/5 stars
+        Category: \(feedbackCategory)
+        
+        Feedback:
+        \(feedbackText)
+        
+        ---
+        Device: \(UIDevice.current.model)
+        iOS: \(UIDevice.current.systemVersion)
+        App Version: 1.0.0
+        """
+        
+        // Send via mail or mailto
+        if MFMailComposeViewController.canSendMail() {
+            let mailComposer = MFMailComposeViewController()
+            mailComposer.setSubject(subject)
+            mailComposer.setToRecipients(["karjunvarma2001@gmail.com"])
+            mailComposer.setMessageBody(body, isHTML: false)
+            
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(mailComposer, animated: true)
+            }
+        } else {
+            let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let mailtoURL = "mailto:karjunvarma2001@gmail.com?subject=\(encodedSubject)&body=\(encodedBody)"
+            
+            if let url = URL(string: mailtoURL) {
+                UIApplication.shared.open(url)
+            }
+        }
         
         presentationMode.wrappedValue.dismiss()
     }
@@ -619,7 +682,44 @@ struct BugReportView: View {
     }
     
     private func submitBugReport() {
-        // Here you would typically send the bug report to your backend
+        // Send bug report via email
+        let subject = "Bondfyr Bug Report"
+        let body = """
+        Bug Description:
+        \(bugDescription)
+        
+        Steps to Reproduce:
+        \(stepsToReproduce)
+        
+        Device Information:
+        - Device: \(deviceInfo)
+        - iOS Version: \(iosVersion)
+        - App Version: 1.0.0
+        
+        ---
+        Please fix this issue. Thank you!
+        """
+        
+        // Send via mail or mailto
+        if MFMailComposeViewController.canSendMail() {
+            let mailComposer = MFMailComposeViewController()
+            mailComposer.setSubject(subject)
+            mailComposer.setToRecipients(["karjunvarma2001@gmail.com"])
+            mailComposer.setMessageBody(body, isHTML: false)
+            
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootViewController = windowScene.windows.first?.rootViewController {
+                rootViewController.present(mailComposer, animated: true)
+            }
+        } else {
+            let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let mailtoURL = "mailto:karjunvarma2001@gmail.com?subject=\(encodedSubject)&body=\(encodedBody)"
+            
+            if let url = URL(string: mailtoURL) {
+                UIApplication.shared.open(url)
+            }
+        }
         
         presentationMode.wrappedValue.dismiss()
     }

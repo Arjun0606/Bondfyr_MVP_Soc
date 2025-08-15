@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showDeleteAccountAlert = false
     @State private var showPrivacyPolicy = false
     @State private var showTermsOfService = false
+    @State private var showContentGuidelines = false
     @State private var showHelpFAQ = false
     @State private var showingNotificationStatus = false
     
@@ -100,8 +101,8 @@ struct SettingsView: View {
                                 }
                         }
                         
-                        // Privacy section
-                        SettingsSection(title: "Privacy") {
+                        // Legal & Privacy section
+                        SettingsSection(title: "Legal & Privacy") {
                             SettingsLinkRow(title: "Privacy Policy", icon: "lock.shield.fill") {
                                 showPrivacyPolicy = true
                             }
@@ -109,6 +110,31 @@ struct SettingsView: View {
                             SettingsLinkRow(title: "Terms of Service", icon: "doc.text.fill") {
                                 showTermsOfService = true
                             }
+                            
+                            SettingsLinkRow(title: "Community Guidelines", icon: "shield.checkerboard") {
+                                showContentGuidelines = true
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(alignment: .top) {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(.blue)
+                                        .padding(.top, 2)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Keep Bondfyr safe for everyone")
+                                            .font(.caption)
+                                            .foregroundColor(.white)
+                                        Text("Report inappropriate content or behavior to help maintain a positive community.")
+                                            .font(.caption2)
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 8)
+                            }
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
+                            .padding(.horizontal)
                         }
                         
                         // Support section
@@ -204,10 +230,13 @@ struct SettingsView: View {
                 )
             }
             .sheet(isPresented: $showPrivacyPolicy) {
-                PrivacyPolicyView()
+                WebLegalView(title: "Privacy Policy", url: "https://bondfyr-da123.web.app/privacy-policy.html")
             }
             .sheet(isPresented: $showTermsOfService) {
-                TermsOfServiceView()
+                WebLegalView(title: "Terms of Service", url: "https://bondfyr-da123.web.app/terms-of-service.html")
+            }
+            .sheet(isPresented: $showContentGuidelines) {
+                ContentGuidelinesView()
             }
             .sheet(isPresented: $showHelpFAQ) {
                 HelpFAQView()
@@ -342,116 +371,54 @@ struct SettingsInputRow: View {
     }
 }
 
-struct PrivacyPolicyView: View {
-    @Environment(\.presentationMode) var presentationMode
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Privacy Policy")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .padding(.bottom, 4)
-                    
-                    Text("Last Updated: April 6, 2025")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 16)
-                    
-                    Text("At Bondfyr, we take your privacy seriously. This Privacy Policy explains how we collect, use, and protect your information when you use our mobile application.")
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    // Updated policy sections
-                    Group {
-                        PolicySection(title: "Information We Collect", content: "We collect information that you provide directly to us when you create an account or use our features. This includes your name, email address, location data, and profile information. We also collect usage data to improve our services.")
-                        
-                        PolicySection(title: "How We Use Your Information", content: "We use your information solely to provide and improve our services, connect you with local events, ensure user safety, and communicate important updates. We do not sell, rent, or trade your personal information.")
-                        
-                        PolicySection(title: "Information Sharing", content: "We only share your information when necessary to provide our services (such as showing your profile to event hosts) or as required by law. We never sell your data to third parties for marketing purposes.")
-                        
-                        PolicySection(title: "Data Security", content: "We implement industry-standard security measures to protect your personal information. Your data is stored securely and access is limited to authorized personnel only.")
-                        
-                        PolicySection(title: "Your Rights", content: "You have the right to access, correct, or delete your personal information at any time through the app settings. You can also contact us directly for data-related requests.")
-                        
-                        PolicySection(title: "Location Data", content: "Location access is essential for finding nearby events and connecting with your local party community. You can disable location services in your device settings, though this may limit app functionality.")
-                    }
-                    
-                    Spacer()
-                }
-                .padding()
-            }
-            .navigationBarTitle("Privacy Policy", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Done") {
-                presentationMode.wrappedValue.dismiss()
-            })
-        }
-    }
-}
 
-struct PolicySection: View {
+
+struct WebLegalView: View {
     let title: String
-    let content: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-            
-            Text(content)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 8)
-    }
-}
-
-struct TermsOfServiceView: View {
+    let url: String
     @Environment(\.presentationMode) var presentationMode
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Terms of Service")
-                        .font(.title)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.pink)
+                    
+                    Text(title)
+                        .font(.title2)
                         .fontWeight(.bold)
-                        .padding(.bottom, 4)
+                        .foregroundColor(.white)
                     
-                    Text("Last Updated: April 6, 2025")
+                    Text("For the most up-to-date version, please visit our website.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 16)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
                     
-                    Text("By using the Bondfyr app, you agree to these terms, which govern your use of our services.")
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    // Updated terms sections
-                    Group {
-                        PolicySection(title: "Acceptance of Terms", content: "By accessing or using our services, you agree to be bound by these Terms and our Privacy Policy.")
-                        
-                        PolicySection(title: "User Accounts", content: "You are responsible for safeguarding your account and for all activities that occur under your account. You must provide accurate information when creating your account.")
-                        
-                        PolicySection(title: "Event Discovery", content: "Bondfyr helps you discover and connect with local events. All event information is provided by hosts and we strive to ensure accuracy, but cannot guarantee all details.")
-                        
-                        PolicySection(title: "Code of Conduct", content: "Users must behave respectfully when using our platform and attending events. Harassment, discrimination, or illegal activities are strictly prohibited.")
-                        
-                        PolicySection(title: "Safety", content: "While we implement safety features, users are responsible for their own safety when attending events. Always meet in public places and trust your instincts.")
-                        
-                        PolicySection(title: "Content", content: "Users are responsible for all content they post. We reserve the right to remove content that violates our community standards.")
-                        
-                        PolicySection(title: "Service Availability", content: "We strive to maintain service availability but cannot guarantee uninterrupted access. We may modify or discontinue features with notice.")
+                    Button("Open in Browser") {
+                        if let webURL = URL(string: url) {
+                            UIApplication.shared.open(webURL)
+                        }
                     }
+                    .padding()
+                    .background(Color.pink)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
                     
                     Spacer()
                 }
                 .padding()
             }
-            .navigationBarTitle("Terms of Service", displayMode: .inline)
-            .navigationBarItems(trailing: Button("Done") {
-                presentationMode.wrappedValue.dismiss()
-            })
+            .navigationBarTitle(title, displayMode: .inline)
+            .navigationBarItems(
+                trailing: Button("Close") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .foregroundColor(.pink)
+            )
         }
     }
 }
@@ -595,21 +562,21 @@ struct HelpFAQView: View {
                 FAQRow(
                     id: "create-party",
                     question: "How do I create a party?",
-                    answer: "1. Tap 'Host Party' in the bottom tab\n2. Fill in your party details, location, and price\n3. Set your vibe tags and guest limit\n4. Accept legal responsibility\n5. Your party goes live immediately!",
+                    answer: "1. Tap the '+' button to create a party\n2. Fill in your party details, location, and price\n3. Pay the listing fee on our Host Web portal\n4. Your party goes live after payment!\n5. Guests pay you directly via Venmo/PayPal/Cash App",
                     expandedFAQ: $expandedFAQ
                 )
                 
                 FAQRow(
                     id: "join-party",
                     question: "How do I join a party?",
-                    answer: "1. Browse parties on the main feed\n2. Tap 'Request to Join' on a party you like\n3. Write a brief intro message\n4. Wait for host approval\n5. Once approved, you'll get the party details!",
+                    answer: "1. Browse parties on the main feed\n2. Tap on a party card to see details\n3. Tap 'Request to Join'\n4. Wait for host approval\n5. Pay the host directly via their preferred method",
                     expandedFAQ: $expandedFAQ
                 )
                 
                 FAQRow(
-                    id: "verification",
-                    question: "How do I get verified?",
-                    answer: "• Host Verification: Successfully host 4 parties\n• Guest Verification: Attend 8 parties\n• Verified users get special badges and priority in the app",
+                    id: "payments",
+                    question: "How do payments work?",
+                    answer: "• Hosts pay listing fees to publish parties\n• Guests pay hosts directly (Venmo, PayPal, Cash App, Apple Pay)\n• Bondfyr doesn't handle guest-to-host payments\n• Listing fees are dynamic based on party size and price",
                     expandedFAQ: $expandedFAQ
                 )
                 
@@ -623,21 +590,21 @@ struct HelpFAQView: View {
                 FAQRow(
                     id: "safety",
                     question: "How is safety ensured?",
-                    answer: "• All users go through verification\n• Rating system for hosts and guests\n• 24/7 emergency support available\n• Report system for inappropriate behavior\n• Location-based safety features",
+                    answer: "• Age verification (18+ only)\n• Report system for inappropriate content\n• Community guidelines enforcement\n• User reputation system\n• Report button on all party cards (flag icon)",
                     expandedFAQ: $expandedFAQ
                 )
                 
                 FAQRow(
-                    id: "host-approval",
-                    question: "How does the approval process work?",
-                    answer: "• Hosts can set manual or automatic approval\n• Manual: Host reviews each request individually\n• Automatic: First-come-first-serve with optional gender ratios\n• You'll get notified when your request is approved or denied",
+                    id: "reporting",
+                    question: "How do I report inappropriate content?",
+                    answer: "• Tap the flag icon on any party card\n• Choose report reason (inappropriate content, safety concern, fake/spam)\n• Reports are reviewed promptly\n• Help keep the community safe for everyone",
                     expandedFAQ: $expandedFAQ
                 )
                 
                 FAQRow(
-                    id: "community",
-                    question: "How do I build my reputation?",
-                    answer: "• Attend parties and get positive ratings\n• Host successful events with good reviews\n• Be respectful and follow community guidelines\n• Verified users get special badges and benefits",
+                    id: "contact",
+                    question: "How do I get help or report issues?",
+                    answer: "• Contact support via Settings → Help & Support\n• Send feedback or report bugs directly from the app\n• Email us at karjunvarma2001@gmail.com\n• Check community guidelines for content policies",
                     expandedFAQ: $expandedFAQ
                 )
             }

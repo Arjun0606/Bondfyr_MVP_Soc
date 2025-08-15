@@ -483,6 +483,31 @@ struct AfterpartyTabView: View {
                 }
             }
             
+            // Listen for payment completion notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("PaymentCompleted"),
+                object: nil,
+                queue: .main
+            ) { notification in
+                print("🎉 Payment completed notification received!")
+                
+                // Dismiss any create sheet that might be open
+                showingCreateSheet = false
+                
+                // Force refresh the marketplace data
+                Task {
+                    await loadMarketplaceAfterparties()
+                }
+                
+                // Show success feedback and refresh after a brief delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    Task {
+                        await loadMarketplaceAfterparties()
+                        print("🎉 Payment success - party should now be visible!")
+                    }
+                }
+            }
+            
             // Listen for party ended notifications
             NotificationCenter.default.addObserver(
                 forName: Notification.Name("PartyEnded"),
@@ -2505,31 +2530,33 @@ struct CreateAfterpartyView: View {
         isSubmittingForPublish = true
         submitSuccess = false
         
-        // Store pending party and signal host to complete payment on the web portal
-        storePendingPartyData(location: location)
-        
-        // Open Host Web directly for payment right after submission (with Firebase ID token for silent sign-in)
-        if let partyId = pendingPartyData?["partyId"] as? String,
-           let uid = authViewModel.currentUser?.uid {
+        // Ensure pending party is saved before opening Host Web for payment
+        Task {
+            let savedPartyId = await storePendingPartyData(location: location)
+            guard let partyId = savedPartyId, let uid = authViewModel.currentUser?.uid else {
+                await MainActor.run {
+                    self.errorMessage = "Failed to save draft. Please try again."
+                    self.showingError = true
+                    self.isSubmittingForPublish = false
+                }
+                return
+            }
+
             if let user = Auth.auth().currentUser {
                 user.getIDToken { token, _ in
                     var urlString = "https://bondfyr-da123.firebaseapp.com?partyId=\(partyId)&uid=\(uid)"
-                    if let token = token {
-                        // Pass ID token so the portal can authenticate without showing Google UI
-                        urlString += "&idToken=\(token)"
-                    }
-                    if let url = URL(string: urlString) {
-                        UIApplication.shared.open(url)
-                    }
+                    if let token = token { urlString += "&idToken=\(token)" }
+                    if let url = URL(string: urlString) { Task { await UIApplication.shared.open(url) } }
                 }
             } else if let url = URL(string: "https://bondfyr-da123.firebaseapp.com?partyId=\(partyId)&uid=\(uid)") {
-                UIApplication.shared.open(url)
+                Task { await UIApplication.shared.open(url) }
+            }
+
+            await MainActor.run {
+                self.isSubmittingForPublish = false
+                self.submitSuccess = true
             }
         }
-        
-        // Confirmation state
-        isSubmittingForPublish = false
-        submitSuccess = true
     }
 
     private func openHostWeb() {
@@ -2592,7 +2619,7 @@ struct CreateAfterpartyView: View {
         submitSuccess = false
     }
     
-    private func storePendingPartyData(location: CLLocationCoordinate2D) {
+    private func storePendingPartyData(location: CLLocationCoordinate2D) async -> String? {
         let finalStartTime = Calendar.current.date(
             bySettingHour: Calendar.current.component(.hour, from: customStartTime),
             minute: Calendar.current.component(.minute, from: customStartTime),
@@ -2637,10 +2664,9 @@ struct CreateAfterpartyView: View {
             "partyId": partyId
         ]
         
-        // Store in Firebase for webhook access
-        Task {
-            await storePendingPartyInFirebase(partyId: partyId, partyData: pendingPartyData!)
-        }
+        // Store in Firebase for webhook access and wait until it's written
+        await storePendingPartyInFirebase(partyId: partyId, partyData: pendingPartyData!)
+        return partyId
     }
     
     private func storePendingPartyInFirebase(partyId: String, partyData: [String: Any]) async {
@@ -3129,26 +3155,7 @@ struct PartyDetailsSection: View {
                         .foregroundColor(.gray)
                 }
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    if ticketPrice >= 5.0 {
-                        Text("You keep $\(String(format: "%.2f", ticketPrice)) per ticket (100% during TestFlight!)")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                            .fontWeight(.semibold)
-                    } else {
-                        Text("⚠️ Minimum $5 required to create party")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                    
-                    Text("Full version: 20% service fee, you keep 80%")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    
-                    Text("No maximum price limit - charge what your party is worth!")
-                        .font(.caption)
-                        .foregroundColor(ticketPrice >= 5.0 ? .green : .gray)
-                }
+
             }
             
             // Guest Limit
