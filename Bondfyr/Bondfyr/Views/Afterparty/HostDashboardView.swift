@@ -20,6 +20,13 @@ struct HostDashboardView: View {
     @State private var showingEarningsDashboard = false
     @State private var isLoading = false
     @State private var error: String? = nil
+    let targetPartyId: String?
+    let autoOpenGuestList: Bool
+
+    init(targetPartyId: String? = nil, autoOpenGuestList: Bool = true) {
+        self.targetPartyId = targetPartyId
+        self.autoOpenGuestList = autoOpenGuestList
+    }
     
     var body: some View {
         NavigationView {
@@ -74,7 +81,7 @@ struct HostDashboardView: View {
         }
         .sheet(isPresented: $showingPartyManagement) {
             if let party = selectedParty {
-                PartyManagementSheet(party: party)
+                PartyManagementSheet(party: party, autoOpenGuestList: autoOpenGuestList)
             }
         }
         .sheet(isPresented: $showingEarningsDashboard) {
@@ -101,6 +108,10 @@ struct HostDashboardView: View {
             await MainActor.run {
                 hostParties = parties
                 isLoading = false
+                if let targetId = targetPartyId, let match = hostParties.first(where: { $0.id == targetId }) {
+                    selectedParty = match
+                    showingPartyManagement = true
+                }
             }
         } catch {
             await MainActor.run {
@@ -490,6 +501,7 @@ struct PartyCardActionButton: View {
 // MARK: - Party Management Sheet
 struct PartyManagementSheet: View {
     let party: Afterparty
+    let autoOpenGuestList: Bool
     @Environment(\.presentationMode) var presentationMode
     @State private var showingGuestList = false
     @State private var showingEditSheet = false
@@ -525,6 +537,7 @@ struct PartyManagementSheet: View {
         }
         .onAppear {
             partyState = party
+            if autoOpenGuestList { showingGuestList = true }
         }
         .sheet(isPresented: $showingEditSheet) {
             EditAfterpartyView(afterparty: party)

@@ -82,42 +82,10 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToProfile"))) { _ in
             tabSelection.selectedTab = .profile
         }
-        // PRODUCTION-READY: Replace placeholder sheets with proper navigation
+        // Replace placeholder with full Host Dashboard and auto-open guest list
         .sheet(isPresented: $showHostDashboard) {
             if let partyId = navigationPartyId {
-                NavigationView {
-                    VStack(spacing: 20) {
-                        Text("🎯 Host Dashboard")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        Text("Manage Party: \(partyId)")
-                            .font(.headline)
-                        
-                        Text("Host dashboard for managing your party and guests.")
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                        
-                        Button("Close") {
-                            showHostDashboard = false
-                            navigationPartyId = nil
-                        }
-                        .padding()
-                        .background(Color.pink)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                    }
-                    .padding()
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
-                                showHostDashboard = false
-                                navigationPartyId = nil
-                            }
-                        }
-                    }
-                }
+                HostDashboardView(targetPartyId: partyId, autoOpenGuestList: true)
             }
         }
         .sheet(isPresented: $showPartyRating) {
