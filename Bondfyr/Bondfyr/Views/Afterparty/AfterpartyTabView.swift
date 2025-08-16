@@ -995,252 +995,13 @@ struct AfterpartyCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // MARK: - Cover Photo & Price Header
-            ZStack(alignment: .topTrailing) {
-                // Cover photo or placeholder - MUCH BIGGER and better image handling
-                if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty {
-                    AsyncImage(url: URL(string: coverURL)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(4/3, contentMode: .fill) // 4:3 landscape ratio
-                                .frame(maxWidth: .infinity)
-                                .clipped()
-                                .cornerRadius(16)
-                        case .failure(_), .empty:
-                            // Fallback to gradient on failure or loading
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.pink)
-                                .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
-                                .frame(maxWidth: .infinity)
-                                .overlay(
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "party.popper.fill")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.white)
-                                        Text("Party Image")
-                                            .font(.caption)
-                                            .foregroundColor(.white.opacity(0.8))
-                                    }
-                                )
-                        @unknown default:
-                            // Default fallback
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.pink)
-                                .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
-                                .frame(maxWidth: .infinity)
-                                .overlay(
-                                    Image(systemName: "party.popper.fill")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.white)
-                                )
-                        }
-                    }
-                } else {
-                    // Default gradient placeholder when no image URL
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.pink)
-                        .aspectRatio(4/3, contentMode: .fit) // 4:3 landscape ratio
-                        .frame(maxWidth: .infinity)
-                        .overlay(
-                            VStack(spacing: 8) {
-                                Image(systemName: "party.popper.fill")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.white)
-                                Text("No Image")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        )
-                }
-                
-                // Price tag with demo indicator
-                VStack(spacing: 4) {
-                    // Demo indicator for sample parties
-                    if afterparty.id.hasPrefix("demo-") {
-                        Text("DEMO")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.2))
-                            .cornerRadius(4)
-                    }
-                    
-                    Text("$\(Int(afterparty.ticketPrice))")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                }
-                .padding(8)
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(8)
-                .padding(.trailing, 12)
-                .padding(.top, 12)
-            }
-            
-            // Party title and location - below the image
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(afterparty.title)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                // Simple redirect arrow - no text, just navigation
-                Button(action: {
-                    if let url = URL(string: afterparty.googleMapsLink), !afterparty.googleMapsLink.isEmpty {
-                        UIApplication.shared.open(url)
-                    }
-                }) {
-                    Image(systemName: "arrow.up.right")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(Color.white.opacity(0.15))
-                        .cornerRadius(10)
-                }
-            }
-            
-            // Date and Time Display
-            HStack {
-                Image(systemName: "calendar.circle.fill")
-                    .foregroundColor(.pink)
-                Text(formattedDateTime)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            .padding(.vertical, 4)
-            
-            // Vibe tags
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
-                        Text(vibe)
-                    .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.purple.opacity(0.3))
-                            .foregroundColor(.purple)
-                            .cornerRadius(8)
-                    }
-                }
-                .padding(.horizontal, 1)
-            }
-            
+            coverPhotoSection
+            titleLocationRow
+            dateTimeRow
+            vibeTagsRow
             Divider().background(Color.white.opacity(0.2))
-            
-            // Party stats and info
-            HStack {
-                // Guest capacity
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount) Guests", systemImage: "person.2.fill")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                    
-                    if afterparty.isSoldOut {
-                        Text("SOLD OUT")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                                .foregroundColor(.red)
-                        }
-                }
-                
-                Spacer()
-                
-                // Host info
-                VStack(alignment: .trailing, spacing: 4) {
-                    Button(action: { showingHostInfo = true }) {
-                        Text("@\(afterparty.hostHandle)")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.pink)
-                    }
-                    Text("Host")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-            }
-            
-            // FIXED: Use new action button system
-            if isHost {
-                // Host controls with end party option - VISUAL DISTINCTION FOR PINNED PARTY
-                VStack(spacing: 8) {
-                    // "MY PARTY" Badge for visual distinction
-                    HStack {
-                        Image(systemName: "crown.fill")
-                            .foregroundColor(.yellow)
-                        Text("MY PARTY")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.yellow)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.yellow.opacity(0.1))
-                    .cornerRadius(6)
-                    
-                    // Consolidated Manage Party Button
-                    Button(action: { showingManagementSheet = true }) {
-                        HStack {
-                            Image(systemName: "gearshape.fill")
-                            Text("Manage Party")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.pink)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    
-                    // Share Party Button
-                    Button(action: { showingShareSheet = true }) {
-                        HStack {
-                            Image(systemName: "square.and.arrow.up")
-                            Text("Share Party")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    
-                    // End Party Button (enabled 1 hour after start)
-                    Button(action: { 
-                        if canEndParty {
-                            showingDeleteConfirmation = true
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: canEndParty ? "stop.circle.fill" : "clock.fill")
-                            Text(canEndParty ? "End Party" : "End Available in \(timeUntilEndEnabled)")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(canEndParty ? Color.red.opacity(0.2) : Color.gray.opacity(0.2))
-                        .foregroundColor(canEndParty ? .red : .gray)
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                        )
-                    }
-                    .disabled(!canEndParty)
-                }
-            } else {
-                // FIXED: Guest action button
-                FixedGuestActionButton(afterparty: afterparty)
-            }
+            statsInfoRow
+            actionSection
         }
         .padding(16)
         .background(Color(.systemGray6).opacity(0.1))
@@ -1265,7 +1026,7 @@ struct AfterpartyCard: View {
             }
         }
         .sheet(isPresented: $showingManagementSheet) {
-            PartyManagementSheet(party: afterparty)
+            PartyManagementSheet(party: afterparty, autoOpenGuestList: false)
         }
         .onAppear {
             // Refresh party data when card appears to ensure UI is up to date
@@ -1325,6 +1086,208 @@ struct AfterpartyCard: View {
             }
         } message: {
             Text("This will end your party and start the rating process for all guests.")
+        }
+    }
+
+    // MARK: - Extracted subviews to simplify type-checking
+    private var coverPhotoSection: some View {
+        ZStack(alignment: .topTrailing) {
+            if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty, let url = URL(string: coverURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(4/3, contentMode: .fill)
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .cornerRadius(16)
+                    case .failure(_), .empty:
+                        coverFallback(label: "Party Image")
+                    @unknown default:
+                        coverFallback(label: "Party Image")
+                    }
+                }
+            } else {
+                coverFallback(label: "No Image")
+            }
+
+            VStack(spacing: 4) {
+                if afterparty.id.hasPrefix("demo-") {
+                    Text("DEMO")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.2))
+                        .cornerRadius(4)
+                }
+                Text("$\(Int(afterparty.ticketPrice))")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            .padding(8)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(8)
+            .padding(.trailing, 12)
+            .padding(.top, 12)
+        }
+    }
+
+    private func coverFallback(label: String) -> some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color.pink)
+            .aspectRatio(4/3, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay(
+                VStack(spacing: 8) {
+                    Image(systemName: "party.popper.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white)
+                    Text(label)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            )
+    }
+
+    private var titleLocationRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(afterparty.title)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+            }
+            Spacer()
+            Button(action: {
+                guard !afterparty.googleMapsLink.isEmpty, let url = URL(string: afterparty.googleMapsLink) else { return }
+                UIApplication.shared.open(url)
+            }) {
+                Image(systemName: "arrow.up.right")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                    .padding(10)
+                    .background(Color.white.opacity(0.15))
+                    .cornerRadius(10)
+            }
+        }
+    }
+
+    private var dateTimeRow: some View {
+        HStack {
+            Image(systemName: "calendar.circle.fill")
+                .foregroundColor(.pink)
+            Text(formattedDateTime)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.white)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var vibeTagsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
+                    Text(vibe)
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.purple.opacity(0.3))
+                        .foregroundColor(.purple)
+                        .cornerRadius(8)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private var statsInfoRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount) Guests", systemImage: "person.2.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                if afterparty.isSoldOut {
+                    Text("SOLD OUT")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Button(action: { showingHostInfo = true }) {
+                    Text("@\(afterparty.hostHandle)")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.pink)
+                }
+                Text("Host")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+
+    private var actionSection: some View {
+        Group {
+            if isHost {
+                VStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "crown.fill")
+                            .foregroundColor(.yellow)
+                        Text("MY PARTY")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.yellow)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.yellow.opacity(0.1))
+                    .cornerRadius(6)
+
+                    Button(action: { showingManagementSheet = true }) {
+                        HStack { Image(systemName: "gearshape.fill"); Text("Manage Party") }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.pink)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+
+                    Button(action: { showingShareSheet = true }) {
+                        HStack { Image(systemName: "square.and.arrow.up"); Text("Share Party") }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+
+                    Button(action: { if canEndParty { showingDeleteConfirmation = true } }) {
+                        HStack {
+                            Image(systemName: canEndParty ? "stop.circle.fill" : "clock.fill")
+                            Text(canEndParty ? "End Party" : "End Available in \(timeUntilEndEnabled)")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(canEndParty ? Color.red.opacity(0.2) : Color.gray.opacity(0.2))
+                        .foregroundColor(canEndParty ? .red : .gray)
+                        .cornerRadius(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.5), lineWidth: 1))
+                    }
+                    .disabled(!canEndParty)
+                }
+            } else {
+                FixedGuestActionButton(afterparty: afterparty)
+            }
         }
     }
     
