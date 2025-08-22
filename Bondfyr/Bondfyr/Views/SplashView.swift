@@ -126,6 +126,13 @@ struct SplashView: View {
         navigateToMainView = false
         navigateToProfileForm = false
         navigateToSignIn = false
+        
+        // Initialize demo data if in demo mode
+        if DemoDataManager.shared.isDemoMode {
+            Task {
+                await DemoDataManager.shared.createDemoParties()
+            }
+        }
 
         // Give the AuthStateListener a moment to update AuthViewModel
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { 

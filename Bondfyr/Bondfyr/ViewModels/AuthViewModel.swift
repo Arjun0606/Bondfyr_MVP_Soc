@@ -11,6 +11,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 import GoogleSignIn
+import AuthenticationServices
 
 class AuthViewModel: ObservableObject {
     @Published var currentUser: AppUser?
@@ -205,6 +206,112 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
+    
+    func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Bool, Error?) -> Void) {
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.error = nil
+        }
+        
+        AuthManager.shared.signInWithApple(credential: credential) { [weak self] result in
+            guard let self = self else {
+                completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            switch result {
+            case .success(_):
+                // Save FCM token to Firestore after successful authentication
+                self.saveFCMTokenAfterSignIn()
+                
+                // After successful authentication, fetch the user profile
+                self.fetchUserProfile { success in
+                    if success {
+                        // Save the last sign-in time
+                        UserDefaults.standard.set(Date(), forKey: "lastSignInTime")
+                        
+                        // Set logged in state only after confirming profile exists
+                        DispatchQueue.main.async {
+                            self.isLoggedIn = true
+                            // Notify that user logged in
+                            let userId = Auth.auth().currentUser?.uid
+                            NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: userId)
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            // For new users, we still want to consider the sign-in successful
+                            self.isLoggedIn = true
+                        }
+                    }
+                    
+                    // Always complete with success if Firebase auth succeeded
+                    completion(true, nil)
+                }
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self.error = error.localizedDescription
+                }
+                completion(false, error)
+            }
+        }
+    }
+    
+    func signInWithDemo(completion: @escaping (Bool, Error?) -> Void) {
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.error = nil
+        }
+        
+        AuthManager.shared.signInWithDemo { [weak self] result in
+            guard let self = self else {
+                completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            switch result {
+            case .success(_):
+                // Save FCM token to Firestore after successful authentication
+                self.saveFCMTokenAfterSignIn()
+                
+                // After successful authentication, fetch the user profile
+                self.fetchUserProfile { success in
+                    if success {
+                        // Save the last sign-in time
+                        UserDefaults.standard.set(Date(), forKey: "lastSignInTime")
+                        
+                        // Set logged in state only after confirming profile exists
+                        DispatchQueue.main.async {
+                            self.isLoggedIn = true
+                            // Notify that user logged in
+                            let userId = Auth.auth().currentUser?.uid
+                            NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: userId)
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            // For new users, we still want to consider the sign-in successful
+                            self.isLoggedIn = true
+                        }
+                    }
+                    
+                    // Always complete with success if Firebase auth succeeded
+                    completion(true, nil)
+                }
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self.error = error.localizedDescription
+                }
+                completion(false, error)
+            }
+        }
+    }
 
     func fetchUserProfile(completion: @escaping (Bool) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
@@ -288,7 +395,7 @@ class AuthViewModel: ObservableObject {
     }
 
     func logout(completion: ((Error?) -> Void)? = nil) {
-        
+        print("🚪 Starting logout process...")
         
         // First, send the logout notification before actual logout
         // to make sure all observers get notified
@@ -296,6 +403,7 @@ class AuthViewModel: ObservableObject {
         
         DispatchQueue.main.async {
             // Reset local state immediately
+            print("🔄 Resetting local auth state...")
             self.currentUser = nil
             self.isLoading = true
         }
@@ -303,11 +411,14 @@ class AuthViewModel: ObservableObject {
         do {
             // Make sure Firebase Auth user is signed out
             try auth.signOut()
+            print("✅ Firebase auth sign out successful")
             
             DispatchQueue.main.async {
                 self.isLoggedIn = false
                 self.isLoading = false
+                self.authStateKnown = true  // Make sure auth state is known
                 
+                print("📢 Posting logout notification...")
                 // Now post the actual logout notification
                 NotificationCenter.default.post(name: NSNotification.Name("UserDidLogout"), object: nil)
             }
@@ -316,8 +427,9 @@ class AuthViewModel: ObservableObject {
             resetAppToInitialState()
             
             completion?(nil)
+            print("✅ Logout completed successfully")
         } catch {
-            
+            print("❌ Logout error: \(error.localizedDescription)")
             
             DispatchQueue.main.async {
                 self.error = "Failed to log out: \(error.localizedDescription)"
@@ -337,6 +449,8 @@ class AuthViewModel: ObservableObject {
     }
     
     private func resetAppToInitialState() {
+        print("🔄 Resetting app to initial state...")
+        
         // Clear user-specific data from UserDefaults
         UserDefaults.standard.removeObject(forKey: "lastViewedEventId")
         UserDefaults.standard.removeObject(forKey: "chat_username")
@@ -350,10 +464,14 @@ class AuthViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "savedEvents")
         UserDefaults.standard.removeObject(forKey: "myTickets")
         
+        // Clear demo mode settings on logout
+        UserDefaults.standard.removeObject(forKey: "isDemoMode")
+        
         // Don't clear onboarding status - user has already seen it
         // UserDefaults.standard.removeObject(forKey: "hasSeenOnboarding")
         
         UserDefaults.standard.synchronize()
+        print("✅ App state reset complete")
     }
     
     func updateCurrentUser(_ user: AppUser) {

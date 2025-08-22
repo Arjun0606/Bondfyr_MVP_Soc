@@ -1091,48 +1091,48 @@ struct AfterpartyCard: View {
 
     // MARK: - Extracted subviews to simplify type-checking
     private var coverPhotoSection: some View {
-        ZStack(alignment: .topTrailing) {
+            ZStack(alignment: .topTrailing) {
             if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty, let url = URL(string: coverURL) {
                 AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
                             .aspectRatio(4/3, contentMode: .fill)
-                            .frame(maxWidth: .infinity)
-                            .clipped()
-                            .cornerRadius(16)
-                    case .failure(_), .empty:
+                                .frame(maxWidth: .infinity)
+                                .clipped()
+                                .cornerRadius(16)
+                        case .failure(_), .empty:
                         coverFallback(label: "Party Image")
-                    @unknown default:
+                        @unknown default:
                         coverFallback(label: "Party Image")
+                        }
                     }
-                }
-            } else {
+                } else {
                 coverFallback(label: "No Image")
             }
 
-            VStack(spacing: 4) {
-                if afterparty.id.hasPrefix("demo-") {
-                    Text("DEMO")
-                        .font(.caption2)
+                VStack(spacing: 4) {
+                    if afterparty.id.hasPrefix("demo-") {
+                        Text("DEMO")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(4)
+                    }
+                    Text("$\(Int(afterparty.ticketPrice))")
+                        .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
-                        .cornerRadius(4)
+                        .foregroundColor(.white)
                 }
-                Text("$\(Int(afterparty.ticketPrice))")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-            }
-            .padding(8)
-            .background(Color.black.opacity(0.7))
-            .cornerRadius(8)
-            .padding(.trailing, 12)
-            .padding(.top, 12)
+                .padding(8)
+                .background(Color.black.opacity(0.7))
+                .cornerRadius(8)
+                .padding(.trailing, 12)
+                .padding(.top, 12)
         }
     }
 
@@ -1154,87 +1154,87 @@ struct AfterpartyCard: View {
     }
 
     private var titleLocationRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(afterparty.title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-            }
-            Spacer()
-            Button(action: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(afterparty.title)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                Spacer()
+                Button(action: {
                 guard !afterparty.googleMapsLink.isEmpty, let url = URL(string: afterparty.googleMapsLink) else { return }
-                UIApplication.shared.open(url)
-            }) {
-                Image(systemName: "arrow.up.right")
-                    .font(.title2)
-                    .foregroundColor(.white)
-                    .padding(10)
-                    .background(Color.white.opacity(0.15))
-                    .cornerRadius(10)
+                        UIApplication.shared.open(url)
+                }) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.white.opacity(0.15))
+                        .cornerRadius(10)
             }
-        }
-    }
-
+                }
+            }
+            
     private var dateTimeRow: some View {
-        HStack {
-            Image(systemName: "calendar.circle.fill")
-                .foregroundColor(.pink)
-            Text(formattedDateTime)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.white)
-            Spacer()
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var vibeTagsRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
-                    Text(vibe)
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.purple.opacity(0.3))
-                        .foregroundColor(.purple)
-                        .cornerRadius(8)
-                }
-            }
-            .padding(.horizontal, 1)
-        }
-    }
-
-    private var statsInfoRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount) Guests", systemImage: "person.2.fill")
+            HStack {
+                Image(systemName: "calendar.circle.fill")
+                    .foregroundColor(.pink)
+                Text(formattedDateTime)
                     .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .fontWeight(.medium)
                     .foregroundColor(.white)
-                if afterparty.isSoldOut {
-                    Text("SOLD OUT")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.red)
-                }
+                Spacer()
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Button(action: { showingHostInfo = true }) {
-                    Text("@\(afterparty.hostHandle)")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.pink)
-                }
-                Text("Host")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-        }
+            .padding(.vertical, 4)
     }
-
+            
+    private var vibeTagsRow: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(afterparty.vibeTag.components(separatedBy: ", "), id: \.self) { vibe in
+                        Text(vibe)
+                    .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.purple.opacity(0.3))
+                            .foregroundColor(.purple)
+                            .cornerRadius(8)
+                    }
+                }
+                .padding(.horizontal, 1)
+        }
+            }
+            
+    private var statsInfoRow: some View {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("\(afterparty.confirmedGuestsCount)/\(afterparty.maxGuestCount) Guests", systemImage: "person.2.fill")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                    if afterparty.isSoldOut {
+                        Text("SOLD OUT")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                                .foregroundColor(.red)
+                        }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Button(action: { showingHostInfo = true }) {
+                        Text("@\(afterparty.hostHandle)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.pink)
+                    }
+                    Text("Host")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+            }
+                }
+            }
+            
     private var actionSection: some View {
         Group {
             if isHost {
@@ -1252,25 +1252,25 @@ struct AfterpartyCard: View {
                     .padding(.vertical, 4)
                     .background(Color.yellow.opacity(0.1))
                     .cornerRadius(6)
-
+                    
                     Button(action: { showingManagementSheet = true }) {
                         HStack { Image(systemName: "gearshape.fill"); Text("Manage Party") }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.pink)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.pink)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                     }
-
+                    
                     Button(action: { showingShareSheet = true }) {
                         HStack { Image(systemName: "square.and.arrow.up"); Text("Share Party") }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                     }
-
+                    
                     Button(action: { if canEndParty { showingDeleteConfirmation = true } }) {
                         HStack {
                             Image(systemName: canEndParty ? "stop.circle.fill" : "clock.fill")
@@ -2287,7 +2287,7 @@ struct CreateAfterpartyView: View {
                         
                         // MARK: - Legal Disclaimer
                         LegalDisclaimerSection(legalDisclaimerAccepted: $legalDisclaimerAccepted)
-
+                        
                         // MARK: - Listing Fee (information only)
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
@@ -2319,7 +2319,7 @@ struct CreateAfterpartyView: View {
                             isProcessingPayment: isSubmittingForPublish,
                             paymentSuccess: submitSuccess
                         )
-                    }
+                        }
                                 .frame(maxWidth: .infinity)
                                 .padding()
                     .background(createButtonBackground)
@@ -2493,6 +2493,24 @@ struct CreateAfterpartyView: View {
         isSubmittingForPublish = true
         submitSuccess = false
         
+        // Check if in demo mode
+        if DemoDataManager.shared.isDemoMode {
+            // Simulate payment processing in demo mode
+            DemoDataManager.shared.simulatePayment { success in
+                DispatchQueue.main.async {
+                    if success {
+                        self.createAfterpartyDirectly(location: location)
+                    } else {
+                        self.errorMessage = "Demo payment failed. Please try again."
+                        self.showingError = true
+                        self.isSubmittingForPublish = false
+                    }
+                }
+            }
+            return
+        }
+        
+        // Regular flow for non-demo users
         // Ensure pending party is saved before opening Host Web for payment
         Task {
             let savedPartyId = await storePendingPartyData(location: location)
@@ -2525,6 +2543,80 @@ struct CreateAfterpartyView: View {
     private func openHostWeb() {
         if let url = URL(string: "https://bondfyr-da123.web.app") {
             UIApplication.shared.open(url)
+        }
+    }
+    
+    // MARK: - Demo Mode Direct Creation
+    
+    private func createAfterpartyDirectly(location: CLLocationCoordinate2D) {
+        Task {
+            await createPartyDirectlyAsync(location: location)
+        }
+    }
+    
+    private func createPartyDirectlyAsync(location: CLLocationCoordinate2D) async {
+        let finalStartTime = Calendar.current.date(
+            bySettingHour: Calendar.current.component(.hour, from: customStartTime),
+            minute: Calendar.current.component(.minute, from: customStartTime),
+            second: 0,
+            of: selectedDate
+        ) ?? selectedDate
+        
+        guard let currentUser = authViewModel.currentUser else {
+            await MainActor.run {
+                self.errorMessage = "User authentication required"
+                self.showingError = true
+                self.isSubmittingForPublish = false
+            }
+            return
+        }
+        
+        // Create party data
+        let partyData: [String: Any] = [
+            "title": title,
+            "description": description,
+            "location": address,
+            "date": finalStartTime,
+            "ticketPrice": ticketPrice,
+            "capacity": maxGuestCount,
+            "currentCount": 0,
+            "hostId": currentUser.uid,
+            "hostName": currentUser.name,
+            "hostPhotoURL": currentUser.avatarURL ?? "",
+            "hostRating": 5.0,
+            "imageURL": coverPhotoURL,
+            "tags": Array(selectedVibes),
+            "vibes": Array(selectedVibes),
+            "ageRange": ageRestriction?.description ?? "18+",
+            "genderRatio": ["male": 0, "female": 0],
+            "status": "active",
+            "createdAt": Timestamp(),
+            "isDemoData": true,
+            "confirmedGuests": [],
+            "guestRequests": [:],
+            "waitlist": []
+        ]
+        
+        do {
+            let docRef = try await Firestore.firestore().collection("afterparties").addDocument(data: partyData)
+            
+            await MainActor.run {
+                self.isSubmittingForPublish = false
+                self.submitSuccess = true
+                
+                // Simulate the payment completion notification for consistent UX
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    NotificationCenter.default.post(name: NSNotification.Name("PaymentCompleted"), object: nil)
+                }
+            }
+            
+            print("✅ Demo party created successfully: \(docRef.documentID)")
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Failed to create party: \(error.localizedDescription)"
+                self.showingError = true
+                self.isSubmittingForPublish = false
+            }
         }
     }
     
@@ -2628,7 +2720,7 @@ struct CreateAfterpartyView: View {
         ]
         
         // Store in Firebase for webhook access and wait until it's written
-        await storePendingPartyInFirebase(partyId: partyId, partyData: pendingPartyData!)
+            await storePendingPartyInFirebase(partyId: partyId, partyData: pendingPartyData!)
         return partyId
     }
     

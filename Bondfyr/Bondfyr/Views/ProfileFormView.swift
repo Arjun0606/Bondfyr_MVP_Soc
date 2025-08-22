@@ -42,6 +42,7 @@ struct ProfileFormView: View {
     @State private var showImagePicker = false
     @State private var showProfileSavedAlert = false
     @State private var isInitialLoad = true
+    @State private var authCheckCompleted = false
 
     // Auto-detect city
     @StateObject private var locationManager = LocationManager()
@@ -158,6 +159,17 @@ struct ProfileFormView: View {
                 if let user = Auth.auth().currentUser {
                     InfoRow(title: "Email", value: user.email ?? "Not provided")
                     InfoRow(title: "Name", value: user.displayName ?? "Not provided")
+                } else {
+                    // Show loading state while auth state loads
+                    HStack {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.8)
+                        Text("Loading account info...")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    }
+                    .padding()
                 }
             }
         }
@@ -513,9 +525,32 @@ struct ProfileFormView: View {
         }
         .onAppear {
             loadExistingData()
+            checkAuthState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserDidLogin"))) { _ in
+            checkAuthState()
         }
     }
 
+    private func checkAuthState() {
+        // Wait a bit for auth state to settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if Auth.auth().currentUser != nil {
+                self.authCheckCompleted = true
+                print("✅ Auth state confirmed - user is signed in")
+            } else {
+                print("❌ Auth state check - no user found")
+                // Show error after a delay to give auth time to settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if Auth.auth().currentUser == nil {
+                        self.errorMessage = "Authentication session expired. Please sign in again."
+                        self.showError = true
+                    }
+                }
+            }
+        }
+    }
+    
     private func loadExistingData() {
         guard isInitialLoad else { return }
         isInitialLoad = false
@@ -564,6 +599,13 @@ struct ProfileFormView: View {
     }
 
     private func saveProfile() {
+        // Check if user is authenticated first
+        guard Auth.auth().currentUser != nil else {
+            errorMessage = "Authentication required. Please sign in again."
+            showError = true
+            return
+        }
+        
         isSaving = true
         
         // Prepare data for update
@@ -591,18 +633,18 @@ struct ProfileFormView: View {
             dob: dob
         ) { result in
             DispatchQueue.main.async {
-            isSaving = false
+                self.isSaving = false
                 
                 switch result {
                 case .success:
-                    if isEditingMode {
-                        showProfileSavedAlert = true
+                    if self.isEditingMode {
+                        self.showProfileSavedAlert = true
                     } else {
-                        dismiss()
+                        self.dismiss()
                     }
                 case .failure(let error):
-                    errorMessage = error.localizedDescription
-                showError = true
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
                 }
             }
         }

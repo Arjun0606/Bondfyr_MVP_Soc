@@ -200,6 +200,142 @@ class AuthManager {
         }
     }
     
+    // MARK: - Apple Sign In
+    
+    func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Result<User, AuthError>) -> Void) {
+        guard let nonce = randomNonceString() else {
+            completion(.failure(.appleSignInFailed))
+            return
+        }
+        
+        guard let appleIDToken = credential.identityToken else {
+            completion(.failure(.appleSignInFailed))
+            return
+        }
+        
+        guard let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+            completion(.failure(.appleSignInFailed))
+            return
+        }
+        
+        let credential = OAuthProvider.credential(withProviderID: "apple.com",
+                                                idToken: idTokenString,
+                                                rawNonce: nonce)
+        
+        signInWithCredential(credential: credential) { result in
+            switch result {
+            case .success(let user):
+                // Update or create user profile in Firestore
+                let email = user.email ?? "private@apple.com"
+                let name = user.displayName ?? "Apple User"
+                
+                let userData: [String: Any] = [
+                    "uid": user.uid,
+                    "email": email,
+                    "name": name,
+                    "photoURL": user.photoURL?.absoluteString ?? "",
+                    "role": "user",
+                    "lastLogin": Timestamp()
+                ]
+                
+                // Use setData with merge to update existing or create new
+                self.db.collection("users").document(user.uid).setData(userData, merge: true) { error in
+                    if let error = error {
+                        print("Error updating user data: \(error)")
+                    }
+                    completion(.success(user))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    // MARK: - Demo Sign In
+    
+    func signInWithDemo(completion: @escaping (Result<User, AuthError>) -> Void) {
+        print("🔧 Starting demo sign-in with anonymous auth...")
+        
+        // Create a demo user with anonymous authentication
+        auth.signInAnonymously { [weak self] authResult, error in
+            guard let self = self else { return }
+            
+            if let error = error as NSError? {
+                print("❌ Demo sign-in failed with error: \(error.localizedDescription)")
+                print("❌ Error code: \(error.code), domain: \(error.domain)")
+                let authError = self.handleAuthError(error)
+                completion(.failure(authError))
+                return
+            }
+            
+            guard let user = authResult?.user else {
+                print("❌ No user returned from anonymous auth")
+                completion(.failure(.userNotFound))
+                return
+            }
+            
+            print("✅ Anonymous auth successful for user: \(user.uid)")
+            
+            // Create demo user profile in Firestore
+            let userData: [String: Any] = [
+                "uid": user.uid,
+                "email": "demo@bondfyr.app",
+                "name": "Demo User",
+                "photoURL": "",
+                "role": "user",
+                "lastLogin": Timestamp(),
+                "isDemoUser": true,
+                "city": "San Francisco",  // Add required fields
+                "username": "demo_user_\(String(user.uid.suffix(6)))",
+                "dob": Date(timeIntervalSince1970: 946684800), // Jan 1, 2000
+                "phoneNumber": "+1234567890"
+            ]
+            
+            print("🔄 Creating demo user profile in Firestore...")
+            self.db.collection("users").document(user.uid).setData(userData, merge: true) { error in
+                if let error = error {
+                    print("❌ Error creating demo user data: \(error.localizedDescription)")
+                    completion(.failure(.serverError))
+                    return
+                }
+                print("✅ Demo user profile created successfully")
+                completion(.success(user))
+            }
+        }
+    }
+    
+    // Helper function for Apple Sign In nonce
+    private func randomNonceString(length: Int = 32) -> String? {
+        precondition(length > 0)
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+        
+        while remainingLength > 0 {
+            let randoms: [UInt8] = (0..<16).map { _ in
+                var random: UInt8 = 0
+                let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+                if errorCode != errSecSuccess {
+                    fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+                }
+                return random
+            }
+            
+            randoms.forEach { random in
+                if remainingLength == 0 {
+                    return
+                }
+                
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+        
+        return result
+    }
+    
     // MARK: - Sign Out
     
     func signOut() -> Result<Void, AuthError> {

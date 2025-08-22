@@ -92,15 +92,14 @@ struct ProfileView: View {
             .sheet(isPresented: $showHelpSupport) {
             HelpSupportView()
         }
-        .alert(isPresented: $showingLogoutAlert) {
-            Alert(
-                title: Text("Sign Out"),
-                message: Text("Are you sure you want to sign out?"),
-                primaryButton: .destructive(Text("Sign Out")) {
-                    authViewModel.logout()
-                },
-                secondaryButton: .cancel()
-            )
+        .alert("Sign Out", isPresented: $showingLogoutAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Sign Out", role: .destructive) {
+                print("🚪 Sign out button pressed - calling logout...")
+                authViewModel.logout()
+            }
+        } message: {
+            Text("Are you sure you want to sign out?")
         }
         .alert(isPresented: $showingDeleteAccountAlert) {
             Alert(
@@ -431,7 +430,10 @@ struct ProfileView: View {
                     icon: "rectangle.portrait.and.arrow.right",
                     title: "Sign Out",
                     isDestructive: true,
-                    action: { showingLogoutAlert = true }
+                    action: { 
+                        print("🔴 Sign out row tapped - showing alert...")
+                        showingLogoutAlert = true 
+                    }
                 )
             }
         }

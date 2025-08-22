@@ -8,6 +8,7 @@
 import SwiftUI
 import GoogleSignIn
 import GoogleSignInSwift
+import AuthenticationServices
 
 struct GoogleSignInView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -16,6 +17,7 @@ struct GoogleSignInView: View {
     @State private var showError = false
     @State private var logoScale: CGFloat = 1.0
     @State private var backgroundAnimation = false
+    @State private var isDemoMode = false
     
     var body: some View {
         ZStack {
@@ -99,8 +101,36 @@ struct GoogleSignInView: View {
                         .cornerRadius(8)
                 }
                 
-                // Sign in button with enhanced styling
-                VStack(spacing: 20) {
+                // Demo Mode Toggle
+                HStack {
+                    Text("Demo Mode (App Review)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    Toggle("", isOn: $isDemoMode)
+                        .toggleStyle(SwitchToggleStyle(tint: .pink))
+                        .scaleEffect(0.8)
+                }
+                .padding(.bottom, 10)
+                
+                // Sign in buttons with enhanced styling
+                VStack(spacing: 16) {
+                    // Sign in with Apple button
+                    SignInWithAppleButton(
+                        onRequest: { request in
+                            configureAppleSignIn(request)
+                        },
+                        onCompletion: { result in
+                            handleAppleSignInResult(result)
+                        }
+                    )
+                    .signInWithAppleButtonStyle(.white)
+                    .frame(height: 55)
+                    .frame(maxWidth: 300)
+                    .cornerRadius(12)
+                    .shadow(color: Color.pink.opacity(0.3), radius: 10, x: 0, y: 4)
+                    .disabled(isLoading)
+                    
                     // Custom Google sign-in button
                     Button(action: handleGoogleSignIn) {
                         HStack(spacing: 12) {
@@ -136,6 +166,35 @@ struct GoogleSignInView: View {
                         .shadow(color: Color.pink.opacity(0.3), radius: 10, x: 0, y: 4)
                     }
                     .disabled(isLoading)
+                    
+                    // Demo Mode Button
+                    if isDemoMode {
+                        Button(action: handleDemoSignIn) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "play.circle.fill")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 22, height: 22)
+                                    .foregroundColor(.white)
+                                
+                                Text("Continue as Demo User")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(height: 55)
+                            .frame(maxWidth: 300)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.orange.opacity(0.9)]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(12)
+                            .shadow(color: Color.orange.opacity(0.3), radius: 10, x: 0, y: 4)
+                        }
+                        .disabled(isLoading)
+                    }
                     
                     // Loading indicator
                     if isLoading {
@@ -192,12 +251,93 @@ struct GoogleSignInView: View {
                 self.isLoading = false
                 
                 if let error = error {
-                    
                     self.errorMessage = "Sign-in failed: \(error.localizedDescription)"
                     self.showError = true
                 } else if success {
+                    // Set demo mode in UserDefaults if toggle is on
+                    UserDefaults.standard.set(self.isDemoMode, forKey: "isDemoMode")
                     // Post notification that login succeeded
-                    
+                    NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
+                    // Force onboarding state update
+                    if let splash = UIApplication.shared.connectedScenes
+                        .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController as? UIHostingController<SplashView> })
+                        .first {
+                        splash.rootView.checkAuthStatus()
+                    }
+                }
+            }
+        }
+    }
+    
+    func configureAppleSignIn(_ request: ASAuthorizationAppleIDRequest) {
+        request.requestedScopes = [.fullName, .email]
+    }
+    
+    func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                handleAppleSignInCredential(appleIDCredential)
+            } else {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Invalid Apple Sign-In credentials"
+                    self.showError = true
+                }
+            }
+        case .failure(let error):
+            print("❌ Apple Sign-In failed: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+                self.showError = true
+            }
+        }
+    }
+    
+    func handleAppleSignInCredential(_ credential: ASAuthorizationAppleIDCredential) {
+        print("🍎 Processing Apple Sign-In credential...")
+        isLoading = true
+        
+        authViewModel.signInWithApple(credential: credential) { success, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                
+                if let error = error {
+                    print("❌ Apple Sign-In error: \(error.localizedDescription)")
+                    self.errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+                    self.showError = true
+                } else if success {
+                    print("✅ Apple Sign-In successful!")
+                    // Set demo mode in UserDefaults if toggle is on
+                    UserDefaults.standard.set(self.isDemoMode, forKey: "isDemoMode")
+                    // Post notification that login succeeded
+                    NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
+                    // Force onboarding state update
+                    if let splash = UIApplication.shared.connectedScenes
+                        .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController as? UIHostingController<SplashView> })
+                        .first {
+                        splash.rootView.checkAuthStatus()
+                    }
+                }
+            }
+        }
+    }
+    
+    func handleDemoSignIn() {
+        isLoading = true
+        
+        // Create a demo user account
+        authViewModel.signInWithDemo { success, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                
+                if let error = error {
+                    self.errorMessage = "Demo sign-in failed: \(error.localizedDescription)"
+                    self.showError = true
+                } else if success {
+                    // Always set demo mode for demo users
+                    UserDefaults.standard.set(true, forKey: "isDemoMode")
+                    // Post notification that login succeeded
                     NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
                     // Force onboarding state update
                     if let splash = UIApplication.shared.connectedScenes
