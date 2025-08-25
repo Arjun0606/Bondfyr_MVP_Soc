@@ -435,8 +435,12 @@ struct Afterparty: Identifiable, Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        // Basic fields
-        id = try container.decode(String.self, forKey: .partyId)
+        // Basic fields (accept either `partyId` or `id`)
+        if let partyId = try? container.decode(String.self, forKey: .partyId) {
+            id = partyId
+        } else {
+            id = try container.decode(String.self, forKey: .id)
+        }
         userId = try container.decode(String.self, forKey: .userId)
         hostHandle = try container.decode(String.self, forKey: .hostHandle)
         radius = try container.decode(Double.self, forKey: .radius)

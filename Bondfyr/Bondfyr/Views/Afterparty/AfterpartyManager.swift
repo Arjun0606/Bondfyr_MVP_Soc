@@ -832,27 +832,48 @@ class AfterpartyManager: NSObject, ObservableObject {
         timeFilter: TimeFilter = .all
     ) async throws -> [Afterparty] {
         // Simplified query - just get public parties (no compound queries to avoid index requirement)
+        print("🔧 QUERY DEBUG: Looking for visibility = '\(PartyVisibility.publicFeed.rawValue)'")
         let snapshot = try await db.collection("afterparties")
             .whereField("visibility", isEqualTo: PartyVisibility.publicFeed.rawValue)
             .getDocuments()
         
+        print("🔧 QUERY DEBUG: Raw snapshot returned \(snapshot.documents.count) documents")
+        for doc in snapshot.documents {
+            let data = doc.data()
+            print("🔧 QUERY DEBUG: Doc \(doc.documentID): visibility=\(data["visibility"] ?? "nil"), title=\(data["title"] ?? "nil")")
+        }
+        
         var afterparties = snapshot.documents.compactMap { doc -> Afterparty? in
             var docData = doc.data()
             docData["id"] = doc.documentID
+            // Compatibility: some decoders expect `partyId`
+            if docData["partyId"] == nil { docData["partyId"] = doc.documentID }
+            
+            let title = docData["title"] as? String ?? "Unknown"
+            print("🔧 CONVERSION DEBUG: Processing party '\(title)'")
             
             // Skip expired afterparties (natural end time)
             if let endTime = (docData["endTime"] as? Timestamp)?.dateValue(),
                endTime < Date() {
+                print("🔧 CONVERSION DEBUG: Party '\(title)' filtered out - expired")
                 return nil
             }
             
             // CRITICAL FIX: Skip parties that have been ended by host
             if let completionStatus = docData["completionStatus"] as? String,
                completionStatus != "ongoing" && !completionStatus.isEmpty {
+                print("🔧 CONVERSION DEBUG: Party '\(title)' filtered out - completion status: \(completionStatus)")
                 return nil
             }
             
-            return try? Firestore.Decoder().decode(Afterparty.self, from: docData)
+            do {
+                let party = try Firestore.Decoder().decode(Afterparty.self, from: docData)
+                print("🔧 CONVERSION DEBUG: Party '\(title)' successfully converted")
+                return party
+            } catch {
+                print("🔧 CONVERSION DEBUG: Party '\(title)' failed conversion: \(error)")
+                return nil
+            }
         }
         
         // Apply price range filter in memory

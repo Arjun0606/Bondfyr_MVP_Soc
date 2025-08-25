@@ -448,6 +448,11 @@ struct ProfileFormView: View {
                     if isSaving {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else if !authCheckCompleted {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Verifying...")
+                            .font(.system(size: 16, weight: .semibold))
                     } else {
                             Text(isEditingMode ? "Save Changes" : "Complete Profile")
                             .font(.system(size: 16, weight: .semibold))
@@ -457,8 +462,8 @@ struct ProfileFormView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 54)
                     }
-                .disabled(!canContinue || isSaving || isUploadingImage)
-                .background(canContinue ? Color.pink : Color.gray.opacity(0.3))
+                .disabled(!canContinue || isSaving || isUploadingImage || !authCheckCompleted)
+                .background((canContinue && authCheckCompleted) ? Color.pink : Color.gray.opacity(0.3))
                 .cornerRadius(12)
                 .padding(.bottom, 30)
             }
@@ -535,16 +540,28 @@ struct ProfileFormView: View {
     private func checkAuthState() {
         // Wait a bit for auth state to settle
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if Auth.auth().currentUser != nil {
+            if let user = Auth.auth().currentUser {
                 self.authCheckCompleted = true
-                print("✅ Auth state confirmed - user is signed in")
+                print("✅ Auth state confirmed - user is signed in: \(user.uid)")
             } else {
-                print("❌ Auth state check - no user found")
-                // Show error after a delay to give auth time to settle
+                print("❌ Auth state check - no user found, retrying...")
+                // Retry after additional delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    if Auth.auth().currentUser == nil {
-                        self.errorMessage = "Authentication session expired. Please sign in again."
-                        self.showError = true
+                    if let user = Auth.auth().currentUser {
+                        self.authCheckCompleted = true
+                        print("✅ Auth state confirmed on retry - user is signed in: \(user.uid)")
+                    } else {
+                        // Final retry after 2 more seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            if let user = Auth.auth().currentUser {
+                                self.authCheckCompleted = true
+                                print("✅ Auth state confirmed on final retry - user is signed in: \(user.uid)")
+                            } else {
+                                print("❌ Auth state check failed after all retries")
+                                self.errorMessage = "Authentication session expired. Please sign in again."
+                                self.showError = true
+                            }
+                        }
                     }
                 }
             }
@@ -599,6 +616,15 @@ struct ProfileFormView: View {
     }
 
     private func saveProfile() {
+        // Wait for auth state to be confirmed before proceeding
+        if !authCheckCompleted {
+            // If auth check isn't complete, wait and try again
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.saveProfile()
+            }
+            return
+        }
+        
         // Check if user is authenticated first
         guard Auth.auth().currentUser != nil else {
             errorMessage = "Authentication required. Please sign in again."

@@ -8,7 +8,6 @@
 import SwiftUI
 import GoogleSignIn
 import GoogleSignInSwift
-import AuthenticationServices
 
 struct GoogleSignInView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -17,7 +16,13 @@ struct GoogleSignInView: View {
     @State private var showError = false
     @State private var logoScale: CGFloat = 1.0
     @State private var backgroundAnimation = false
-    @State private var isDemoMode = false
+    
+    // Email/Password sign-in states
+    @State private var email = ""
+    @State private var password = ""
+    @State private var showEmailSignIn = false
+
+    @State private var showReviewerGuide = false
     
     var body: some View {
         ZStack {
@@ -101,35 +106,36 @@ struct GoogleSignInView: View {
                         .cornerRadius(8)
                 }
                 
-                // Demo Mode Toggle
-                HStack {
-                    Text("Demo Mode (App Review)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                // App Store Reviewer Info
+                VStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("For App Store Reviewers")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .fontWeight(.medium)
+                        Spacer()
+                    }
                     
-                    Toggle("", isOn: $isDemoMode)
-                        .toggleStyle(SwitchToggleStyle(tint: .pink))
-                        .scaleEffect(0.8)
+                    Text("Use demo account provided in App Review Information section")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .multilineTextAlignment(.leading)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                )
                 .padding(.bottom, 10)
                 
                 // Sign in buttons with enhanced styling
                 VStack(spacing: 16) {
-                    // Sign in with Apple button
-                    SignInWithAppleButton(
-                        onRequest: { request in
-                            configureAppleSignIn(request)
-                        },
-                        onCompletion: { result in
-                            handleAppleSignInResult(result)
-                        }
-                    )
-                    .signInWithAppleButtonStyle(.white)
-                    .frame(height: 55)
-                    .frame(maxWidth: 300)
-                    .cornerRadius(12)
-                    .shadow(color: Color.pink.opacity(0.3), radius: 10, x: 0, y: 4)
-                    .disabled(isLoading)
+                    // Apple Sign-In removed for faster App Store submission
                     
                     // Custom Google sign-in button
                     Button(action: handleGoogleSignIn) {
@@ -167,34 +173,40 @@ struct GoogleSignInView: View {
                     }
                     .disabled(isLoading)
                     
-                    // Demo Mode Button
-                    if isDemoMode {
-                        Button(action: handleDemoSignIn) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "play.circle.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 22, height: 22)
-                                    .foregroundColor(.white)
-                                
-                                Text("Continue as Demo User")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white)
-                            }
-                            .frame(height: 55)
-                            .frame(maxWidth: 300)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.orange.opacity(0.9)]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(12)
-                            .shadow(color: Color.orange.opacity(0.3), radius: 10, x: 0, y: 4)
+                    // Email/Password sign-in button
+                    Button(action: { showEmailSignIn.toggle() }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "envelope.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 22, height: 22)
+                                .foregroundColor(.white)
+                            
+                            Text("Sign in with Email")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
                         }
-                        .disabled(isLoading)
+                        .frame(height: 55)
+                        .frame(maxWidth: 300)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.green.opacity(0.8), Color.green.opacity(0.9)]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(LinearGradient(
+                                    gradient: Gradient(colors: [Color.green.opacity(0.8), Color.green.opacity(0.4)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ), lineWidth: 1.5)
+                        )
+                        .cornerRadius(12)
+                        .shadow(color: Color.green.opacity(0.3), radius: 10, x: 0, y: 4)
                     }
+                    .disabled(isLoading)
                     
                     // Loading indicator
                     if isLoading {
@@ -211,9 +223,26 @@ struct GoogleSignInView: View {
                         .background(Color.black.opacity(0.3))
                         .cornerRadius(12)
                     }
+                    
+                    // Email/Password sign-in form
+                    if showEmailSignIn {
+                        emailPasswordForm
+                    }
                 }
                 
                 Spacer()
+                
+                // App Store Reviewer Guide Button
+                Button(action: { showReviewerGuide = true }) {
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("App Store Reviewer Guide")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.bottom, 10)
                 
                 // App version or branding
                 Text("v1.0")
@@ -229,6 +258,9 @@ struct GoogleSignInView: View {
                 logoScale = 1.05
                 backgroundAnimation = true
             }
+        }
+        .sheet(isPresented: $showReviewerGuide) {
+            AppStoreReviewerGuideView()
         }
     }
 
@@ -254,8 +286,7 @@ struct GoogleSignInView: View {
                     self.errorMessage = "Sign-in failed: \(error.localizedDescription)"
                     self.showError = true
                 } else if success {
-                    // Set demo mode in UserDefaults if toggle is on
-                    UserDefaults.standard.set(self.isDemoMode, forKey: "isDemoMode")
+                    print("✅ Google Sign-In successful!")
                     // Post notification that login succeeded
                     NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
                     // Force onboarding state update
@@ -269,82 +300,131 @@ struct GoogleSignInView: View {
         }
     }
     
-    func configureAppleSignIn(_ request: ASAuthorizationAppleIDRequest) {
-        request.requestedScopes = [.fullName, .email]
-    }
+    // Apple Sign-In functions removed for streamlined authentication
     
-    func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) {
-        switch result {
-        case .success(let authorization):
-            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                handleAppleSignInCredential(appleIDCredential)
-            } else {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Invalid Apple Sign-In credentials"
-                    self.showError = true
+
+    
+    // MARK: - Email/Password Sign-In Form
+    
+    private var emailPasswordForm: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 12) {
+                // Email field
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Email")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    TextField("Enter your email", text: $email)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
                 }
+                
+                // Password field
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Password")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    SecureField("Enter your password", text: $password)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                
+                // Demo account hint
+                VStack(spacing: 4) {
+                    Text("App Store Reviewers:")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.orange)
+                    
+                    Text("Use credentials from App Review Information")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.vertical, 4)
             }
-        case .failure(let error):
-            print("❌ Apple Sign-In failed: \(error.localizedDescription)")
-            DispatchQueue.main.async {
-                self.isLoading = false
-                self.errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
-                self.showError = true
+            
+            // Sign in button
+            Button(action: handleEmailPasswordSignIn) {
+                HStack {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "envelope.fill")
+                            .foregroundColor(.white)
+                        Text("Sign In")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(height: 50)
+                .frame(maxWidth: .infinity)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.9)]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(12)
+                .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
             }
+            .disabled(isLoading || email.isEmpty || password.isEmpty)
+            
+            // Cancel button
+            Button("Cancel") {
+                showEmailSignIn = false
+                email = ""
+                password = ""
+            }
+            .font(.caption)
+            .foregroundColor(.gray)
         }
+        .padding(20)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+        )
+        .padding(.horizontal, 20)
+        .transition(.opacity.combined(with: .scale))
     }
     
-    func handleAppleSignInCredential(_ credential: ASAuthorizationAppleIDCredential) {
-        print("🍎 Processing Apple Sign-In credential...")
+    // MARK: - Email/Password Sign-In Handler
+    
+    func handleEmailPasswordSignIn() {
+        guard !email.isEmpty, !password.isEmpty else { return }
+        
         isLoading = true
         
-        authViewModel.signInWithApple(credential: credential) { success, error in
+        authViewModel.signInWithEmail(email: email, password: password) { success, error in
             DispatchQueue.main.async {
                 self.isLoading = false
                 
                 if let error = error {
-                    print("❌ Apple Sign-In error: \(error.localizedDescription)")
-                    self.errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+                    self.errorMessage = error.localizedDescription
                     self.showError = true
                 } else if success {
-                    print("✅ Apple Sign-In successful!")
-                    // Set demo mode in UserDefaults if toggle is on
-                    UserDefaults.standard.set(self.isDemoMode, forKey: "isDemoMode")
+                    print("✅ Email/Password sign-in successful!")
+                    // Check if this is the demo account
+                    if self.email == AppStoreDemoManager.demoEmail {
+                        AppStoreDemoManager.shared.isDemoAccount = true
+                        print("🎭 Demo account signed in successfully")
+                    }
+                    
                     // Post notification that login succeeded
                     NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
-                    // Force onboarding state update
-                    if let splash = UIApplication.shared.connectedScenes
-                        .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController as? UIHostingController<SplashView> })
-                        .first {
-                        splash.rootView.checkAuthStatus()
-                    }
-                }
-            }
-        }
-    }
-    
-    func handleDemoSignIn() {
-        isLoading = true
-        
-        // Create a demo user account
-        authViewModel.signInWithDemo { success, error in
-            DispatchQueue.main.async {
-                self.isLoading = false
-                
-                if let error = error {
-                    self.errorMessage = "Demo sign-in failed: \(error.localizedDescription)"
-                    self.showError = true
-                } else if success {
-                    // Always set demo mode for demo users
-                    UserDefaults.standard.set(true, forKey: "isDemoMode")
-                    // Post notification that login succeeded
-                    NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
-                    // Force onboarding state update
-                    if let splash = UIApplication.shared.connectedScenes
-                        .compactMap({ ($0 as? UIWindowScene)?.windows.first?.rootViewController as? UIHostingController<SplashView> })
-                        .first {
-                        splash.rootView.checkAuthStatus()
-                    }
+                    
+                    // Reset form
+                    self.email = ""
+                    self.password = ""
+                    self.showEmailSignIn = false
                 }
             }
         }

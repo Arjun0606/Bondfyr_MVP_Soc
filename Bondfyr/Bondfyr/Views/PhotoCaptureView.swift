@@ -41,6 +41,7 @@ struct PhotoCaptureView: UIViewControllerRepresentable {
                         rootView: MainTabView()
                             .environmentObject(AuthViewModel())
                             .environmentObject(TabSelection())
+                            .environmentObject(AppStoreDemoManager.shared)
                     )
                     window.makeKeyAndVisible()
                 }

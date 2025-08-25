@@ -11,7 +11,6 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 import GoogleSignIn
-import AuthenticationServices
 
 class AuthViewModel: ObservableObject {
     @Published var currentUser: AppUser?
@@ -46,6 +45,10 @@ class AuthViewModel: ObservableObject {
                 self.authStateKnown = true
                 
                 if let user = user {
+                    // Update demo mode based on the signed-in user's email
+                    let isReviewer = (user.email == AppStoreDemoManager.demoEmail)
+                    AppStoreDemoManager.shared.isDemoAccount = isReviewer
+                    if !isReviewer { AppStoreDemoManager.shared.hostMode = true }
                     
                     
                     // Check if we need to refresh the token
@@ -69,6 +72,9 @@ class AuthViewModel: ObservableObject {
                     
                     self.isLoggedIn = false
                     self.currentUser = nil
+                    // Clear demo mode on sign-out
+                    AppStoreDemoManager.shared.isDemoAccount = false
+                    AppStoreDemoManager.shared.hostMode = true
                 }
             }
         }
@@ -175,6 +181,10 @@ class AuthViewModel: ObservableObject {
                     
                     // Save FCM token to Firestore after successful authentication
                     self.saveFCMTokenAfterSignIn()
+                    // Set demo flag appropriately for Google sign-in
+                    let isReviewer = (authResult?.user.email == AppStoreDemoManager.demoEmail)
+                    AppStoreDemoManager.shared.isDemoAccount = isReviewer
+                    if !isReviewer { AppStoreDemoManager.shared.hostMode = true }
                     
                     // After successful authentication, fetch the user profile
                     self.fetchUserProfile { success in
@@ -207,7 +217,8 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Bool, Error?) -> Void) {
+    // Apple Sign-In removed for App Store submission
+    /*func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Bool, Error?) -> Void) {
         DispatchQueue.main.async {
             self.isLoading = true
             self.error = nil
@@ -258,15 +269,19 @@ class AuthViewModel: ObservableObject {
                 completion(false, error)
             }
         }
-    }
+    }*/
     
-    func signInWithDemo(completion: @escaping (Bool, Error?) -> Void) {
+
+    
+    // MARK: - Email/Password Sign-In
+    
+    func signInWithEmail(email: String, password: String, completion: @escaping (Bool, Error?) -> Void) {
         DispatchQueue.main.async {
             self.isLoading = true
             self.error = nil
         }
         
-        AuthManager.shared.signInWithDemo { [weak self] result in
+        auth.signIn(withEmail: email, password: password) { [weak self] authResult, error in
             guard let self = self else {
                 completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
                 return
@@ -276,43 +291,102 @@ class AuthViewModel: ObservableObject {
                 self.isLoading = false
             }
             
-            switch result {
-            case .success(_):
-                // Save FCM token to Firestore after successful authentication
-                self.saveFCMTokenAfterSignIn()
-                
-                // After successful authentication, fetch the user profile
-                self.fetchUserProfile { success in
-                    if success {
-                        // Save the last sign-in time
-                        UserDefaults.standard.set(Date(), forKey: "lastSignInTime")
-                        
-                        // Set logged in state only after confirming profile exists
-                        DispatchQueue.main.async {
-                            self.isLoggedIn = true
-                            // Notify that user logged in
-                            let userId = Auth.auth().currentUser?.uid
-                            NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: userId)
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            // For new users, we still want to consider the sign-in successful
-                            self.isLoggedIn = true
-                        }
-                    }
-                    
-                    // Always complete with success if Firebase auth succeeded
-                    completion(true, nil)
-                }
-            case .failure(let error):
+            if let error = error {
+                print("❌ Email/Password sign-in failed: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     self.error = error.localizedDescription
                 }
                 completion(false, error)
+                return
+            }
+            
+            guard let user = authResult?.user else {
+                let error = NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user returned"])
+                DispatchQueue.main.async {
+                    self.error = "Sign-in failed"
+                }
+                completion(false, error)
+                return
+            }
+            
+            print("✅ Email/Password sign-in successful for user: \(user.uid)")
+            
+            // Fetch user profile from Firestore
+            self.db.collection("users").document(user.uid).getDocument { document, error in
+                if let error = error {
+                    print("❌ Error fetching user profile: \(error)")
+                    DispatchQueue.main.async {
+                        self.error = "Failed to load user profile"
+                    }
+                    completion(false, error)
+                    return
+                }
+                
+                guard let document = document, document.exists, let data = document.data() else {
+                    print("❌ User profile not found in Firestore")
+                    DispatchQueue.main.async {
+                        self.error = "User profile not found"
+                    }
+                    completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "User profile not found"]))
+                    return
+                }
+                
+                // Create AppUser from Firestore data
+                let roleString = data["role"] as? String ?? "user"
+                let userRole = AppUser.UserRole(rawValue: roleString) ?? .user
+                
+                let appUser = AppUser(
+                    uid: data["uid"] as? String ?? user.uid,
+                    name: data["name"] as? String ?? "",
+                    email: data["email"] as? String ?? user.email ?? "",
+                    dob: (data["dob"] as? Timestamp)?.dateValue() ?? Date(timeIntervalSince1970: 631152000),
+                    phoneNumber: data["phoneNumber"] as? String ?? "",
+                    role: userRole,
+                    username: data["username"] as? String,
+                    gender: data["gender"] as? String,
+                    bio: data["bio"] as? String,
+                    instagramHandle: data["instagramHandle"] as? String,
+                    snapchatHandle: data["snapchatHandle"] as? String,
+                    avatarURL: data["avatarURL"] as? String,
+                    googleID: data["googleID"] as? String,
+                    city: data["city"] as? String
+                )
+                
+                DispatchQueue.main.async {
+                    self.currentUser = appUser
+                    self.isLoggedIn = true
+                    self.error = nil
+                    
+                    // Check if this is the demo account
+                    if user.email == AppStoreDemoManager.demoEmail {
+                        AppStoreDemoManager.shared.isDemoAccount = true
+                        print("🎭 Demo account detected and logged in")
+                        print("🎭 Setting up complete App Store reviewer experience...")
+                        
+                        // Force create fresh demo parties on every login for consistent review experience
+                        Task {
+                            // Wait a moment for user profile to be fully loaded
+                            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                            await AppStoreDemoManager.shared.createDemoParties()
+                            print("🎭 Demo parties ready - reviewer can test both HOST and GUEST experiences")
+                            
+                            // Force refresh the UI
+                            DispatchQueue.main.async {
+                                NotificationCenter.default.post(name: NSNotification.Name("RefreshPartyData"), object: nil)
+                            }
+                        }
+                    } else {
+                        // Ensure demo mode is OFF for non-reviewer accounts
+                        AppStoreDemoManager.shared.isDemoAccount = false
+                        AppStoreDemoManager.shared.hostMode = true
+                    }
+                }
+                
+                completion(true, nil)
             }
         }
     }
-
+    
     func fetchUserProfile(completion: @escaping (Bool) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
             completion(false)

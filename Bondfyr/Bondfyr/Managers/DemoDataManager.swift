@@ -26,7 +26,30 @@ class DemoDataManager {
     // MARK: - Demo Parties
     
     func createDemoParties() async {
-        guard isDemoMode else { return }
+        guard isDemoMode else { 
+            print("🎭 Demo mode not enabled, skipping party creation")
+            return 
+        }
+        
+        // Wait for user authentication to be confirmed with limited retries
+        var retryCount = 0
+        let maxRetries = 5
+        
+        while Auth.auth().currentUser == nil && retryCount < maxRetries {
+            print("🎭 No authenticated user for demo parties, retrying in 2 seconds... (\(retryCount + 1)/\(maxRetries))")
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // Wait 2 seconds
+            retryCount += 1
+        }
+        
+        guard Auth.auth().currentUser != nil else {
+            print("🎭 Failed to get authenticated user after \(maxRetries) retries, skipping demo party creation")
+            return
+        }
+        
+        print("🎭 Creating demo parties for App Store reviewers...")
+        
+        // Clear any existing demo parties first
+        await clearExistingDemoParties()
         
         let demoParties = generateDemoParties()
         
@@ -37,6 +60,20 @@ class DemoDataManager {
             } catch {
                 print("❌ Error creating demo party: \(error)")
             }
+        }
+        
+        print("🎉 Demo parties creation completed! Total: \(demoParties.count)")
+    }
+    
+    private func clearExistingDemoParties() async {
+        do {
+            let snapshot = try await db.collection("afterparties").whereField("isDemoData", isEqualTo: true).getDocuments()
+            for document in snapshot.documents {
+                try await document.reference.delete()
+                print("🗑️ Cleared existing demo party: \(document.documentID)")
+            }
+        } catch {
+            print("❌ Error clearing existing demo parties: \(error)")
         }
     }
     
@@ -143,6 +180,105 @@ class DemoDataManager {
                 "earnings": 20.0,
                 "bondfyrFee": 5.0,
                 "isDemoData": true
+            ],
+            
+            // Wine tasting party
+            [
+                "id": "demo-party-3",
+                "userId": "demo-host-3",
+                "hostHandle": "sophia_wine",
+                "coordinate": sfCoordinate,
+                "radius": 400.0,
+                "startTime": Calendar.current.date(byAdding: .day, value: 1, to: baseDate) ?? baseDate,
+                "endTime": Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.date(byAdding: .hour, value: 4, to: baseDate) ?? baseDate) ?? baseDate,
+                "city": "San Francisco",
+                "locationName": "Elegant Wine Bar",
+                "description": "Sophisticated wine tasting with professional sommelier. Learn about different regions while meeting fellow wine enthusiasts.",
+                "address": "789 Wine St, San Francisco, CA",
+                "googleMapsLink": "https://maps.google.com/?q=789+Wine+St+San+Francisco",
+                "vibeTag": "🍷 Sophisticated",
+                "activeUsers": ["user9", "user10", "user11"],
+                "pendingRequests": [],
+                "createdAt": Calendar.current.date(byAdding: .hour, value: -3, to: baseDate) ?? baseDate,
+                "title": "Wine Tasting Evening 🍷",
+                "ticketPrice": 35.0,
+                "coverPhotoURL": "",
+                "maxGuestCount": 20,
+                "visibility": "public",
+                "approvalType": "automatic",
+                "ageRestriction": 25,
+                "maxMaleRatio": 0.5,
+                "legalDisclaimerAccepted": true,
+                "guestRequests": [],
+                "earnings": 0.0,
+                "bondfyrFee": 0.0,
+                "isDemoData": true
+            ],
+            
+            // Beach bonfire party
+            [
+                "id": "demo-party-4",
+                "userId": "demo-host-4",
+                "hostHandle": "mike_beach",
+                "coordinate": sfCoordinate,
+                "radius": 1000.0,
+                "startTime": Calendar.current.date(byAdding: .day, value: 3, to: baseDate) ?? baseDate,
+                "endTime": Calendar.current.date(byAdding: .day, value: 3, to: Calendar.current.date(byAdding: .hour, value: 8, to: baseDate) ?? baseDate) ?? baseDate,
+                "city": "San Francisco",
+                "locationName": "Ocean Beach",
+                "description": "Beach bonfire with s'mores, acoustic guitars, and sunset views. Bring a jacket and good vibes!",
+                "address": "Ocean Beach, San Francisco, CA",
+                "googleMapsLink": "https://maps.google.com/?q=Ocean+Beach+San+Francisco",
+                "vibeTag": "🏖️ Outdoorsy",
+                "activeUsers": ["user12", "user13"],
+                "pendingRequests": ["user14", "user15", "user16"],
+                "createdAt": Calendar.current.date(byAdding: .minute, value: -30, to: baseDate) ?? baseDate,
+                "title": "Beach Bonfire & Sunset 🏖️",
+                "ticketPrice": 10.0,
+                "coverPhotoURL": "",
+                "maxGuestCount": 30,
+                "visibility": "public",
+                "approvalType": "manual",
+                "ageRestriction": 18,
+                "maxMaleRatio": 0.6,
+                "legalDisclaimerAccepted": true,
+                "guestRequests": [],
+                "earnings": 0.0,
+                "bondfyrFee": 0.0,
+                "isDemoData": true
+            ],
+            
+            // Karaoke night
+            [
+                "id": "demo-party-5",
+                "userId": "demo-host-5",
+                "hostHandle": "jenny_karaoke",
+                "coordinate": sfCoordinate,
+                "radius": 250.0,
+                "startTime": Calendar.current.date(byAdding: .hour, value: 1, to: baseDate) ?? baseDate,
+                "endTime": Calendar.current.date(byAdding: .hour, value: 6, to: baseDate) ?? baseDate,
+                "city": "San Francisco",
+                "locationName": "Stars Karaoke Lounge",
+                "description": "Let your inner rockstar shine! Private karaoke room with drinks, snacks, and great company. All singing levels welcome!",
+                "address": "321 Music Ave, San Francisco, CA",
+                "googleMapsLink": "https://maps.google.com/?q=321+Music+Ave+San+Francisco",
+                "vibeTag": "🎤 Fun",
+                "activeUsers": ["user17", "user18", "user19", "user20"],
+                "pendingRequests": ["user21"],
+                "createdAt": Calendar.current.date(byAdding: .minute, value: -45, to: baseDate) ?? baseDate,
+                "title": "Karaoke Night Fever 🎤",
+                "ticketPrice": 18.0,
+                "coverPhotoURL": "",
+                "maxGuestCount": 16,
+                "visibility": "public",
+                "approvalType": "automatic",
+                "ageRestriction": 21,
+                "maxMaleRatio": 0.55,
+                "legalDisclaimerAccepted": true,
+                "guestRequests": [],
+                "earnings": 0.0,
+                "bondfyrFee": 0.0,
+                "isDemoData": true
             ]
         ]
     }
@@ -161,9 +297,36 @@ class DemoDataManager {
     func simulateGuestInteractions(for partyId: String) {
         guard isDemoMode else { return }
         
-        // Simulate new guest requests periodically
-        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+        // Simulate new guest requests periodically for demo
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) {
             self.simulateNewGuestRequest(for: partyId)
+        }
+        
+        // Simulate party updates
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20.0) {
+            self.simulatePartyUpdate(for: partyId)
+        }
+    }
+    
+    private func simulatePartyUpdate(for partyId: String) {
+        let updates = [
+            "New guest joined your party! 🎉",
+            "Someone liked your party! ❤️", 
+            "Party reminder: Starting in 1 hour! ⏰",
+            "Weather looks perfect for your event! ☀️"
+        ]
+        
+        let randomUpdate = updates.randomElement() ?? "Party update!"
+        
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DemoPartyUpdate"),
+                object: nil,
+                userInfo: [
+                    "partyId": partyId,
+                    "message": randomUpdate
+                ]
+            )
         }
     }
     

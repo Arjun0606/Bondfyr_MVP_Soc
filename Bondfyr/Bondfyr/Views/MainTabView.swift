@@ -10,6 +10,7 @@ import FirebaseFirestore
 
 struct MainTabView: View {
     @EnvironmentObject var tabSelection: TabSelection
+    @EnvironmentObject var demoManager: AppStoreDemoManager
     
     // CRITICAL FIX: Add state for notification navigation
     @State private var showHostDashboard = false
@@ -50,6 +51,7 @@ struct MainTabView: View {
 
             NavigationView {
                 ProfileView()
+                    .environmentObject(demoManager)
             }
             .tabItem {
                 Image(systemName: "person.circle")

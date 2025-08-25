@@ -191,6 +191,12 @@ struct AfterpartyTabView: View {
         }
         
         // Apply distance filter
+        // DEMO MODE: Skip distance filter for demo account to show all demo parties
+        if AppStoreDemoManager.shared.isDemoAccount {
+            print("🎭 DEMO MODE: Skipping distance filter - showing all parties for reviewer")
+            return parties
+        }
+        
         guard let userLocation = locationManager.location?.coordinate else {
             print("🔍 FILTERED DEBUG: No user location - returning \(parties.count) parties without distance filter")
             return parties
@@ -336,9 +342,9 @@ struct AfterpartyTabView: View {
                 
                 // Create button - FIXED
                 CreateAfterpartyButton(
-                    hasActiveParty: hasActiveParty,
+                    hasActiveParty: hasActiveParty && !AppStoreDemoManager.shared.isDemoAccount,
                     onCreateTap: {
-                        if hasActiveParty {
+                        if hasActiveParty && !AppStoreDemoManager.shared.isDemoAccount {
                             showingActivePartyAlert = true
                         } else if locationManager.authorizationStatus == .denied {
                             showLocationDeniedAlert = true
@@ -403,7 +409,7 @@ struct AfterpartyTabView: View {
                             }
                             
                             Button("Create First Party") {
-                                if hasActiveParty {
+                                if hasActiveParty && !AppStoreDemoManager.shared.isDemoAccount {
                                     showingActivePartyAlert = true
                                 } else if locationManager.authorizationStatus == .denied {
                                     showLocationDeniedAlert = true
@@ -478,6 +484,18 @@ struct AfterpartyTabView: View {
                 queue: .main
             ) { _ in
                 print("🔔 FEED: Party created - refreshing marketplace")
+                Task {
+                    await loadMarketplaceAfterparties()
+                }
+            }
+            
+            // Listen for demo party refresh notifications
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("RefreshPartyData"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                print("🎭 DEMO: RefreshPartyData - reloading marketplace")
                 Task {
                     await loadMarketplaceAfterparties()
                 }
@@ -615,10 +633,11 @@ struct AfterpartyTabView: View {
         
         // Load real parties from Firebase
         do {
+            let isDemo = AppStoreDemoManager.shared.isDemoAccount
             afterparties = try await afterpartyManager.getMarketplaceAfterparties(
-                priceRange: activeFilters.priceRange,
-                vibes: activeFilters.vibes,
-                timeFilter: activeFilters.timeFilter
+                priceRange: isDemo ? nil : activeFilters.priceRange,
+                vibes: isDemo ? nil : activeFilters.vibes,
+                timeFilter: isDemo ? .all : activeFilters.timeFilter
             )
             print("🔍 MARKETPLACE DEBUG: Loaded \(afterparties.count) parties from Firebase")
             for (index, party) in afterparties.enumerated() {
@@ -628,9 +647,50 @@ struct AfterpartyTabView: View {
             print("🔴 MARKETPLACE DEBUG: Error loading parties: \(error)")
             // Continue with empty array to show proper empty state
         }
+
+        // DEMO SAFETY NET: If demo account and nothing loaded, fetch demo parties directly
+        if AppStoreDemoManager.shared.isDemoAccount && afterparties.isEmpty {
+            print("🎭 DEMO MODE: Fallback fetch for demo parties (isDemoData=true)")
+            do {
+                let snapshot = try await Firestore.firestore()
+                    .collection("afterparties")
+                    .whereField("isDemoData", isEqualTo: true)
+                    .getDocuments()
+
+                var demoParties: [Afterparty] = []
+                for doc in snapshot.documents {
+                    var data = doc.data()
+                    data["id"] = doc.documentID
+                    if data["partyId"] == nil { data["partyId"] = doc.documentID }
+
+                    // Filter out expired or ended
+                    if let endTs = data["endTime"] as? Timestamp, endTs.dateValue() < Date() { continue }
+                    if let status = data["completionStatus"] as? String, !status.isEmpty && status != "ongoing" { continue }
+
+                    if let party = try? Firestore.Decoder().decode(Afterparty.self, from: data) {
+                        demoParties.append(party)
+                    } else {
+                        print("🎭 DEMO MODE: Failed to decode demo party \(doc.documentID)")
+                    }
+                }
+                print("🎭 DEMO MODE: Fallback fetched \(demoParties.count) demo parties")
+                afterparties = demoParties
+            } catch {
+                print("🎭 DEMO MODE: Fallback demo fetch failed: \(error)")
+            }
+        }
         
         // Apply additional client-side filters
         var filteredResults = afterparties
+
+        // DEMO: Show all parties without client-side filters for reviewer account
+        if AppStoreDemoManager.shared.isDemoAccount {
+            print("🎭 DEMO MODE: Skipping client-side filters; showing all \(afterparties.count) parties")
+            await MainActor.run {
+                marketplaceAfterparties = afterparties
+            }
+            return
+        }
         
         // Apply price range filter
         filteredResults = filteredResults.filter { afterparty in
@@ -2493,20 +2553,16 @@ struct CreateAfterpartyView: View {
         isSubmittingForPublish = true
         submitSuccess = false
         
-        // Check if in demo mode
-        if DemoDataManager.shared.isDemoMode {
-            // Simulate payment processing in demo mode
-            DemoDataManager.shared.simulatePayment { success in
-                DispatchQueue.main.async {
-                    if success {
-                        self.createAfterpartyDirectly(location: location)
-                    } else {
-                        self.errorMessage = "Demo payment failed. Please try again."
-                        self.showingError = true
-                        self.isSubmittingForPublish = false
-                    }
-                }
-            }
+        // Check if this is the demo account for App Store reviewers
+        print("🔍 PAYMENT DEBUG: isDemoAccount = \(AppStoreDemoManager.shared.isDemoAccount)")
+        print("🔍 PAYMENT DEBUG: shouldBypassPayments = \(AppStoreDemoManager.shared.shouldBypassPayments())")
+        print("🔍 PAYMENT DEBUG: Current user email = \(authViewModel.currentUser?.email ?? "nil")")
+        
+        if AppStoreDemoManager.shared.shouldBypassPayments() {
+            // Demo account - bypass payment and create party directly
+            print("🎭 Demo account detected - bypassing payment flow")
+            print("🎭 Creating party for App Store reviewer to test hosting features")
+            createAfterpartyDirectly(location: location)
             return
         }
         
@@ -2561,7 +2617,7 @@ struct CreateAfterpartyView: View {
             second: 0,
             of: selectedDate
         ) ?? selectedDate
-        
+
         guard let currentUser = authViewModel.currentUser else {
             await MainActor.run {
                 self.errorMessage = "User authentication required"
@@ -2570,46 +2626,75 @@ struct CreateAfterpartyView: View {
             }
             return
         }
-        
-        // Create party data
-        let partyData: [String: Any] = [
-            "title": title,
-            "description": description,
-            "location": address,
-            "date": finalStartTime,
-            "ticketPrice": ticketPrice,
-            "capacity": maxGuestCount,
-            "currentCount": 0,
-            "hostId": currentUser.uid,
-            "hostName": currentUser.name,
-            "hostPhotoURL": currentUser.avatarURL ?? "",
-            "hostRating": 5.0,
-            "imageURL": coverPhotoURL,
-            "tags": Array(selectedVibes),
-            "vibes": Array(selectedVibes),
-            "ageRange": ageRestriction?.description ?? "18+",
-            "genderRatio": ["male": 0, "female": 0],
-            "status": "active",
-            "createdAt": Timestamp(),
-            "isDemoData": true,
-            "confirmedGuests": [],
-            "guestRequests": [:],
-            "waitlist": []
-        ]
-        
+
+        // End time a few hours after start so it shows up and isn't expired
+        let demoEndTime = Calendar.current.date(byAdding: .hour, value: 6, to: finalStartTime) ?? finalStartTime
+
+        // Build a proper Afterparty document matching the model schema
+        let demoAfterparty = Afterparty(
+            userId: currentUser.uid,
+            hostHandle: currentUser.name ?? "Host",
+            coordinate: CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude),
+            radius: 5000, // 5km
+            startTime: finalStartTime,
+            endTime: demoEndTime,
+            city: currentCity,
+            locationName: address,
+            description: description,
+            address: address,
+            googleMapsLink: googleMapsLink,
+            vibeTag: Array(selectedVibes).joined(separator: ", "),
+            createdAt: Date(),
+            title: title,
+            ticketPrice: ticketPrice,
+            coverPhotoURL: coverPhotoURL.isEmpty ? nil : coverPhotoURL,
+            maxGuestCount: maxGuestCount,
+            visibility: visibility, // ensure public for marketplace unless unlisted chosen
+            approvalType: approvalType,
+            ageRestriction: ageRestriction,
+            maxMaleRatio: maxMaleRatio,
+            legalDisclaimerAccepted: legalDisclaimerAccepted,
+            guestRequests: [],
+            earnings: 0.0,
+            bondfyrFee: 0.20,
+            phoneNumber: phoneNumber,
+            instagramHandle: instagramHandle,
+            snapchatHandle: snapchatHandle,
+            venmoHandle: venmoHandle,
+            zelleInfo: zelleInfo,
+            cashAppHandle: cashAppHandle,
+            acceptsApplePay: acceptsApplePay,
+            collectInPerson: collectInPerson,
+            paymentId: nil,
+            paymentStatus: nil,
+            listingFeePaid: nil,
+            statsProcessed: false,
+            statsProcessedAt: nil,
+            completionStatus: .ongoing,
+            endedAt: nil,
+            endedBy: nil,
+            ratedBy: [:],
+            lastRatedAt: nil,
+            ratingsSubmitted: [:],
+            ratingsRequired: nil,
+            hostCreditAwarded: false,
+            averageRating: 0,
+            totalRatingsCount: 0
+        )
+
         do {
-            let docRef = try await Firestore.firestore().collection("afterparties").addDocument(data: partyData)
-            
+            let data = try Firestore.Encoder().encode(demoAfterparty)
+            let docRef = Firestore.firestore().collection("afterparties").document(demoAfterparty.id)
+            try await docRef.setData(data.merging(["isDemoData": true]) { current, _ in current })
+
             await MainActor.run {
                 self.isSubmittingForPublish = false
                 self.submitSuccess = true
-                
-                // Simulate the payment completion notification for consistent UX
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    NotificationCenter.default.post(name: NSNotification.Name("PaymentCompleted"), object: nil)
-                }
+
+                // Force UI refresh
+                NotificationCenter.default.post(name: NSNotification.Name("RefreshPartyData"), object: nil)
             }
-            
+
             print("✅ Demo party created successfully: \(docRef.documentID)")
         } catch {
             await MainActor.run {

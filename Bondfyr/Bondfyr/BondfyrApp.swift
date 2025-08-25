@@ -13,6 +13,7 @@ import UserNotifications
 import FirebaseMessaging
 import FirebaseAuth
 import FirebaseFirestore
+import GoogleSignIn
 
 @main
 struct BondfyrApp: App {
@@ -21,6 +22,7 @@ struct BondfyrApp: App {
     @StateObject var eventViewModel = EventViewModel()
     @StateObject var cityManager = CityManager.shared
     @StateObject var fcmManager = FCMNotificationManager.shared // NEW: FCM push notifications
+    @StateObject var demoManager = AppStoreDemoManager.shared // NEW: Demo account for App Store review
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     
     // Add state variables to manage navigation
@@ -32,6 +34,16 @@ struct BondfyrApp: App {
 
     init() {
         FirebaseApp.configure()
+        
+        // Configure Google Sign-In
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let plist = NSDictionary(contentsOfFile: path),
+           let clientId = plist["CLIENT_ID"] as? String {
+            GoogleSignIn.GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
+            print("✅ Google Sign-In configured successfully")
+        } else {
+            print("❌ Failed to configure Google Sign-In - GoogleService-Info.plist not found or invalid")
+        }
         
         // Enable Firestore persistence for offline use
         let settings = Firestore.firestore().settings
@@ -75,6 +87,8 @@ struct BondfyrApp: App {
         
         // Listen for party navigation after payment
         setupPartiesNavigationListener()
+        
+        // Demo account will be created only when reviewer signs in with demo credentials
     }
     
     func setupContestPhotoNotificationListener() {
@@ -136,6 +150,7 @@ struct BondfyrApp: App {
                     .environmentObject(tabSelection)
                     .environmentObject(eventViewModel)
                     .environmentObject(cityManager)
+                    .environmentObject(demoManager)
                     .environment(\.pendingEventNavigation, pendingNavigationEventId)
                     .environment(\.pendingEventAction, pendingNavigationAction)
                     .preferredColorScheme(.dark)

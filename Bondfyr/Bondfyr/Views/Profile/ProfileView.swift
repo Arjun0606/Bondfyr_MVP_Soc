@@ -4,6 +4,7 @@ import FirebaseFirestore
 
 struct ProfileView: View {
     @EnvironmentObject private var authViewModel: AuthViewModel
+    @EnvironmentObject private var demoManager: AppStoreDemoManager
     @State private var showingLogoutAlert = false
     @State private var showingDeleteAccountAlert = false
     @State private var showEditProfile = false
@@ -55,6 +56,11 @@ struct ProfileView: View {
                     VStack(spacing: 24) {
                         // Profile Header
                         profileHeader
+                        
+                        // Demo Mode Toggle (App Store Reviewer Only)
+                        if demoManager.isDemoAccount {
+                            demoModeToggle
+                        }
                         
                         // Verification Status Section
                         verificationStatusSection
@@ -474,6 +480,65 @@ struct ProfileView: View {
             }
         }
     }
+    
+    // MARK: - Demo Mode Toggle (App Store Reviewer Only)
+    
+    private var demoModeToggle: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "eye.fill")
+                    .foregroundColor(.orange)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("App Store Review Mode")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    Text(demoManager.hostMode ? "🏠 HOSTING EXPERIENCE" : "🎉 GUEST EXPERIENCE")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.orange)
+                    
+                    Text(demoManager.hostMode ? "Create parties, manage guests" : "Join parties, test guest flow")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .italic()
+                }
+                
+                Spacer()
+                
+                Button(action: {
+                    demoManager.toggleHostGuestMode()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: demoManager.hostMode ? "person.badge.key" : "person.fill")
+                            .foregroundColor(.white)
+                        Text(demoManager.hostMode ? "HOST" : "GUEST")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(demoManager.hostMode ? Color.pink : Color.blue)
+                    .cornerRadius(20)
+                }
+            }
+            
+            Text("Toggle between host and guest experiences for comprehensive app review")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(16)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
 }
 
 // MARK: - Supporting Views
@@ -561,4 +626,5 @@ struct SettingsRowView: View {
             .padding(.vertical, 8)
         }
     }
+
 } 

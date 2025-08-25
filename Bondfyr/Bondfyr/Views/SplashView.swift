@@ -33,6 +33,7 @@ struct SplashView: View {
         }
         .fullScreenCover(isPresented: $navigateToMainView) {
             MainTabView()
+                .environmentObject(AppStoreDemoManager.shared)
         }
         .fullScreenCover(isPresented: $navigateToProfileForm) {
             ProfileFormView()
@@ -127,32 +128,42 @@ struct SplashView: View {
         navigateToProfileForm = false
         navigateToSignIn = false
         
-        // Initialize demo data if in demo mode
-        if DemoDataManager.shared.isDemoMode {
-            Task {
-                await DemoDataManager.shared.createDemoParties()
-            }
-        }
+        // For App Store reviewers: Force clean slate by clearing any existing auth
+        // This ensures the app always starts with the sign-in screen
+        print("🔍 Checking auth status - Current user: \(Auth.auth().currentUser?.uid ?? "none")")
+        print("🔍 AuthViewModel logged in: \(authViewModel.isLoggedIn)")
+        print("🔍 AuthViewModel current user: \(authViewModel.currentUser?.username ?? "none")")
+        
 
+
+        // Normal authentication flow - no force logout
+        // Let users sign in naturally
+        
         // Give the AuthStateListener a moment to update AuthViewModel
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { 
-            if !self.authViewModel.isLoggedIn || Auth.auth().currentUser == nil {
-                self.navigateToSignIn = true
-                return
-            }
-            
-            // User is logged in according to AuthViewModel, now check profile completeness
-            // Ensure currentUser is fetched if not already available
-            if self.authViewModel.currentUser == nil {
+            // Check if we have a complete user profile first
+            if let currentUser = self.authViewModel.currentUser,
+               let username = currentUser.username, !username.isEmpty,
+               let gender = currentUser.gender, !gender.isEmpty,
+               let city = currentUser.city, !city.isEmpty,
+               self.authViewModel.isLoggedIn && Auth.auth().currentUser != nil {
+                // User is fully set up, go to main app
+                print("✅ User fully authenticated, navigating to main app")
+                self.navigateToMainView = true
+            } else if self.authViewModel.isLoggedIn && Auth.auth().currentUser != nil {
+                // User is logged in but needs to complete profile
+                print("⚠️ User logged in but profile incomplete, fetching profile")
                 self.authViewModel.fetchUserProfile { success in 
-                    if !success {
-                        self.navigateToSignIn = true
-                        return
+                    if success {
+                        self.evaluateProfileAndNavigate()
+                    } else {
+                        self.navigateToProfileForm = true
                     }
-                    self.evaluateProfileAndNavigate()
                 }
             } else {
-                self.evaluateProfileAndNavigate()
+                // User not logged in, show sign-in options
+                print("🔑 No user logged in, showing sign-in screen")
+                self.navigateToSignIn = true
             }
         }
     }
@@ -160,6 +171,13 @@ struct SplashView: View {
     private func evaluateProfileAndNavigate() {
         guard let user = authViewModel.currentUser else {
             navigateToProfileForm = true
+            return
+        }
+
+        // DEMO MODE: Skip profile checks for demo account
+        if user.email == "appstore.reviewer@bondfyr.demo" {
+            print("🎭 Demo account detected - bypassing profile checks")
+            navigateToMainView = true
             return
         }
 

@@ -254,15 +254,26 @@ class AuthManager {
     // MARK: - Demo Sign In
     
     func signInWithDemo(completion: @escaping (Result<User, AuthError>) -> Void) {
-        print("🔧 Starting demo sign-in with anonymous auth...")
+        print("🔧 Starting demo sign-in with master demo account...")
         
-        // Create a demo user with anonymous authentication
-        auth.signInAnonymously { [weak self] authResult, error in
+        // Sign in with the dedicated demo account
+        auth.signIn(withEmail: AppStoreDemoManager.demoEmail, password: AppStoreDemoManager.demoPassword) { [weak self] authResult, error in
             guard let self = self else { return }
             
             if let error = error as NSError? {
                 print("❌ Demo sign-in failed with error: \(error.localizedDescription)")
-                print("❌ Error code: \(error.code), domain: \(error.domain)")
+                
+                // If account doesn't exist, create it
+                if error.code == AuthErrorCode.userNotFound.rawValue {
+                    print("🔧 Demo account not found, creating it...")
+                    Task {
+                        await AppStoreDemoManager.shared.createDemoAccountIfNeeded()
+                        // Retry sign-in after creation
+                        self.signInWithDemo(completion: completion)
+                    }
+                    return
+                }
+                
                 let authError = self.handleAuthError(error)
                 completion(.failure(authError))
                 return
@@ -274,21 +285,44 @@ class AuthManager {
                 return
             }
             
-            print("✅ Anonymous auth successful for user: \(user.uid)")
+            print("✅ Demo account sign-in successful for user: \(user.uid)")
             
-            // Create demo user profile in Firestore
+            // Mark this as demo account
+            AppStoreDemoManager.shared.isDemoAccount = true
+            
+            // Create demo user profile in Firestore - App Store Reviewer Account
             let userData: [String: Any] = [
                 "uid": user.uid,
-                "email": "demo@bondfyr.app",
-                "name": "Demo User",
+                "email": "appstore.reviewer@bondfyr.demo",
+                "name": "App Store Reviewer",
                 "photoURL": "",
                 "role": "user",
                 "lastLogin": Timestamp(),
                 "isDemoUser": true,
-                "city": "San Francisco",  // Add required fields
-                "username": "demo_user_\(String(user.uid.suffix(6)))",
-                "dob": Date(timeIntervalSince1970: 946684800), // Jan 1, 2000
-                "phoneNumber": "+1234567890"
+                "isAppStoreReviewer": true,
+                "city": "San Francisco",
+                "username": "AppReviewer",
+                "dob": Date(timeIntervalSince1970: 631152000), // Jan 1, 1990 (33 years old)
+                "phoneNumber": "+1-800-APP-STORE",
+                "gender": "non-binary",
+                "bio": "Demo account for App Store review process",
+                "instagramHandle": "",
+                "snapchatHandle": "",
+                "avatarURL": "",
+                "googleID": user.uid,
+                "isHostVerified": true,
+                "isGuestVerified": true,
+                "hostedPartiesCount": 3,
+                "attendedPartiesCount": 8,
+                "hostRating": 4.8,
+                "guestRating": 4.9,
+                "hostRatingsCount": 15,
+                "guestRatingsCount": 12,
+                "totalEarnings": 150.0,
+                "totalSpent": 89.0,
+                "totalLikesReceived": 24,
+                "createdAt": Timestamp(date: Date()),
+                "lastActiveAt": Timestamp(date: Date())
             ]
             
             print("🔄 Creating demo user profile in Firestore...")
