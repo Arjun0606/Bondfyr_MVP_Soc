@@ -8,6 +8,7 @@
 import SwiftUI
 import GoogleSignIn
 import GoogleSignInSwift
+import AuthenticationServices
 
 struct GoogleSignInView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -17,10 +18,12 @@ struct GoogleSignInView: View {
     @State private var logoScale: CGFloat = 1.0
     @State private var backgroundAnimation = false
     
-    // Email/Password sign-in states
+    // Email/Password authentication states
     @State private var email = ""
     @State private var password = ""
-    @State private var showEmailSignIn = false
+    @State private var confirmPassword = ""
+    @State private var showEmailAuth = false
+    @State private var isSignUpMode = false
 
     @State private var showReviewerGuide = false
     
@@ -135,7 +138,8 @@ struct GoogleSignInView: View {
                 
                 // Sign in buttons with enhanced styling
                 VStack(spacing: 16) {
-                    // Apple Sign-In removed for faster App Store submission
+                    // Apple Sign-In temporarily removed due to system integration issues
+                    // Will be re-added in future update after resolving Error 1000
                     
                     // Custom Google sign-in button
                     Button(action: handleGoogleSignIn) {
@@ -173,8 +177,8 @@ struct GoogleSignInView: View {
                     }
                     .disabled(isLoading)
                     
-                    // Email/Password sign-in button
-                    Button(action: { showEmailSignIn.toggle() }) {
+                    // Email/Password authentication button
+                    Button(action: { showEmailAuth.toggle() }) {
                         HStack(spacing: 12) {
                             Image(systemName: "envelope.circle.fill")
                                 .resizable()
@@ -182,7 +186,7 @@ struct GoogleSignInView: View {
                                 .frame(width: 22, height: 22)
                                 .foregroundColor(.white)
                             
-                            Text("Sign in with Email")
+                            Text("Continue with Email")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.white)
                         }
@@ -224,9 +228,9 @@ struct GoogleSignInView: View {
                         .cornerRadius(12)
                     }
                     
-                    // Email/Password sign-in form
-                    if showEmailSignIn {
-                        emailPasswordForm
+                    // Email/Password authentication form
+                    if showEmailAuth {
+                        emailPasswordAuthForm
                     }
                 }
                 
@@ -306,8 +310,20 @@ struct GoogleSignInView: View {
     
     // MARK: - Email/Password Sign-In Form
     
-    private var emailPasswordForm: some View {
+    private var emailPasswordAuthForm: some View {
         VStack(spacing: 16) {
+            // Header
+            VStack(spacing: 8) {
+                Text(isSignUpMode ? "Create Account" : "Sign In")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text(isSignUpMode ? "Join the Bondfyr community" : "Welcome back to Bondfyr")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+            
             VStack(spacing: 12) {
                 // Email field
                 VStack(alignment: .leading, spacing: 4) {
@@ -332,7 +348,20 @@ struct GoogleSignInView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                 }
                 
-                // Demo account hint
+                // Confirm password field (only for sign up)
+                if isSignUpMode {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Confirm Password")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        SecureField("Confirm your password", text: $confirmPassword)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                }
+                
+                // Demo account hint (only for sign in)
+                if !isSignUpMode {
                 VStack(spacing: 4) {
                     Text("App Store Reviewers:")
                         .font(.caption2)
@@ -345,19 +374,26 @@ struct GoogleSignInView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(.vertical, 4)
+                }
             }
             
-            // Sign in button
-            Button(action: handleEmailPasswordSignIn) {
+            // Sign in/Sign up button
+            Button(action: {
+                if isSignUpMode {
+                    handleEmailPasswordSignUp()
+                } else {
+                    handleEmailPasswordSignIn()
+                }
+            }) {
                 HStack {
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(0.8)
                     } else {
-                        Image(systemName: "envelope.fill")
+                        Image(systemName: isSignUpMode ? "person.badge.plus" : "envelope.fill")
                             .foregroundColor(.white)
-                        Text("Sign In")
+                        Text(isSignUpMode ? "Create Account" : "Sign In")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                     }
@@ -374,13 +410,29 @@ struct GoogleSignInView: View {
                 .cornerRadius(12)
                 .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
             }
-            .disabled(isLoading || email.isEmpty || password.isEmpty)
+            .disabled(isLoading || isFormInvalid)
+            
+            // Toggle between Sign In / Sign Up
+            HStack(spacing: 4) {
+                Text(isSignUpMode ? "Already have an account?" : "Don't have an account?")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+                
+                Button(isSignUpMode ? "Sign In" : "Sign Up") {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isSignUpMode.toggle()
+                        clearForm()
+                    }
+                }
+                .font(.footnote)
+                .fontWeight(.medium)
+                .foregroundColor(.green)
+            }
+            .padding(.top, 8)
             
             // Cancel button
             Button("Cancel") {
-                showEmailSignIn = false
-                email = ""
-                password = ""
+                closeEmailAuth()
             }
             .font(.caption)
             .foregroundColor(.gray)
@@ -396,7 +448,33 @@ struct GoogleSignInView: View {
         .transition(.opacity.combined(with: .scale))
     }
     
-    // MARK: - Email/Password Sign-In Handler
+    // MARK: - Form Validation & Helper Functions
+    
+    private var isFormInvalid: Bool {
+        if email.isEmpty || password.isEmpty {
+            return true
+        }
+        
+        if isSignUpMode {
+            return password != confirmPassword || password.count < 6
+        }
+        
+        return false
+    }
+    
+    private func clearForm() {
+        email = ""
+        password = ""
+        confirmPassword = ""
+    }
+    
+    private func closeEmailAuth() {
+        showEmailAuth = false
+        clearForm()
+        isSignUpMode = false
+    }
+    
+    // MARK: - Email/Password Authentication Handlers
     
     func handleEmailPasswordSignIn() {
         guard !email.isEmpty, !password.isEmpty else { return }
@@ -412,19 +490,87 @@ struct GoogleSignInView: View {
                     self.showError = true
                 } else if success {
                     print("✅ Email/Password sign-in successful!")
-                    // Check if this is the demo account
+                    // Check if this is the demo account (only for specific reviewer email)
                     if self.email == AppStoreDemoManager.demoEmail {
                         AppStoreDemoManager.shared.isDemoAccount = true
                         print("🎭 Demo account signed in successfully")
+                    } else {
+                        // Regular user - ensure demo mode is off
+                        AppStoreDemoManager.shared.isDemoAccount = false
                     }
                     
                     // Post notification that login succeeded
                     NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
                     
                     // Reset form
-                    self.email = ""
-                    self.password = ""
-                    self.showEmailSignIn = false
+                    self.closeEmailAuth()
+                }
+            }
+        }
+    }
+    
+    func handleEmailPasswordSignUp() {
+        guard !email.isEmpty, !password.isEmpty, password == confirmPassword, password.count >= 6 else { 
+            errorMessage = "Please check your password requirements"
+            showError = true
+            return 
+        }
+        
+        isLoading = true
+        
+        authViewModel.signUpWithEmail(email: email, password: password) { success, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                } else if success {
+                    print("✅ Email/Password sign-up successful!")
+                    // Regular user - ensure demo mode is off
+                    AppStoreDemoManager.shared.isDemoAccount = false
+                    
+                    // Post notification that login succeeded
+                    NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
+                    
+                    // Reset form
+                    self.closeEmailAuth()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Apple Sign-In Handler
+    
+    func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                handleAppleSignInCredential(appleIDCredential)
+            }
+        case .failure(let error):
+            DispatchQueue.main.async {
+                self.errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+                self.showError = true
+                self.isLoading = false
+            }
+        }
+    }
+    
+    func handleAppleSignInCredential(_ credential: ASAuthorizationAppleIDCredential) {
+        isLoading = true
+        
+        authViewModel.signInWithApple(credential: credential) { success, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                } else if success {
+                    print("✅ Apple Sign-In successful!")
+                    // Post notification that login succeeded
+                    NotificationCenter.default.post(name: NSNotification.Name("UserDidLogin"), object: nil)
                 }
             }
         }

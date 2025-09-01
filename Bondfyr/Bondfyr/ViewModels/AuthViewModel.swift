@@ -11,6 +11,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 import GoogleSignIn
+import AuthenticationServices
 
 class AuthViewModel: ObservableObject {
     @Published var currentUser: AppUser?
@@ -217,8 +218,8 @@ class AuthViewModel: ObservableObject {
         }
     }
     
-    // Apple Sign-In removed for App Store submission
-    /*func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Bool, Error?) -> Void) {
+    // Apple Sign-In for App Store compliance (Guideline 4.8)
+    func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Bool, Error?) -> Void) {
         DispatchQueue.main.async {
             self.isLoading = true
             self.error = nil
@@ -269,7 +270,7 @@ class AuthViewModel: ObservableObject {
                 completion(false, error)
             }
         }
-    }*/
+    }
     
 
     
@@ -380,6 +381,84 @@ class AuthViewModel: ObservableObject {
                         AppStoreDemoManager.shared.isDemoAccount = false
                         AppStoreDemoManager.shared.hostMode = true
                     }
+                }
+                
+                completion(true, nil)
+            }
+        }
+    }
+    
+    // MARK: - Email/Password Sign-Up
+    
+    func signUpWithEmail(email: String, password: String, completion: @escaping (Bool, Error?) -> Void) {
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.error = nil
+        }
+        
+        auth.createUser(withEmail: email, password: password) { [weak self] authResult, error in
+            guard let self = self else {
+                completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+            
+            if let error = error {
+                print("❌ Email/Password sign-up failed: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.error = error.localizedDescription
+                }
+                completion(false, error)
+                return
+            }
+            
+            guard let user = authResult?.user else {
+                let error = NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user returned"])
+                DispatchQueue.main.async {
+                    self.error = "Sign-up failed"
+                }
+                completion(false, error)
+                return
+            }
+            
+            print("✅ Email/Password sign-up successful for user: \(user.uid)")
+            
+            // Create basic user profile in Firestore
+            let userData: [String: Any] = [
+                "uid": user.uid,
+                "name": "", // Will be filled during profile completion
+                "email": user.email ?? email,
+                "dob": Timestamp(date: Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()),
+                "phoneNumber": "",
+                "role": "user",
+                "createdAt": Timestamp(date: Date()),
+                "isHostVerified": false,
+                "isGuestVerified": false,
+                "hostedPartiesCount": 0,
+                "attendedPartiesCount": 0,
+                "hostRating": 0.0,
+                "guestRating": 0.0,
+                "hostRatingsCount": 0,
+                "guestRatingsCount": 0
+            ]
+            
+            self.db.collection("users").document(user.uid).setData(userData) { error in
+                if let error = error {
+                    print("❌ Error creating user profile: \(error)")
+                    DispatchQueue.main.async {
+                        self.error = "Failed to create user profile"
+                    }
+                    completion(false, error)
+                    return
+                }
+                
+                print("✅ User profile created successfully")
+                DispatchQueue.main.async {
+                    self.isLoggedIn = true
+                    self.error = nil
                 }
                 
                 completion(true, nil)
@@ -769,11 +848,13 @@ class AuthViewModel: ObservableObject {
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
         guard let user = Auth.auth().currentUser,
-              let email = user.email,
-              let displayName = user.displayName else {
+              let email = user.email else {
             completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user signed in"])))
             return
         }
+        
+        // For email/password users, displayName might be nil initially
+        let displayName = user.displayName ?? ""
         
         let uid = user.uid
         
