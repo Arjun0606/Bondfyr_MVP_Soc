@@ -138,8 +138,19 @@ struct GoogleSignInView: View {
                 
                 // Sign in buttons with enhanced styling
                 VStack(spacing: 16) {
-                    // Apple Sign-In temporarily removed due to system integration issues
-                    // Will be re-added in future update after resolving Error 1000
+                    // Apple Sign-In button for App Store Guideline 4.8 compliance
+                    SignInWithAppleButton(
+                        onRequest: { request in
+                            AuthManager.shared.prepareAppleSignInRequest(request)
+                        },
+                        onCompletion: handleAppleSignInResult
+                    )
+                    .signInWithAppleButtonStyle(.black)
+                    .frame(height: 55)
+                    .frame(maxWidth: 300)
+                    .cornerRadius(12)
+                    .shadow(color: Color.white.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .disabled(isLoading)
                     
                     // Custom Google sign-in button
                     Button(action: handleGoogleSignIn) {

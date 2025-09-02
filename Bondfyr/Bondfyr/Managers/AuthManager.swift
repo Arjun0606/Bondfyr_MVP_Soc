@@ -11,6 +11,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import GoogleSignIn
 import AuthenticationServices
+import CryptoKit
 
 enum AuthError: Error {
     case userNotFound
@@ -34,6 +35,8 @@ class AuthManager {
     static let shared = AuthManager()
     private let auth = Auth.auth()
     private let db = Firestore.firestore()
+    // Store the current nonce so that the same value is used for the request and verification
+    private var currentNonce: String?
     
     private init() {}
     
@@ -202,8 +205,17 @@ class AuthManager {
     
     // MARK: - Apple Sign In
     
+    // Prepare the Apple Sign-In request with scopes and a cryptographic nonce
+    func prepareAppleSignInRequest(_ request: ASAuthorizationAppleIDRequest) {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+    }
+
     func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Result<User, AuthError>) -> Void) {
-        guard let nonce = randomNonceString() else {
+        // Use the same nonce that was set on the request
+        guard let nonce = currentNonce else {
             completion(.failure(.appleSignInFailed))
             return
         }
@@ -339,7 +351,7 @@ class AuthManager {
     }
     
     // Helper function for Apple Sign In nonce
-    private func randomNonceString(length: Int = 32) -> String? {
+    private func randomNonceString(length: Int = 32) -> String {
         precondition(length > 0)
         let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
         var result = ""
@@ -368,6 +380,12 @@ class AuthManager {
         }
         
         return result
+    }
+
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashed = SHA256.hash(data: inputData)
+        return hashed.compactMap { String(format: "%02x", $0) }.joined()
     }
     
     // MARK: - Sign Out
