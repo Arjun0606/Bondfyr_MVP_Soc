@@ -975,7 +975,20 @@ class AuthViewModel: ObservableObject {
                             }
                             completion(.success(()))
                         } else {
-                            completion(.failure(NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to refresh profile data"])))
+                            // Be resilient: if Firestore fetch fails (e.g., App Check issues),
+                            // consider the update successful and attempt a background refresh later.
+                            DispatchQueue.main.async {
+                                // Best-effort local completion based on provided fields
+                                let hasUsername = (username?.isEmpty == false)
+                                let hasGender = (gender?.isEmpty == false)
+                                let hasCity = (city?.isEmpty == false)
+                                self?.isProfileComplete = hasUsername && hasGender && hasCity
+                            }
+                            // Trigger a delayed refresh without blocking the UI
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                self?.fetchUserProfile { _ in }
+                            }
+                            completion(.success(()))
                         }
                     }
                 }
