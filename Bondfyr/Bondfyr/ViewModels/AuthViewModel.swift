@@ -217,7 +217,7 @@ class AuthViewModel: ObservableObject {
             }
         }
     }
-    
+
     // Apple Sign-In for App Store compliance (Guideline 4.8)
     func signInWithApple(credential: ASAuthorizationAppleIDCredential, completion: @escaping (Bool, Error?) -> Void) {
         DispatchQueue.main.async {
@@ -228,9 +228,9 @@ class AuthViewModel: ObservableObject {
         AuthManager.shared.signInWithApple(credential: credential) { [weak self] result in
             guard let self = self else {
                 completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
-                return
-            }
-            
+            return
+        }
+        
             DispatchQueue.main.async {
                 self.isLoading = false
             }
@@ -468,70 +468,70 @@ class AuthViewModel: ObservableObject {
     
     func fetchUserProfile(completion: @escaping (Bool) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
-            completion(false)
-            return
-        }
-        
+                completion(false)
+                return
+            }
+            
         let db = Firestore.firestore()
         func handleSnapshot(_ data: [String: Any]?) -> Bool {
             guard let data = data,
-                  let name = data["name"] as? String,
-                  let email = data["email"] as? String,
-                  let dobTimestamp = data["dob"] as? Timestamp,
+               let name = data["name"] as? String,
+               let email = data["email"] as? String,
+               let dobTimestamp = data["dob"] as? Timestamp,
                   let phoneNumber = data["phoneNumber"] as? String else {
                 return false
             }
+                
+                let dob = dobTimestamp.dateValue()
+                let roleString = data["role"] as? String ?? "user"
+                let role = AppUser.UserRole(rawValue: roleString) ?? .user
+                let username = data["username"] as? String
+                let gender = data["gender"] as? String
+                let bio = data["bio"] as? String
+                let instagramHandle = data["instagramHandle"] as? String
+                let snapchatHandle = data["snapchatHandle"] as? String
+                let avatarURL = data["avatarURL"] as? String
+                let googleID = data["googleID"] as? String
+                let city = data["city"] as? String
+                
+                // --- Verification & Reputation ---
+                let isHostVerified = data["isHostVerified"] as? Bool ?? false
+                let isGuestVerified = data["isGuestVerified"] as? Bool ?? false
+                let hostedPartiesCount = data["hostedPartiesCount"] as? Int ?? 0
+                let attendedPartiesCount = data["attendedPartiesCount"] as? Int ?? 0
+                let hostRating = data["hostRating"] as? Double ?? 0.0
+                let guestRating = data["guestRating"] as? Double ?? 0.0
+                let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
+                let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
+                let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
+                let successfulPartiesCount = data["successfulPartiesCount"] as? Int ?? 0
 
-            let dob = dobTimestamp.dateValue()
-            let roleString = data["role"] as? String ?? "user"
-            let role = AppUser.UserRole(rawValue: roleString) ?? .user
-            let username = data["username"] as? String
-            let gender = data["gender"] as? String
-            let bio = data["bio"] as? String
-            let instagramHandle = data["instagramHandle"] as? String
-            let snapchatHandle = data["snapchatHandle"] as? String
-            let avatarURL = data["avatarURL"] as? String
-            let googleID = data["googleID"] as? String
-            let city = data["city"] as? String
-
-            // --- Verification & Reputation ---
-            let isHostVerified = data["isHostVerified"] as? Bool ?? false
-            let isGuestVerified = data["isGuestVerified"] as? Bool ?? false
-            let hostedPartiesCount = data["hostedPartiesCount"] as? Int ?? 0
-            let attendedPartiesCount = data["attendedPartiesCount"] as? Int ?? 0
-            let hostRating = data["hostRating"] as? Double ?? 0.0
-            let guestRating = data["guestRating"] as? Double ?? 0.0
-            let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
-            let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
-            let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
-            let successfulPartiesCount = data["successfulPartiesCount"] as? Int ?? 0
-
-            let user = AppUser(
-                uid: uid,
-                name: name,
-                email: email,
-                dob: dob,
-                phoneNumber: phoneNumber,
-                role: role,
-                username: username,
-                gender: gender,
-                bio: bio,
-                instagramHandle: instagramHandle,
-                snapchatHandle: snapchatHandle,
-                avatarURL: avatarURL,
-                googleID: googleID,
-                city: city,
-                partiesHosted: hostedPartiesCount,
-                partiesAttended: attendedPartiesCount,
-                isHostVerified: isHostVerified,
-                isGuestVerified: isGuestVerified
-            )
-
-            DispatchQueue.main.async {
+                let user = AppUser(
+                    uid: uid,
+                    name: name,
+                    email: email,
+                    dob: dob,
+                    phoneNumber: phoneNumber,
+                    role: role,
+                    username: username,
+                    gender: gender,
+                    bio: bio,
+                    instagramHandle: instagramHandle,
+                    snapchatHandle: snapchatHandle,
+                    avatarURL: avatarURL,
+                    googleID: googleID,
+                    city: city,
+                    partiesHosted: hostedPartiesCount,
+                    partiesAttended: attendedPartiesCount,
+                    isHostVerified: isHostVerified,
+                    isGuestVerified: isGuestVerified
+                )
+                
+                DispatchQueue.main.async {
                 self.currentUser = user
-                let hasUsername = username?.isEmpty == false
-                let hasGender = gender?.isEmpty == false
-                let hasCity = city?.isEmpty == false
+                    let hasUsername = username?.isEmpty == false
+                    let hasGender = gender?.isEmpty == false
+                    let hasCity = city?.isEmpty == false
                 self.isProfileComplete = hasUsername && hasGender && hasCity
             }
             return true
@@ -540,15 +540,28 @@ class AuthViewModel: ObservableObject {
         // Try server first
         db.collection("users").document(uid).getDocument(source: .default) { [weak self] snapshot, error in
             if let data = snapshot?.data(), handleSnapshot(data) {
-                completion(true)
+                    completion(true)
                 return
-            }
+                }
             // Fallback to cache to avoid blocking on App Check/Network
             db.collection("users").document(uid).getDocument(source: .cache) { snapshot, _ in
                 if handleSnapshot(snapshot?.data()) {
                     completion(true)
-                } else {
-                    completion(false)
+            } else {
+                    // Final fallback to shallow local profile so UI doesn't appear empty
+                    if let shallow = UserDefaults.standard.dictionary(forKey: "localProfile_\(uid)") {
+                        var data: [String: Any] = [
+                            "name": shallow["name"] as? String ?? "",
+                            "email": Auth.auth().currentUser?.email ?? "",
+                            "dob": Timestamp(date: Date(timeIntervalSince1970: 631152000)),
+                            "phoneNumber": ""
+                        ]
+                        for (k, v) in shallow { data[k] = v }
+                        _ = handleSnapshot(data)
+                        completion(true)
+                    } else {
+                completion(false)
+                    }
                 }
             }
         }
@@ -980,7 +993,7 @@ class AuthViewModel: ObservableObject {
                     }
                 }
             }
-
+            
             // Use appropriate Firestore operation
             let operation: (([String: Any], @escaping (Error?) -> Void) -> Void) = documentExists ? 
                 { data, completion in
@@ -1000,6 +1013,18 @@ class AuthViewModel: ObservableObject {
                     
                     completion(.failure(error))
                 } else {
+                    // Persist a shallow local copy for fast restore on next login
+                    var local: [String: Any] = [:]
+                    if let username = username { local["username"] = username }
+                    if let gender = gender { local["gender"] = gender }
+                    if let city = city { local["city"] = city }
+                    if let bio = bio { local["bio"] = bio }
+                    if let instagramHandle = instagramHandle { local["instagramHandle"] = instagramHandle }
+                    if let snapchatHandle = snapchatHandle { local["snapchatHandle"] = snapchatHandle }
+                    if let avatarURL = avatarURL { local["avatarURL"] = avatarURL }
+                    UserDefaults.standard.set(local, forKey: "localProfile_\(uid)")
+                    UserDefaults.standard.set(true, forKey: "profileCompleted_\(uid)")
+                    
                     
                     // Refresh user profile to get updated data
                     self?.fetchUserProfile { success in
