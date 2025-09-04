@@ -475,66 +475,66 @@ class AuthViewModel: ObservableObject {
         let db = Firestore.firestore()
         func handleSnapshot(_ data: [String: Any]?) -> Bool {
             guard let data = data,
-               let name = data["name"] as? String,
-               let email = data["email"] as? String,
-               let dobTimestamp = data["dob"] as? Timestamp,
-               let phoneNumber = data["phoneNumber"] as? String {
-                
-                let dob = dobTimestamp.dateValue()
-                let roleString = data["role"] as? String ?? "user"
-                let role = AppUser.UserRole(rawValue: roleString) ?? .user
-                let username = data["username"] as? String
-                let gender = data["gender"] as? String
-                let bio = data["bio"] as? String
-                let instagramHandle = data["instagramHandle"] as? String
-                let snapchatHandle = data["snapchatHandle"] as? String
-                let avatarURL = data["avatarURL"] as? String
-                let googleID = data["googleID"] as? String
-                let city = data["city"] as? String
-                
-                // --- Verification & Reputation ---
-                let isHostVerified = data["isHostVerified"] as? Bool ?? false
-                let isGuestVerified = data["isGuestVerified"] as? Bool ?? false
-                let hostedPartiesCount = data["hostedPartiesCount"] as? Int ?? 0
-                let attendedPartiesCount = data["attendedPartiesCount"] as? Int ?? 0
-                let hostRating = data["hostRating"] as? Double ?? 0.0
-                let guestRating = data["guestRating"] as? Double ?? 0.0
-                let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
-                let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
-                let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
-                let successfulPartiesCount = data["successfulPartiesCount"] as? Int ?? 0
-
-                let user = AppUser(
-                    uid: uid,
-                    name: name,
-                    email: email,
-                    dob: dob,
-                    phoneNumber: phoneNumber,
-                    role: role,
-                    username: username,
-                    gender: gender,
-                    bio: bio,
-                    instagramHandle: instagramHandle,
-                    snapchatHandle: snapchatHandle,
-                    avatarURL: avatarURL,
-                    googleID: googleID,
-                    city: city,
-                    partiesHosted: hostedPartiesCount,
-                    partiesAttended: attendedPartiesCount,
-                    isHostVerified: isHostVerified,
-                    isGuestVerified: isGuestVerified
-                )
-                
-                DispatchQueue.main.async {
-                    self?.currentUser = user
-                    let hasUsername = username?.isEmpty == false
-                    let hasGender = gender?.isEmpty == false
-                    let hasCity = city?.isEmpty == false
-                    self?.isProfileComplete = hasUsername && hasGender && hasCity
-                }
-                return true
+                  let name = data["name"] as? String,
+                  let email = data["email"] as? String,
+                  let dobTimestamp = data["dob"] as? Timestamp,
+                  let phoneNumber = data["phoneNumber"] as? String else {
+                return false
             }
-            return false
+
+            let dob = dobTimestamp.dateValue()
+            let roleString = data["role"] as? String ?? "user"
+            let role = AppUser.UserRole(rawValue: roleString) ?? .user
+            let username = data["username"] as? String
+            let gender = data["gender"] as? String
+            let bio = data["bio"] as? String
+            let instagramHandle = data["instagramHandle"] as? String
+            let snapchatHandle = data["snapchatHandle"] as? String
+            let avatarURL = data["avatarURL"] as? String
+            let googleID = data["googleID"] as? String
+            let city = data["city"] as? String
+
+            // --- Verification & Reputation ---
+            let isHostVerified = data["isHostVerified"] as? Bool ?? false
+            let isGuestVerified = data["isGuestVerified"] as? Bool ?? false
+            let hostedPartiesCount = data["hostedPartiesCount"] as? Int ?? 0
+            let attendedPartiesCount = data["attendedPartiesCount"] as? Int ?? 0
+            let hostRating = data["hostRating"] as? Double ?? 0.0
+            let guestRating = data["guestRating"] as? Double ?? 0.0
+            let hostRatingsCount = data["hostRatingsCount"] as? Int ?? 0
+            let guestRatingsCount = data["guestRatingsCount"] as? Int ?? 0
+            let totalLikesReceived = data["totalLikesReceived"] as? Int ?? 0
+            let successfulPartiesCount = data["successfulPartiesCount"] as? Int ?? 0
+
+            let user = AppUser(
+                uid: uid,
+                name: name,
+                email: email,
+                dob: dob,
+                phoneNumber: phoneNumber,
+                role: role,
+                username: username,
+                gender: gender,
+                bio: bio,
+                instagramHandle: instagramHandle,
+                snapchatHandle: snapchatHandle,
+                avatarURL: avatarURL,
+                googleID: googleID,
+                city: city,
+                partiesHosted: hostedPartiesCount,
+                partiesAttended: attendedPartiesCount,
+                isHostVerified: isHostVerified,
+                isGuestVerified: isGuestVerified
+            )
+
+            DispatchQueue.main.async {
+                self.currentUser = user
+                let hasUsername = username?.isEmpty == false
+                let hasGender = gender?.isEmpty == false
+                let hasCity = city?.isEmpty == false
+                self.isProfileComplete = hasUsername && hasGender && hasCity
+            }
+            return true
         }
         
         // Try server first
