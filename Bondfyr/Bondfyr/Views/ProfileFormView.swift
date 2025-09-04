@@ -141,7 +141,7 @@ struct ProfileFormView: View {
                 Button(action: {
                     // Cancel profile: sign out and return to sign-in so user can choose another provider
                     authViewModel.logout()
-                    NotificationCenter.default.post(name: NSNotification.Name("UserProfileCancelled"), object: nil))
+                    NotificationCenter.default.post(name: NSNotification.Name("UserProfileCancelled"), object: nil)
                     dismiss()
                 }) {
                     HStack(spacing: 6) {
