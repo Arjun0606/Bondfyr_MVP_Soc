@@ -276,6 +276,27 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - Email/Password Sign-In
     
+    private func fetchSignInMethods(for email: String, completion: @escaping ([String]) -> Void) {
+        auth.fetchSignInMethods(forEmail: email) { methods, _ in
+            completion(methods ?? [])
+        }
+    }
+    
+    func resetPassword(email: String, completion: @escaping (Bool, String?) -> Void) {
+        guard !email.isEmpty else {
+            completion(false, "Enter your email to reset password")
+            return
+        }
+        AuthManager.shared.resetPassword(for: email) { result in
+            switch result {
+            case .success:
+                completion(true, nil)
+            case .failure:
+                completion(false, "Couldn't send reset email. Check the address or try later.")
+            }
+        }
+    }
+    
     func signInWithEmail(email: String, password: String, completion: @escaping (Bool, Error?) -> Void) {
         DispatchQueue.main.async {
             self.isLoading = true
@@ -292,12 +313,21 @@ class AuthViewModel: ObservableObject {
                 self.isLoading = false
             }
             
-            if let error = error {
-                print("❌ Email/Password sign-in failed: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.error = error.localizedDescription
+            if let error = error as NSError? {
+                self.fetchSignInMethods(for: email) { methods in
+                    var friendly = error.localizedDescription
+                    if methods.contains("google.com") || methods.contains("apple.com") {
+                        if !methods.contains("password") {
+                            friendly = "This email is registered via \(methods.contains("google.com") ? "Google" : "Apple"). Please continue with that provider first. You can add a password later in settings."
+                        }
+                    } else if error.code == AuthErrorCode.userNotFound.rawValue {
+                        friendly = "Account not found. Try Sign Up or check your email."
+                    } else if error.code == AuthErrorCode.wrongPassword.rawValue {
+                        friendly = "Incorrect password. Use ‘Forgot Password?’ to reset."
+                    }
+                    DispatchQueue.main.async { self.error = friendly }
+                    completion(false, NSError(domain: "auth", code: error.code, userInfo: [NSLocalizedDescriptionKey: friendly]))
                 }
-                completion(false, error)
                 return
             }
             
@@ -357,27 +387,10 @@ class AuthViewModel: ObservableObject {
                     self.currentUser = appUser
                     self.isLoggedIn = true
                     self.error = nil
-                    
-                    // Check if this is the demo account
                     if user.email == AppStoreDemoManager.demoEmail {
                         AppStoreDemoManager.shared.isDemoAccount = true
-                        print("🎭 Demo account detected and logged in")
-                        print("🎭 Setting up complete App Store reviewer experience...")
-                        
-                        // Force create fresh demo parties on every login for consistent review experience
-                        Task {
-                            // Wait a moment for user profile to be fully loaded
-                            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-                            await AppStoreDemoManager.shared.createDemoParties()
-                            print("🎭 Demo parties ready - reviewer can test both HOST and GUEST experiences")
-                            
-                            // Force refresh the UI
-                            DispatchQueue.main.async {
-                                NotificationCenter.default.post(name: NSNotification.Name("RefreshPartyData"), object: nil)
-                            }
-                        }
+                        Task { try? await Task.sleep(nanoseconds: 1_000_000_000); await AppStoreDemoManager.shared.createDemoParties(); DispatchQueue.main.async { NotificationCenter.default.post(name: NSNotification.Name("RefreshPartyData"), object: nil) } }
                     } else {
-                        // Ensure demo mode is OFF for non-reviewer accounts
                         AppStoreDemoManager.shared.isDemoAccount = false
                         AppStoreDemoManager.shared.hostMode = true
                     }
@@ -396,72 +409,77 @@ class AuthViewModel: ObservableObject {
             self.error = nil
         }
         
-        auth.createUser(withEmail: email, password: password) { [weak self] authResult, error in
-            guard let self = self else {
-                completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
-                return
-            }
-            
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
-            
-            if let error = error {
-                print("❌ Email/Password sign-up failed: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.error = error.localizedDescription
+        fetchSignInMethods(for: email) { [weak self] methods in
+            guard let self = self else { return }
+            if !methods.isEmpty {
+                var message = "Email already in use."
+                if methods.contains("google.com") || methods.contains("apple.com") {
+                    message = "This email is registered via \(methods.contains("google.com") ? "Google" : "Apple"). Please sign in with that provider, then add a password in settings."
+                } else if methods.contains("password") {
+                    message = "An account with this email already exists. Try Sign In or Forgot Password."
                 }
-                completion(false, error)
+                DispatchQueue.main.async { self.isLoading = false; self.error = message }
+                completion(false, NSError(domain: "auth", code: AuthErrorCode.emailAlreadyInUse.rawValue, userInfo: [NSLocalizedDescriptionKey: message]))
                 return
             }
             
-            guard let user = authResult?.user else {
-                let error = NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user returned"])
-                DispatchQueue.main.async {
-                    self.error = "Sign-up failed"
+            self.auth.createUser(withEmail: email, password: password) { [weak self] authResult, error in
+                guard let self = self else {
+                    completion(false, NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "Auth view model deallocated"]))
+                    return
                 }
-                completion(false, error)
-                return
-            }
-            
-            print("✅ Email/Password sign-up successful for user: \(user.uid)")
-            
-            // Create basic user profile in Firestore
-            let userData: [String: Any] = [
-                "uid": user.uid,
-                "name": "", // Will be filled during profile completion
-                "email": user.email ?? email,
-                "dob": Timestamp(date: Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()),
-                "phoneNumber": "",
-                "role": "user",
-                "createdAt": Timestamp(date: Date()),
-                "isHostVerified": false,
-                "isGuestVerified": false,
-                "hostedPartiesCount": 0,
-                "attendedPartiesCount": 0,
-                "hostRating": 0.0,
-                "guestRating": 0.0,
-                "hostRatingsCount": 0,
-                "guestRatingsCount": 0
-            ]
-            
-            self.db.collection("users").document(user.uid).setData(userData) { error in
-                if let error = error {
-                    print("❌ Error creating user profile: \(error)")
-                    DispatchQueue.main.async {
-                        self.error = "Failed to create user profile"
+                
+                DispatchQueue.main.async { self.isLoading = false }
+                
+                if let error = error as NSError? {
+                    var friendly = error.localizedDescription
+                    if error.code == AuthErrorCode.invalidEmail.rawValue {
+                        friendly = "Please enter a valid email address."
+                    } else if error.code == AuthErrorCode.weakPassword.rawValue {
+                        friendly = "Choose a stronger password (min 8 chars, mix letters and numbers)."
+                    } else if error.code == AuthErrorCode.emailAlreadyInUse.rawValue {
+                        friendly = "Email already in use. Try Sign In or Forgot Password."
                     }
+                    DispatchQueue.main.async { self.error = friendly }
+                    completion(false, NSError(domain: "auth", code: error.code, userInfo: [NSLocalizedDescriptionKey: friendly]))
+                    return
+                }
+                
+                guard let user = authResult?.user else {
+                    let error = NSError(domain: "auth", code: 0, userInfo: [NSLocalizedDescriptionKey: "No user returned"])
+                    DispatchQueue.main.async { self.error = "Sign-up failed" }
                     completion(false, error)
                     return
                 }
                 
-                print("✅ User profile created successfully")
-                DispatchQueue.main.async {
-                    self.isLoggedIn = true
-                    self.error = nil
-                }
+                let userData: [String: Any] = [
+                    "uid": user.uid,
+                    "name": "",
+                    "email": user.email ?? email,
+                    "dob": Timestamp(date: Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()),
+                    "phoneNumber": "",
+                    "role": "user",
+                    "createdAt": Timestamp(date: Date()),
+                    "isHostVerified": false,
+                    "isGuestVerified": false,
+                    "hostedPartiesCount": 0,
+                    "attendedPartiesCount": 0,
+                    "hostRating": 0.0,
+                    "guestRating": 0.0,
+                    "hostRatingsCount": 0,
+                    "guestRatingsCount": 0
+                ]
                 
-                completion(true, nil)
+                self.db.collection("users").document(user.uid).setData(userData) { error in
+                    if let error = error {
+                        DispatchQueue.main.async { self.error = "Failed to create user profile" }
+                        completion(false, error)
+                        return
+                    }
+                    
+                    DispatchQueue.main.async { self.isLoggedIn = true; self.error = nil }
+                    completion(true, nil)
+                }
             }
         }
     }

@@ -15,7 +15,8 @@ struct GoogleSignInView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showError = false
-    @State private var logoScale: CGFloat = 1.0
+    @St
+    ate private var logoScale: CGFloat = 1.0
     @State private var backgroundAnimation = false
     
     // Email/Password authentication states
@@ -423,6 +424,34 @@ struct GoogleSignInView: View {
             }
             .disabled(isLoading || isFormInvalid)
             
+            // Forgot password
+            if !isSignUpMode {
+                Button(action: {
+                    guard !email.isEmpty else {
+                        self.errorMessage = "Enter your email above to reset your password"
+                        self.showError = true
+                        return
+                    }
+                    isLoading = true
+                    authViewModel.resetPassword(email: email) { ok, msg in
+                        DispatchQueue.main.async {
+                            self.isLoading = false
+                            if ok {
+                                self.errorMessage = "Password reset email sent. Check your inbox."
+                            } else {
+                                self.errorMessage = msg ?? "Couldn't send reset email."
+                            }
+                            self.showError = true
+                        }
+                    }
+                }) {
+                    Text("Forgot Password?")
+                        .font(.footnote)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                }
+            }
+
             // Toggle between Sign In / Sign Up
             HStack(spacing: 4) {
                 Text(isSignUpMode ? "Already have an account?" : "Don't have an account?")
