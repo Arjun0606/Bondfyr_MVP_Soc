@@ -50,8 +50,9 @@ struct BondfyrApp: App {
         settings.isPersistenceEnabled = true
         Firestore.firestore().settings = settings
         
-        // Enable App Check using DeviceCheck provider (matches current Firebase registration)
-        AppCheck.setAppCheckProviderFactory(DeviceCheckProviderFactory())
+        // Temporarily disable explicit App Check provider to avoid attestation 403s during submission
+        // Re-enable after DeviceCheck/App Attest fully propagates
+        // AppCheck.setAppCheckProviderFactory(DeviceCheckProviderFactory())
         
         // FIXED: Use new notification system instead of broken one
         Task {

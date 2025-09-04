@@ -73,6 +73,10 @@ struct SplashView: View {
             // Listen for login notification from GoogleSignInView
             checkAuthStatus()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserProfileCompleted"))) { _ in
+            // Navigate immediately when profile is completed
+            self.navigateToMainView = true
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserDidLogout"))) { _ in
             // Listen for logout notification
             // First ensure we're not showing other screens

@@ -975,17 +975,35 @@ class AuthViewModel: ObservableObject {
                             }
                             completion(.success(()))
                         } else {
-                            // Be resilient: if Firestore fetch fails (e.g., App Check issues),
-                            // consider the update successful and attempt a background refresh later.
+                            // Be resilient: if Firestore fetch fails (e.g., App Check hiccup),
+                            // mark completion locally and proceed. UI will refresh once Firestore is reachable.
                             DispatchQueue.main.async {
-                                // Best-effort local completion based on provided fields
-                                let hasUsername = (username?.isEmpty == false)
-                                let hasGender = (gender?.isEmpty == false)
-                                let hasCity = (city?.isEmpty == false)
-                                self?.isProfileComplete = hasUsername && hasGender && hasCity
+                                // Create a minimal local currentUser so navigation can continue
+                                if let uid = Auth.auth().currentUser?.uid, let email = Auth.auth().currentUser?.email {
+                                    let localUser = AppUser(
+                                        uid: uid,
+                                        name: "",
+                                        email: email,
+                                        dob: dob ?? Date(timeIntervalSince1970: 631152000),
+                                        phoneNumber: "",
+                                        role: .user,
+                                        username: username ?? "",
+                                        gender: gender,
+                                        bio: bio,
+                                        instagramHandle: instagramHandle,
+                                        snapchatHandle: snapchatHandle,
+                                        avatarURL: avatarURL,
+                                        city: city
+                                    )
+                                    self?.currentUser = localUser
+                                    let hasUsername = (username?.isEmpty == false)
+                                    let hasGender = (gender?.isEmpty == false)
+                                    let hasCity = (city?.isEmpty == false)
+                                    self?.isProfileComplete = hasUsername && hasGender && hasCity
+                                }
                             }
-                            // Trigger a delayed refresh without blocking the UI
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            // Background refresh later
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                                 self?.fetchUserProfile { _ in }
                             }
                             completion(.success(()))
