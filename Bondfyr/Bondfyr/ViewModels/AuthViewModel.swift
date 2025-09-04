@@ -943,6 +943,37 @@ class AuthViewModel: ObservableObject {
                 ]
             }
             
+            // Enforce unique username (case-insensitive)
+            if let desiredUsername = username, !desiredUsername.isEmpty {
+                let lower = desiredUsername.lowercased()
+                let usernamesRef = self.db.collection("usernames").document(lower)
+                self.db.runTransaction({ (txn, errPtr) -> Any? in
+                    do {
+                        let snap = try txn.getDocument(usernamesRef)
+                        if let data = snap.data(), let existingUid = data["uid"] as? String, existingUid != uid {
+                            // Username taken
+                            errPtr?.pointee = NSError(domain: "auth", code: 409, userInfo: [NSLocalizedDescriptionKey: "Username already taken"])
+                            return nil
+                        }
+                        // Reserve/assign to current user
+                        txn.setData(["uid": uid, "updatedAt": Timestamp()], forDocument: usernamesRef, merge: true)
+                    } catch {
+                        // If not found, set it
+                        txn.setData(["uid": uid, "updatedAt": Timestamp()], forDocument: usernamesRef)
+                    }
+                    return nil
+                }) { _, txnError in
+                    if let txnError = txnError {
+                        DispatchQueue.main.async {
+                            self.isLoading = false
+                            self.error = txnError.localizedDescription
+                            completion(.failure(txnError))
+                        }
+                        return
+                    }
+                }
+            }
+
             // Use appropriate Firestore operation
             let operation: (([String: Any], @escaping (Error?) -> Void) -> Void) = documentExists ? 
                 { data, completion in
