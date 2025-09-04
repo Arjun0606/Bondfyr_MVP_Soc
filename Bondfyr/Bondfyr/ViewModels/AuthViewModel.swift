@@ -720,6 +720,9 @@ class AuthViewModel: ObservableObject {
             }
         }
         
+        // Also prepare to release the username reservation if any
+        let reservedUsernameLower = self.currentUser?.username?.lowercased()
+
         group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
             
@@ -734,6 +737,16 @@ class AuthViewModel: ObservableObject {
                     
                 }
                 
+                // Release username reservation if owned by this uid
+                if let usernameLower = reservedUsernameLower, !usernameLower.isEmpty {
+                    let usernameRef = self.db.collection("usernames").document(usernameLower)
+                    usernameRef.getDocument { snapshot, _ in
+                        if let data = snapshot?.data(), let owner = data["uid"] as? String, owner == uid {
+                            usernameRef.delete(completion: nil)
+                        }
+                    }
+                }
+
                 // Now delete Firebase Auth user
                 user.delete { [weak self] authError in
                     guard let self = self else { return }
