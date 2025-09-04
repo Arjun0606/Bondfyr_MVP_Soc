@@ -15,8 +15,7 @@ struct GoogleSignInView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showError = false
-    @St
-    ate private var logoScale: CGFloat = 1.0
+    @State private var logoScale: CGFloat = 1.0
     @State private var backgroundAnimation = false
     
     // Email/Password authentication states
