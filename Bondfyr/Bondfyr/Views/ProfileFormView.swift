@@ -663,11 +663,11 @@ struct ProfileFormView: View {
                 
                 switch result {
                 case .success:
+                    // Always notify completion so Splash can advance
+                    NotificationCenter.default.post(name: NSNotification.Name("UserProfileCompleted"), object: nil)
                     if self.isEditingMode {
                         self.showProfileSavedAlert = true
                     } else {
-                        // Notify splash to proceed to main app and dismiss
-                        NotificationCenter.default.post(name: NSNotification.Name("UserProfileCompleted"), object: nil)
                         self.dismiss()
                     }
                 case .failure(let error):
