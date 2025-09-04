@@ -157,11 +157,18 @@ struct SplashView: View {
             } else if self.authViewModel.isLoggedIn && Auth.auth().currentUser != nil {
                 // User is logged in but needs to complete profile
                 print("⚠️ User logged in but profile incomplete, fetching profile")
-                self.authViewModel.fetchUserProfile { success in 
-                    if success {
-                        self.evaluateProfileAndNavigate()
-                    } else {
-                        self.navigateToProfileForm = true
+                // Trust local completion flag as fast-path to avoid loop when reads are blocked
+                let uid = Auth.auth().currentUser?.uid ?? ""
+                if UserDefaults.standard.bool(forKey: "profileCompleted_\(uid)") {
+                    print("✅ Using local profileCompleted flag; navigating to main app")
+                    self.navigateToMainView = true
+                } else {
+                    self.authViewModel.fetchUserProfile { success in 
+                        if success {
+                            self.evaluateProfileAndNavigate()
+                        } else {
+                            self.navigateToProfileForm = true
+                        }
                     }
                 }
             } else {

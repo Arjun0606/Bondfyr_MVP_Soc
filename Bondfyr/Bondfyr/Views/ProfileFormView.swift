@@ -663,6 +663,10 @@ struct ProfileFormView: View {
                 
                 switch result {
                 case .success:
+                    // Persist completion locally for fast subsequent sign-ins
+                    if let uid = Auth.auth().currentUser?.uid {
+                        UserDefaults.standard.set(true, forKey: "profileCompleted_\(uid)")
+                    }
                     // Always notify completion so Splash can advance
                     NotificationCenter.default.post(name: NSNotification.Name("UserProfileCompleted"), object: nil)
                     if self.isEditingMode {
