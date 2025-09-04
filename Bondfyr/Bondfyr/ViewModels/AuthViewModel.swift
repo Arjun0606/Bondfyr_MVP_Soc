@@ -473,14 +473,8 @@ class AuthViewModel: ObservableObject {
         }
         
         let db = Firestore.firestore()
-        db.collection("users").document(uid).getDocument(source: .default) { [weak self] snapshot, error in
-            if let error = error {
-                
-                completion(false)
-                return
-            }
-            
-            if let data = snapshot?.data(),
+        func handleSnapshot(_ data: [String: Any]?) -> Bool {
+            guard let data = data,
                let name = data["name"] as? String,
                let email = data["email"] as? String,
                let dobTimestamp = data["dob"] as? Timestamp,
@@ -533,16 +527,29 @@ class AuthViewModel: ObservableObject {
                 
                 DispatchQueue.main.async {
                     self?.currentUser = user
-                    // Check if profile is complete (has username AND gender AND has city - social media now optional)
                     let hasUsername = username?.isEmpty == false
                     let hasGender = gender?.isEmpty == false
                     let hasCity = city?.isEmpty == false
                     self?.isProfileComplete = hasUsername && hasGender && hasCity
-                    completion(true)
                 }
-            } else {
-                
-                completion(false)
+                return true
+            }
+            return false
+        }
+        
+        // Try server first
+        db.collection("users").document(uid).getDocument(source: .default) { [weak self] snapshot, error in
+            if let data = snapshot?.data(), handleSnapshot(data) {
+                completion(true)
+                return
+            }
+            // Fallback to cache to avoid blocking on App Check/Network
+            db.collection("users").document(uid).getDocument(source: .cache) { snapshot, _ in
+                if handleSnapshot(snapshot?.data()) {
+                    completion(true)
+                } else {
+                    completion(false)
+                }
             }
         }
     }
