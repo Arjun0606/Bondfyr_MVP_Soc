@@ -104,6 +104,14 @@ struct SplashView: View {
                 navigateToSignIn = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserWasDeleted"))) { _ in
+            // Account deleted: reset navigation flags and present sign-in immediately
+            navigateToMainView = false
+            navigateToProfileForm = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                navigateToSignIn = true
+            }
+        }
     }
     
     private func startSplashAnimation() {

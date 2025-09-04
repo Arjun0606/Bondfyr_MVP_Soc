@@ -768,21 +768,21 @@ class AuthViewModel: ObservableObject {
                             completion(authError)
                         }
                     } else {
-                        
-                        
                         // Clear local state
                         DispatchQueue.main.async {
                             self.currentUser = nil
                             self.isLoggedIn = false
                             self.isProfileComplete = false // Reset profile completion status
                         }
-                        
                         // Post notification that user was deleted
                         NotificationCenter.default.post(name: NSNotification.Name("UserWasDeleted"), object: nil)
-                        
                         // Reset app state
                         self.resetAppToInitialState()
-                        
+                        // Also clear per-uid completion flags
+                        UserDefaults.standard.removeObject(forKey: "profileCompleted_\(uid)")
+                        UserDefaults.standard.synchronize()
+                        // Broadcast a logout event for any listeners relying on it
+                        NotificationCenter.default.post(name: NSNotification.Name("UserDidLogout"), object: nil)
                         completion(nil)
                     }
                 }
