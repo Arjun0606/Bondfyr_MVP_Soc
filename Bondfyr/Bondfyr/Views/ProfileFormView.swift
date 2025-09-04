@@ -136,14 +136,34 @@ struct ProfileFormView: View {
     // MARK: - View Sections
     
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(isEditingMode ? "Edit Profile" : "Complete Your Profile")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)
+        VStack(spacing: 8) {
+            HStack {
+                Button(action: {
+                    // Cancel profile and return to sign-in
+                    NotificationCenter.default.post(name: NSNotification.Name("UserProfileCancelled"), object: nil)
+                    dismiss()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                        Text("Cancel")
+                            .foregroundColor(.gray)
+                            .font(.subheadline)
+                    }
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
             
-            Text(isEditingMode ? "Update your Bondfyr profile" : "Create your unique Bondfyr profile")
-                .font(.subheadline)
-                .foregroundColor(.gray)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(isEditingMode ? "Edit Profile" : "Complete Your Profile")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+                
+                Text(isEditingMode ? "Update your Bondfyr profile" : "Create your unique Bondfyr profile")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
         }
         .safeTopPadding(16)
     }

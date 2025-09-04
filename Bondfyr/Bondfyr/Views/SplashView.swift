@@ -112,6 +112,12 @@ struct SplashView: View {
                 navigateToSignIn = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserProfileCancelled"))) { _ in
+            // User opted not to finish profile right now; return to sign-in
+            navigateToMainView = false
+            navigateToProfileForm = false
+            navigateToSignIn = true
+        }
     }
     
     private func startSplashAnimation() {
