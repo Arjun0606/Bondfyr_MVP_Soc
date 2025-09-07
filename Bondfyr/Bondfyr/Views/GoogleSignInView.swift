@@ -109,32 +109,7 @@ struct GoogleSignInView: View {
                         .cornerRadius(8)
                 }
                 
-                // App Store Reviewer Info
-                VStack(spacing: 8) {
-                    HStack {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("For App Store Reviewers")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .fontWeight(.medium)
-                        Spacer()
-                    }
-                    
-                    Text("Use demo account provided in App Review Information section")
-                        .font(.caption2)
-                        .foregroundColor(.blue)
-                        .multilineTextAlignment(.leading)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.bottom, 10)
+                
                 
                 // Sign in buttons with enhanced styling
                 VStack(spacing: 16) {
@@ -247,17 +222,7 @@ struct GoogleSignInView: View {
                 
                 Spacer()
                 
-                // App Store Reviewer Guide Button
-                Button(action: { showReviewerGuide = true }) {
-                    HStack {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundColor(.blue)
-                        Text("App Store Reviewer Guide")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                    }
-                }
-                .padding(.bottom, 10)
+                
                 
                 // App version or branding
                 Text("v1.0")

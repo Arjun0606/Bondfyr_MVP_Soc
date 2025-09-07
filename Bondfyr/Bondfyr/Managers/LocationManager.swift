@@ -19,17 +19,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.requestWhenInUseAuthorization()
 
-        // DEMO: Force San Francisco location for App Store reviewer
-        if AppStoreDemoManager.shared.isDemoAccount {
-            let sfLocation = CLLocation(latitude: 37.7749, longitude: -122.4194)
-            self.location = sfLocation
-            self.currentCity = "San Francisco"
-            UserDefaults.standard.set("San Francisco", forKey: "selectedCity")
-            // No need for live updates in demo mode
-            locationManager.stopUpdatingLocation()
-        } else {
-            locationManager.startUpdatingLocation()
-        }
+        // Production: always use real location updates
+        locationManager.startUpdatingLocation()
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -48,15 +39,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // DEMO: Keep San Francisco regardless of physical location
-        if AppStoreDemoManager.shared.isDemoAccount {
-            let sfLocation = CLLocation(latitude: 37.7749, longitude: -122.4194)
-            self.location = sfLocation
-            self.currentCity = "San Francisco"
-            UserDefaults.standard.set("San Francisco", forKey: "selectedCity")
-            locationManager.stopUpdatingLocation()
-            return
-        }
+        // Production: no demo overrides
         guard let location = locations.last else { return }
         
         // Only update if accuracy is good enough

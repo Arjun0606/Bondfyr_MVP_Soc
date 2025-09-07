@@ -201,12 +201,7 @@ struct SplashView: View {
             return
         }
 
-        // DEMO MODE: Skip profile checks for demo account
-        if user.email == "appstore.reviewer@bondfyr.demo" {
-            print("🎭 Demo account detected - bypassing profile checks")
-            navigateToMainView = true
-            return
-        }
+        // Production: no demo account bypass
 
         let hasUsername = (user.username?.isEmpty == false)
         let hasGender = (user.gender?.isEmpty == false)
