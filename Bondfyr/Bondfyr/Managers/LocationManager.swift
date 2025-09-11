@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import FirebaseAuth
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
@@ -19,8 +20,24 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.requestWhenInUseAuthorization()
 
-        // Production: always use real location updates
-        locationManager.startUpdatingLocation()
+        // Check for demo account and force Austin
+        if Auth.auth().currentUser?.email == AppStoreDemoManager.demoEmail {
+            currentCity = "Austin"
+        } else {
+            // Production: always use real location updates
+            locationManager.startUpdatingLocation()
+        }
+        
+        // Listen for login changes to update city for demo account
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("UserDidLogin"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            if Auth.auth().currentUser?.email == AppStoreDemoManager.demoEmail {
+                self?.currentCity = "Austin"
+            }
+        }
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -39,7 +56,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        // Production: no demo overrides
+        // Override for demo account - always use Austin
+        if Auth.auth().currentUser?.email == AppStoreDemoManager.demoEmail {
+            self.currentCity = "Austin"
+            return
+        }
+        
         guard let location = locations.last else { return }
         
         // Only update if accuracy is good enough
