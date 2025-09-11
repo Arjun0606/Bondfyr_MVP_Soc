@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
 import CoreLocation
 import Combine
 import SwiftUI
@@ -37,6 +38,20 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         super.init()
         setupLocationManager()
         setupInitialData()
+        // Adjust city immediately after login for demo account
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("UserDidLogin"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            if AppStoreDemoManager.shared.isDemoAccount || Auth.auth().currentUser?.email == AppStoreDemoManager.demoEmail {
+                self.setCity("Austin")
+                self.userLocation = CLLocation(latitude: 30.2672, longitude: -97.7431)
+                self.location = self.userLocation
+                self.isInSelectedCity = true
+            }
+        }
     }
     
     private func setupLocationManager() {
@@ -54,7 +69,7 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     private func setupInitialData() {
         // Load saved city from UserDefaults
-        if AppStoreDemoManager.shared.isDemoAccount {
+        if AppStoreDemoManager.shared.isDemoAccount || Auth.auth().currentUser?.email == AppStoreDemoManager.demoEmail {
             selectedCity = "Austin"
             defaults.set("Austin", forKey: "selectedCity")
         } else {
