@@ -55,8 +55,8 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private func setupInitialData() {
         // Load saved city from UserDefaults
         if AppStoreDemoManager.shared.isDemoAccount {
-            selectedCity = "San Francisco"
-            defaults.set("San Francisco", forKey: "selectedCity")
+            selectedCity = "Austin"
+            defaults.set("Austin", forKey: "selectedCity")
         } else {
             selectedCity = defaults.string(forKey: "selectedCity")
         }
@@ -75,9 +75,9 @@ class CityManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // DEMO: Force San Francisco regardless of actual device location
         if AppStoreDemoManager.shared.isDemoAccount {
-            selectedCity = "San Francisco"
-            defaults.set("San Francisco", forKey: "selectedCity")
-            userLocation = CLLocation(latitude: 37.7749, longitude: -122.4194)
+            selectedCity = "Austin"
+            defaults.set("Austin", forKey: "selectedCity")
+            userLocation = CLLocation(latitude: 30.2672, longitude: -97.7431)
             location = userLocation
             isInSelectedCity = true
             return

@@ -1152,37 +1152,40 @@ struct AfterpartyCard: View {
     // MARK: - Extracted subviews to simplify type-checking
     private var coverPhotoSection: some View {
             ZStack(alignment: .topTrailing) {
-            if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty, let url = URL(string: coverURL) {
-                AsyncImage(url: url) { phase in
+            if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty {
+                if coverURL.hasPrefix("asset:") {
+                    let assetName = String(coverURL.dropFirst("asset:".count))
+                    Image(assetName)
+                        .resizable()
+                        .aspectRatio(4/3, contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                        .cornerRadius(16)
+                } else if let url = URL(string: coverURL) {
+                    AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let image):
                             image
                                 .resizable()
-                            .aspectRatio(4/3, contentMode: .fill)
+                                .aspectRatio(4/3, contentMode: .fill)
                                 .frame(maxWidth: .infinity)
                                 .clipped()
                                 .cornerRadius(16)
                         case .failure(_), .empty:
-                        coverFallback(label: "Party Image")
+                            coverFallback(label: "Party Image")
                         @unknown default:
-                        coverFallback(label: "Party Image")
+                            coverFallback(label: "Party Image")
                         }
                     }
                 } else {
+                    coverFallback(label: "Party Image")
+                }
+            } else {
                 coverFallback(label: "No Image")
             }
 
                 VStack(spacing: 4) {
-                    if afterparty.id.hasPrefix("demo-") {
-                        Text("DEMO")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.2))
-                            .cornerRadius(4)
-                    }
+                    // Removed DEMO label for screenshot-friendly cards
                     Text("$\(Int(afterparty.ticketPrice))")
                         .font(.title2)
                         .fontWeight(.bold)
@@ -2102,7 +2105,7 @@ struct CreateAfterpartyView: View {
     
     // MARK: - New Marketplace Fields
     @State private var title = ""
-    @State private var ticketPrice: Double = 10.0
+    @State private var ticketPrice: Double = 5.0
     @State private var maxGuestCount = 25
     @State private var selectedVibeTag = "BYOB"
     @State private var coverPhotoImage: UIImage?
@@ -2255,6 +2258,12 @@ struct CreateAfterpartyView: View {
                         coverPhotoImage: $coverPhotoImage,
                         isUploading: isUploadingImage
                     )
+                    .onAppear {
+                        if AppStoreDemoManager.shared.isDemoAccount && coverPhotoURL.isEmpty {
+                            // Preload local asset placeholder for demo screenshots
+                            coverPhotoURL = "asset:demo_austin"
+                        }
+                    }
                     
                     // Vibe Tags
                     VibeTagsSection(

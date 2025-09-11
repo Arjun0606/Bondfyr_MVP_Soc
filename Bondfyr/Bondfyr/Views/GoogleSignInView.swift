@@ -337,20 +337,7 @@ struct GoogleSignInView: View {
                 }
                 
                 // Demo account hint (only for sign in)
-                if !isSignUpMode {
-                VStack(spacing: 4) {
-                    Text("App Store Reviewers:")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.orange)
-                    
-                    Text("Use credentials from App Review Information")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.vertical, 4)
-                }
+                // Reviewer hint removed for production screenshots
             }
             
             // Sign in/Sign up button
