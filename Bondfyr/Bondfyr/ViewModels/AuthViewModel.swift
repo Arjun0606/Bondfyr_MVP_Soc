@@ -12,6 +12,7 @@ import FirebaseFirestore
 import FirebaseStorage
 import GoogleSignIn
 import AuthenticationServices
+import Mixpanel
 
 class AuthViewModel: ObservableObject {
     @Published var currentUser: AppUser?
@@ -52,6 +53,15 @@ class AuthViewModel: ObservableObject {
                     if !isReviewer { AppStoreDemoManager.shared.hostMode = true }
                     
                     
+                    // Identify user for analytics
+                    AnalyticsManager.shared.setUser(
+                        id: user.uid,
+                        email: user.email,
+                        city: CityManager.shared.selectedCity,
+                        isDemo: AppStoreDemoManager.shared.isDemoAccount
+                    )
+                    AnalyticsManager.shared.track("login_state_changed", ["logged_in": true])
+
                     // Check if we need to refresh the token
                     self.checkAndRefreshTokenIfNeeded(user: user)
                     
@@ -70,6 +80,8 @@ class AuthViewModel: ObservableObject {
                         }
                     }
                 } else {
+                    AnalyticsManager.shared.track("login_state_changed", ["logged_in": false])
+                    AnalyticsManager.shared.reset()
                     
                     self.isLoggedIn = false
                     self.currentUser = nil

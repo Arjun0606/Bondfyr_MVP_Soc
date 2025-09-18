@@ -12,6 +12,7 @@ import FirebaseAppCheck
 import UserNotifications
 import FirebaseMessaging
 import FirebaseAuth
+import Mixpanel
 import FirebaseFirestore
 import GoogleSignIn
 
@@ -34,6 +35,11 @@ struct BondfyrApp: App {
 
     init() {
         FirebaseApp.configure()
+        // Mixpanel analytics
+        Mixpanel.initialize(token: "fc3ba0e46474ab687ed0956276d517e7", trackAutomaticEvents: true)
+        #if DEBUG
+        Mixpanel.mainInstance().loggingEnabled = true
+        #endif
         
         // Configure Google Sign-In
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),

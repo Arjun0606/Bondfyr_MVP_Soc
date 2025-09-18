@@ -171,9 +171,15 @@ class AfterpartyManager: NSObject, ObservableObject {
         
         let data = try Firestore.Encoder().encode(afterparty)
         try await db.collection("afterparties").document(afterparty.id).setData(data)
-        
+        // Analytics
+        AnalyticsManager.shared.track("party_created", [
+            "party_id": afterparty.id,
+            "price": afterparty.ticketPrice,
+            "cap": afterparty.maxGuestCount,
+            "city": afterparty.city,
+            "vibe": afterparty.vibeTag
+        ])
 
-        
         // CRITICAL FIX: Schedule party start reminder notification
         NotificationManager.shared.schedulePartyStartReminder(
             partyId: afterparty.id,

@@ -2248,6 +2248,9 @@ struct CreateAfterpartyView: View {
                         ticketPrice: $ticketPrice,
                         maxGuestCount: $maxGuestCount
                     )
+                    .onAppear {
+                        AnalyticsManager.shared.track("create_party_opened")
+                    }
                     
                     // MARK: - Payment Details (TestFlight)
                     
