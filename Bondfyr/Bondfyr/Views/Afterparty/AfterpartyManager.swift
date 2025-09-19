@@ -1258,6 +1258,18 @@ class AfterpartyManager: NSObject, ObservableObject {
             afterparty: afterparty,
             attendees: attendees
         )
+
+        // Increment host's hosted count and unlock verification at 3
+        let hostRef = db.collection("users").document(afterparty.userId)
+        hostRef.updateData(["hostedPartiesCount": FieldValue.increment(Int64(1))]) { err in
+            if let err = err { print("❌ STATS: host increment: \(err)"); return }
+            hostRef.getDocument { snap, _ in
+                if let data = snap?.data(), let hosted = data["hostedPartiesCount"] as? Int, hosted >= 3, (data["hostVerified"] as? Bool) != true {
+                    hostRef.updateData(["hostVerified": true])
+                    AnalyticsManager.shared.track("host_verified_unlocked")
+                }
+            }
+        }
         
         // Mark party as stats processed
         try await db.collection("afterparties").document(afterparty.id).updateData([

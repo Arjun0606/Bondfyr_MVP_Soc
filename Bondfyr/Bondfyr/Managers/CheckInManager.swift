@@ -46,6 +46,9 @@ class CheckInManager: ObservableObject {
                         Task {
                             await RatingManager.shared.recordGuestCheckIn(userId: userId)
                         }
+                        // Increment attendance count and unlock guest verification
+                        self.incrementAttendanceCounter(userId: userId)
+                        AnalyticsManager.shared.track("check_in_success", ["event_id": eventId])
                         
                         completion(true, "Successfully checked in!")
                     }
@@ -126,6 +129,21 @@ class CheckInManager: ObservableObject {
             }
     }
     
+    // MARK: - Stats updates
+    private func incrementAttendanceCounter(userId: String) {
+        let ref = db.collection("users").document(userId)
+        ref.updateData(["attendedPartiesCount": FieldValue.increment(Int64(1))]) { err in
+            if let err = err { print("❌ STATS: attendance increment: \(err)"); return }
+            ref.getDocument { snap, _ in
+                guard let data = snap?.data(), let attended = data["attendedPartiesCount"] as? Int else { return }
+                if attended >= 5, (data["guestVerified"] as? Bool) != true {
+                    ref.updateData(["guestVerified": true])
+                    AnalyticsManager.shared.track("guest_verified_unlocked")
+                }
+            }
+        }
+    }
+
     // Check if user has checked in to a specific event
     func hasCheckedInToEvent(eventId: String) -> Bool {
         guard let checkIn = activeCheckIn else {
