@@ -163,7 +163,7 @@ struct GoogleSignInView: View {
                     }
                     .disabled(isLoading)
                     
-                    // Email/Password authentication button
+                    // Email/Password authentication button (match dark styling)
                     Button(action: { showEmailAuth.toggle() }) {
                         HStack(spacing: 12) {
                             Image(systemName: "envelope.circle.fill")
@@ -171,7 +171,6 @@ struct GoogleSignInView: View {
                                 .scaledToFit()
                                 .frame(width: 22, height: 22)
                                 .foregroundColor(.white)
-                            
                             Text("Continue with Email")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.white)
@@ -180,7 +179,7 @@ struct GoogleSignInView: View {
                         .frame(maxWidth: 300)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.green.opacity(0.8), Color.green.opacity(0.9)]),
+                                gradient: Gradient(colors: [Color.black.opacity(0.85), Color.black.opacity(0.95)]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -188,13 +187,13 @@ struct GoogleSignInView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(LinearGradient(
-                                    gradient: Gradient(colors: [Color.green.opacity(0.8), Color.green.opacity(0.4)]),
+                                    gradient: Gradient(colors: [Color.pink.opacity(0.8), Color.pink.opacity(0.4)]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ), lineWidth: 1.5)
                         )
                         .cornerRadius(12)
-                        .shadow(color: Color.green.opacity(0.3), radius: 10, x: 0, y: 4)
+                        .shadow(color: Color.pink.opacity(0.3), radius: 10, x: 0, y: 4)
                     }
                     .disabled(isLoading)
                     
