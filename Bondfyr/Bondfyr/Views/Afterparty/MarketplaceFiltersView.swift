@@ -243,8 +243,9 @@ struct MarketplaceFiltersView: View {
                     .flatMap { $0.vibeTag.components(separatedBy: ", ") }
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
-                    .uniqued()
+                    .reduce(into: Set<String>()) { $0.insert($1) }
                     .sorted()
+                    
             }
         }
     }

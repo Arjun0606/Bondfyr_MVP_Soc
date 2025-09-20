@@ -16,7 +16,7 @@ final class AnalyticsManager {
         if let city = city { props["city"] = city }
         if let isDemo = isDemo { props["is_demo"] = isDemo }
         if !props.isEmpty {
-            Mixpanel.mainInstance().people.set(props)
+            Mixpanel.mainInstance().people.set(properties: (props as? [String: MixpanelType]) ?? [:])
         }
     }
 
@@ -27,7 +27,7 @@ final class AnalyticsManager {
 
     func track(_ name: String, _ props: [String: Any] = [:]) {
         Analytics.logEvent(name, parameters: props)
-        Mixpanel.mainInstance().track(event: name, properties: props)
+        Mixpanel.mainInstance().track(event: name, properties: (props as? [String: MixpanelType]) ?? [:])
     }
 }
 
