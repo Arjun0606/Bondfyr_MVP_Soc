@@ -47,6 +47,15 @@ struct ProfileView: View {
         min(Double(totalAttendedParties) / 5.0, 1.0) // 5 parties needed for guest verification
     }
 
+    // Simple host rating summary if present on user doc
+    private var hostAverageRating: Double? {
+        // Some parts of the app store average as hostRating / overallAverage
+        let mirror = authViewModel.currentUser
+        let any = mirror as Any
+        // Swift reflection avoided; rely on known optional keys if extended later
+        return nil
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
