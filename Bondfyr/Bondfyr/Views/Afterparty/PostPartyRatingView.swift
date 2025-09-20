@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import Mixpanel
 
 struct PostPartyRatingView: View {
     let party: Afterparty
@@ -125,6 +126,34 @@ struct PostPartyRatingView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
             )
+        }
+    }
+
+    private func submitRating() {
+        guard selectedRating > 0 else { return }
+        isSubmitting = true
+        RatingManager.shared.submitPartyRating(
+            partyId: party.id,
+            rating: selectedRating,
+            comment: comment
+        ) { result in
+            DispatchQueue.main.async {
+                self.isSubmitting = false
+                switch result {
+                case .success:
+                    AnalyticsManager.shared.track("rating_submitted", [
+                        "party_id": party.id,
+                        "rating": selectedRating
+                    ])
+                    self.alertMessage = "Thanks for your feedback!"
+                    self.showingAlert = true
+                    self.onRatingSubmitted()
+                    self.presentationMode.wrappedValue.dismiss()
+                case .failure(let error):
+                    self.alertMessage = error.localizedDescription
+                    self.showingAlert = true
+                }
+            }
         }
     }
     
