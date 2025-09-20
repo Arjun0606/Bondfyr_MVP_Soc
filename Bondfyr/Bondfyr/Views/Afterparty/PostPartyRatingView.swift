@@ -164,66 +164,7 @@ struct PostPartyRatingView: View {
         return formatter.string(from: date)
     }
     
-    private func submitRating() {
-        guard let userId = authViewModel.currentUser?.uid,
-              selectedRating > 0 else { return }
-        
-        isSubmitting = true
-        
-        let db = Firestore.firestore()
-        let partyRef = db.collection("afterparties").document(party.id)
-        
-        // Check if user already rated this party
-        if let lastRatedPartyId = authViewModel.currentUser?.lastRatedPartyId,
-           lastRatedPartyId == party.id {
-            alertMessage = "You have already rated this party."
-            showingAlert = true
-            isSubmitting = false
-            return
-        }
-        
-        // Submit rating to Firestore
-        let ratingData: [String: Any] = [
-            "ratingsSubmitted.\(userId)": selectedRating,
-            "lastRatedAt": FieldValue.serverTimestamp()
-        ]
-        
-        partyRef.updateData(ratingData) { error in
-            DispatchQueue.main.async {
-                isSubmitting = false
-                
-                if let error = error {
-                    print("❌ Error submitting rating: \(error)")
-                    alertMessage = "Failed to submit rating. Please try again."
-                } else {
-                    print("✅ Rating submitted successfully")
-                    alertMessage = "Thank you for your feedback!"
-                    
-                    // Update user's lastRatedPartyId to prevent duplicate ratings
-                    updateUserLastRatedParty()
-                }
-                
-                showingAlert = true
-            }
-        }
-    }
     
-    private func updateUserLastRatedParty() {
-        guard let userId = authViewModel.currentUser?.uid else { return }
-        
-        let db = Firestore.firestore()
-        let userRef = db.collection("users").document(userId)
-        
-        userRef.updateData([
-            "lastRatedPartyId": party.id
-        ]) { error in
-            if let error = error {
-                print("❌ Error updating user lastRatedPartyId: \(error)")
-            } else {
-                print("✅ User lastRatedPartyId updated")
-            }
-        }
-    }
 }
 
 struct PostPartyRatingView_Previews: PreviewProvider {
