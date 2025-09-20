@@ -19,6 +19,9 @@ class AfterpartyManager: NSObject, ObservableObject {
     private var afterpartyListeners: [ListenerRegistration] = []
     
     private var statsProcessingTimer: Timer?
+    // Caches for quick UI access
+    var hostRatingCache: [String: HostRatingSummary] = [:]
+    var hostHostedCountCache: [String: Int] = [:]
     
     private override init() {
         super.init()
@@ -257,7 +260,20 @@ class AfterpartyManager: NSObject, ObservableObject {
                 
                 // Include if within radius
                 if distanceInMeters <= radiusInMeters {
-                    
+                    // Preload host rating summary and hosted count (best-effort)
+                    Task { [weak self] in
+                        guard let self = self else { return }
+                        if self.hostHostedCountCache[cleanedAfterparty.userId] == nil {
+                            let userDoc = try? await self.db.collection("users").document(cleanedAfterparty.userId).getDocument()
+                            if let data = userDoc?.data() {
+                                let hosted = data["hostedPartiesCount"] as? Int ?? (data["partiesHosted"] as? Int ?? 0)
+                                self.hostHostedCountCache[cleanedAfterparty.userId] = hosted
+                                if let avg = data["averagePartyRating"] as? Double, let total = data["totalRatingsCount"] as? Int {
+                                    self.hostRatingCache[cleanedAfterparty.userId] = HostRatingSummary(hostId: cleanedAfterparty.userId, totalRatings: total, averagePartyRating: avg, averageHostRating: avg, overallAverage: avg)
+                                }
+                            }
+                        }
+                    }
                     return cleanedAfterparty
                 } else {
                     

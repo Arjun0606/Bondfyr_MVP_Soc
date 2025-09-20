@@ -40,7 +40,7 @@ struct SearchBarView: View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.gray)
-            TextField("Search afterparties...", text: $searchText)
+            TextField("Search hosts, titles, tags…", text: $searchText)
         }
         .padding(10)
         .background(Color(.systemGray6))
@@ -153,13 +153,13 @@ struct AfterpartyTabView: View {
         var parties = marketplaceAfterparties
         print("🔍 FILTERED DEBUG: Starting with \(parties.count) marketplace parties")
         
-        // Apply search filter
+        // Apply search filter (hosts, titles, tags)
         if !searchText.isEmpty {
+            let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             parties = parties.filter { afterparty in
-                afterparty.title.localizedCaseInsensitiveContains(searchText) ||
-                afterparty.description.localizedCaseInsensitiveContains(searchText) ||
-                afterparty.vibeTag.localizedCaseInsensitiveContains(searchText) ||
-                afterparty.address.localizedCaseInsensitiveContains(searchText)
+                afterparty.title.localizedCaseInsensitiveContains(q) ||
+                afterparty.vibeTag.localizedCaseInsensitiveContains(q) ||
+                afterparty.hostHandle.localizedCaseInsensitiveContains(q)
             }
             print("🔍 FILTERED DEBUG: After search filter: \(parties.count) parties")
         }
@@ -1152,7 +1152,7 @@ struct AfterpartyCard: View {
     // MARK: - Extracted subviews to simplify type-checking
     private var coverPhotoSection: some View {
             ZStack(alignment: .topTrailing) {
-            if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty {
+                if let coverURL = afterparty.coverPhotoURL, !coverURL.isEmpty {
                 if coverURL.hasPrefix("asset:") {
                     let assetName = String(coverURL.dropFirst("asset:".count))
                     Image(assetName)
@@ -1223,6 +1223,21 @@ struct AfterpartyCard: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
+                    // Host rating summary / hosted count
+                    HStack(spacing: 6) {
+                        if let hosted = afterpartyManager.hostHostedCountCache[afterparty.userId] {
+                            let summary = afterpartyManager.hostRatingCache[afterparty.userId]
+                            if let avg = summary?.overallAverage, let total = summary?.totalRatings, total > 0 {
+                                Text("\(String(format: "%.1f", avg))★ (\(total)) • \(hosted) hosted")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            } else {
+                                Text("New host • \(hosted) hosted")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
                 }
                 Spacer()
                 Button(action: {

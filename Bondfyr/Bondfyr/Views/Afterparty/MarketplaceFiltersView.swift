@@ -25,7 +25,8 @@ struct MarketplaceFiltersView: View {
         self._maxGuestCount = State(initialValue: currentFilters.maxGuestCount)
     }
     
-    let vibeOptions = Afterparty.vibeOptions
+    // Dynamically provided vibe options (computed from current marketplace data)
+    @State private var vibeOptions: [String] = []
     
     // Callback for applying filters
     let onApplyFilters: (MarketplaceFilters) -> Void
@@ -235,6 +236,17 @@ struct MarketplaceFiltersView: View {
             )
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            // Pull available tags from a notification or shared cache if provided; fallback to defaults
+            if vibeOptions.isEmpty {
+                vibeOptions = AfterpartyManager.shared.nearbyAfterparties
+                    .flatMap { $0.vibeTag.components(separatedBy: ", ") }
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .uniqued()
+                    .sorted()
+            }
+        }
     }
 }
 
