@@ -71,6 +71,9 @@ struct ProfileView: View {
                             demoModeToggle
                         }
                         
+                        // Contact info
+                        contactSection
+
                         // Verification Status Section
                         verificationStatusSection
                         
@@ -244,16 +247,53 @@ struct ProfileView: View {
                 Text("Edit Profile")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.pink)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 8)
-                    .background(Color.pink.opacity(0.2))
-                    .cornerRadius(20)
             }
+            .brandPrimaryButtonStyle(enabled: true, height: 40)
         }
         .padding()
         .background(Color.white.opacity(0.05))
         .cornerRadius(20)
+    }
+
+    // MARK: - Contact Section
+    private var contactSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Contact")
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+
+            VStack(spacing: 10) {
+                HStack {
+                    Image(systemName: "envelope.fill").foregroundColor(.pink)
+                    Text(authViewModel.currentUser?.email ?? "—")
+                        .foregroundColor(.white)
+                        .font(.subheadline)
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(10)
+
+                if let phone = authViewModel.currentUser?.phoneNumber, !phone.isEmpty {
+                    HStack {
+                        Image(systemName: "phone.fill").foregroundColor(.green)
+                        Text(phone)
+                            .foregroundColor(.white)
+                            .font(.subheadline)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(10)
+                }
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(15)
     }
     
     // MARK: - Stats Section

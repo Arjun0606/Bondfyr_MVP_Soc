@@ -37,6 +37,20 @@ class AuthViewModel: ObservableObject {
             auth.removeStateDidChangeListener(authStateListener)
         }
     }
+
+    // MARK: - Username Availability
+    func isUsernameAvailable(_ username: String, completion: @escaping (Bool) -> Void) {
+        let lower = username.lowercased()
+        guard !lower.isEmpty else { completion(false); return }
+        db.collection("usernames").document(lower).getDocument { doc, _ in
+            if let data = doc?.data(), let existingUid = data["uid"] as? String,
+               let currentUid = Auth.auth().currentUser?.uid, existingUid != currentUid {
+                completion(false)
+            } else {
+                completion(true)
+            }
+        }
+    }
     
     // Setup a listener for Firebase auth state changes
     private func setupAuthStateListener() {
@@ -908,6 +922,8 @@ class AuthViewModel: ObservableObject {
         avatarURL: String? = nil,
         city: String? = nil,
         dob: Date? = nil,
+        name: String? = nil,
+        phoneNumber: String? = nil,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
         guard let user = Auth.auth().currentUser,
@@ -947,6 +963,12 @@ class AuthViewModel: ObservableObject {
                 if let username = username {
                     userData["username"] = username
                 }
+                if let name = name {
+                    userData["name"] = name
+                }
+                if let phoneNumber = phoneNumber {
+                    userData["phoneNumber"] = phoneNumber
+                }
                 if let gender = gender {
                     userData["gender"] = gender.isEmpty ? NSNull() : gender
                 }
@@ -973,10 +995,10 @@ class AuthViewModel: ObservableObject {
                 // For new users, create complete profile with required fields
                 userData = [
                     "uid": uid,
-                    "name": displayName,
+                    "name": (name?.isEmpty == false ? name! : displayName),
                     "email": email,
                     "dob": dob != nil ? Timestamp(date: dob!) : Timestamp(date: Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()),
-                    "phoneNumber": user.phoneNumber ?? "",
+                    "phoneNumber": phoneNumber ?? user.phoneNumber ?? "",
                     "role": "user",
                     "username": username ?? "",
                     "gender": gender?.isEmpty == false ? gender : NSNull(),
@@ -1059,6 +1081,8 @@ class AuthViewModel: ObservableObject {
                     // Persist a shallow local copy for fast restore on next login
                     var local: [String: Any] = [:]
                     if let username = username { local["username"] = username }
+                    if let name = name { local["name"] = name }
+                    if let phoneNumber = phoneNumber { local["phoneNumber"] = phoneNumber }
                     if let gender = gender { local["gender"] = gender }
                     if let city = city { local["city"] = city }
                     if let bio = bio { local["bio"] = bio }
@@ -1088,10 +1112,10 @@ class AuthViewModel: ObservableObject {
                                 if let uid = Auth.auth().currentUser?.uid, let email = Auth.auth().currentUser?.email {
                                     let localUser = AppUser(
                                         uid: uid,
-                                        name: "",
+                                        name: (name ?? ""),
                                         email: email,
                                         dob: dob ?? Date(timeIntervalSince1970: 631152000),
-                                        phoneNumber: "",
+                                        phoneNumber: phoneNumber ?? "",
                                         role: .user,
                                         username: username ?? "",
                                         gender: gender,

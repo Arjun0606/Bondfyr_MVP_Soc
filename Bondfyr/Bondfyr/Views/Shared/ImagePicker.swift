@@ -15,7 +15,7 @@ struct ImagePicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = source == .camera ? .camera : .photoLibrary
-        picker.allowsEditing = false
+        picker.allowsEditing = true
         return picker
     }
     
@@ -33,11 +33,11 @@ struct ImagePicker: UIViewControllerRepresentable {
         }
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.completion(image)
-            } else {
-                parent.completion(nil)
-            }
+            if let edited = info[.editedImage] as? UIImage {
+                parent.completion(edited)
+            } else if let original = info[.originalImage] as? UIImage {
+                parent.completion(original)
+            } else { parent.completion(nil) }
             parent.presentationMode.wrappedValue.dismiss()
         }
         
@@ -58,6 +58,7 @@ struct LegacyImagePicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
         picker.sourceType = sourceType
+        picker.allowsEditing = true
         return picker
     }
     
@@ -75,8 +76,10 @@ struct LegacyImagePicker: UIViewControllerRepresentable {
         }
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.image = image
+            if let edited = info[.editedImage] as? UIImage {
+                parent.image = edited
+            } else if let original = info[.originalImage] as? UIImage {
+                parent.image = original
             }
             parent.presentationMode.wrappedValue.dismiss()
         }

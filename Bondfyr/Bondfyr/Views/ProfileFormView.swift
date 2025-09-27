@@ -23,12 +23,15 @@ struct ProfileFormView: View {
 
     // Form fields
     @State private var username: String = ""
+    @State private var fullName: String = ""
+    @State private var usernameStatus: UsernameStatus = .idle
     @State private var selectedGender: String = ""
     @State private var customGender: String = ""
     @State private var bio: String = ""
     @State private var profileImage: UIImage? = nil
     @State private var profileImageURL: String = ""
     @State private var dob: Date = Calendar.current.date(byAdding: .year, value: -18, to: Date()) ?? Date()
+    @State private var phoneNumber: String = ""
 
     // Instagram
     @State private var showInstagramSheet = false
@@ -43,15 +46,20 @@ struct ProfileFormView: View {
     @State private var showProfileSavedAlert = false
     @State private var isInitialLoad = true
     @State private var authCheckCompleted = false
+    @State private var usernameDebounceWorkItem: DispatchWorkItem? = nil
 
     // Auto-detect city
     @StateObject private var locationManager = LocationManager()
+    @State private var manualCityOverride: String = ""
+    @State private var cityOverrideEnabled: Bool = false
     
     // Profile completion check
     private var canContinue: Bool {
         let genderValid = !selectedGender.isEmpty && (selectedGender != "custom" || !customGender.isEmpty)
         let ageValid = isOver18(dob: dob)
-        return !username.isEmpty && genderValid && ageValid
+        let nameValid = fullName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+        let usernameOk = !username.isEmpty && (usernameStatus == .available || usernameStatus == .idle)
+        return nameValid && usernameOk && genderValid && ageValid
     }
     
     // Age verification helper
@@ -179,7 +187,6 @@ struct ProfileFormView: View {
                 
                 if let user = Auth.auth().currentUser {
                     InfoRow(title: "Email", value: user.email ?? "Not provided")
-                    InfoRow(title: "Name", value: user.displayName ?? "Not provided")
                 } else {
                     // Show loading state while auth state loads
                     HStack {
@@ -196,6 +203,30 @@ struct ProfileFormView: View {
         }
     }
     
+    private var nameSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Name *")
+                .font(.headline)
+                .foregroundColor(.white)
+            TextField("Enter your full name", text: $fullName)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+                .autocapitalization(.words)
+                .disableAutocorrection(true)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+                )
+            if fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Name is required")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+
     private var profilePictureSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Profile Picture")
@@ -225,16 +256,43 @@ struct ProfileFormView: View {
                         .textInputAutocapitalization(.never)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(username.isEmpty ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+                                .stroke(username.isEmpty || usernameStatus == .taken ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
                         )
+                        .onChange(of: username) { newValue in
+                            let cleaned = sanitizeUsernameInput(newValue)
+                            if cleaned != newValue {
+                                self.username = cleaned
+                            } else {
+                                debounceUsernameCheck(cleaned)
+                            }
+                        }
                     
                     if username.isEmpty {
                         Text("Username is required")
                             .font(.caption)
                             .foregroundColor(.red)
-            }
+                    } else {
+                        usernameStatusView
+                    }
+                    Text("3–20 characters, letters/numbers/underscore; shown as @handle")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
                     }
                 }
+
+    private var phoneSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Phone (Optional)")
+                .font(.headline)
+                .foregroundColor(.white)
+            TextField("Enter your phone number", text: $phoneNumber)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+                .keyboardType(.phonePad)
+        }
+    }
 
     private var genderSection: some View {
                 VStack(alignment: .leading, spacing: 16) {
@@ -388,7 +446,7 @@ struct ProfileFormView: View {
                     HStack {
                         Image(systemName: "location.fill")
                             .foregroundColor(.pink)
-                        Text(locationManager.currentCity ?? "Detecting location...")
+                        Text(cityOverrideEnabled && !manualCityOverride.isEmpty ? manualCityOverride : (locationManager.currentCity ?? "Detecting location..."))
                             .foregroundColor(.white)
                         Spacer()
                         if locationManager.currentCity == nil {
@@ -401,7 +459,21 @@ struct ProfileFormView: View {
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(12)
                     
-                    Text("Location is auto-detected for party discovery")
+                    Toggle(isOn: $cityOverrideEnabled) {
+                        Text("Manually set city")
+                            .foregroundColor(.white)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: .pink))
+
+                    if cityOverrideEnabled {
+                        TextField("Enter your city", text: $manualCityOverride)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(12)
+                            .foregroundColor(.white)
+                    }
+                    
+                    Text("Location is auto-detected for party discovery. You can override it if needed.")
                         .font(.caption)
                         .foregroundColor(.gray)
         }
@@ -466,26 +538,21 @@ struct ProfileFormView: View {
     private var saveButtonSection: some View {
                 Button(action: saveProfile) {
                     HStack {
-                    if isSaving {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else if !authCheckCompleted {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        Text("Verifying...")
-                            .font(.system(size: 16, weight: .semibold))
-                    } else {
+                        if isSaving || !authCheckCompleted {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            if !authCheckCompleted {
+                                Text("Verifying...")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        } else {
                             Text(isEditingMode ? "Save Changes" : "Complete Profile")
-                            .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                         }
                     }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                    }
+                }
                 .disabled(!canContinue || isSaving || isUploadingImage || !authCheckCompleted)
-                .background((canContinue && authCheckCompleted) ? Color.pink : Color.gray.opacity(0.3))
-                .cornerRadius(12)
+                .brandPrimaryButtonStyle(enabled: (canContinue && authCheckCompleted))
                 .padding(.bottom, 30)
             }
     
@@ -503,10 +570,12 @@ struct ProfileFormView: View {
             VStack(alignment: .leading, spacing: 32) {
                 headerSection
                 googleInfoSection
+                nameSection
                 profilePictureSection
                 usernameSection
                 genderSection
                 bioSection
+                phoneSection
                 dobSection
                 locationSection
                 socialMediaSection
@@ -596,6 +665,7 @@ struct ProfileFormView: View {
         // Load existing user data if available
         if let user = authViewModel.currentUser {
             username = user.username ?? ""
+            fullName = user.name
             let userGender = user.gender ?? ""
             
             // Handle custom gender: if it's not "male" or "female", treat as custom
@@ -613,6 +683,11 @@ struct ProfileFormView: View {
             instagramHandle = user.instagramHandle ?? ""
             instagramConnected = !instagramHandle.isEmpty
             snapchatConnected = user.snapchatHandle?.isEmpty == false
+            phoneNumber = user.phoneNumber
+        } else {
+            // Prefill from Firebase Auth as a hint only
+            fullName = Auth.auth().currentUser?.displayName ?? ""
+            phoneNumber = Auth.auth().currentUser?.phoneNumber ?? ""
         }
     }
 
@@ -656,7 +731,7 @@ struct ProfileFormView: View {
         isSaving = true
         
         // Prepare data for update
-        let city = locationManager.currentCity ?? "Location Not Available"
+        let city = (cityOverrideEnabled && !manualCityOverride.isEmpty) ? manualCityOverride : (locationManager.currentCity ?? "Location Not Available")
         let instagram = instagramConnected ? instagramHandle : ""
         let snapchat = snapchatConnected ? "connected" : ""
         
@@ -677,7 +752,9 @@ struct ProfileFormView: View {
             snapchatHandle: snapchat,
             avatarURL: profileImageURL.isEmpty ? nil : profileImageURL,
             city: city,
-            dob: dob
+            dob: dob,
+            name: fullName,
+            phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
         ) { result in
             DispatchQueue.main.async {
                 self.isSaving = false
@@ -701,6 +778,44 @@ struct ProfileFormView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Username availability UI/helpers
+    private enum UsernameStatus { case idle, checking, available, taken }
+    private var usernameStatusView: some View {
+        HStack(spacing: 6) {
+            switch usernameStatus {
+            case .idle:
+                EmptyView()
+            case .checking:
+                ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .gray)).scaleEffect(0.7)
+                Text("Checking availability…").font(.caption).foregroundColor(.gray)
+            case .available:
+                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                Text("Username is available").font(.caption).foregroundColor(.green)
+            case .taken:
+                Image(systemName: "xmark.circle.fill").foregroundColor(.red)
+                Text("Username is taken").font(.caption).foregroundColor(.red)
+            }
+        }
+    }
+
+    private func debounceUsernameCheck(_ value: String) {
+        usernameStatus = value.isEmpty ? .idle : .checking
+        usernameDebounceWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak authViewModel] in
+            authViewModel?.isUsernameAvailable(value) { isFree in
+                DispatchQueue.main.async { self.usernameStatus = isFree ? .available : .taken }
+            }
+        }
+        usernameDebounceWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    private func sanitizeUsernameInput(_ value: String) -> String {
+        let lowered = value.lowercased()
+        let filtered = lowered.filter { $0.isLetter || $0.isNumber || $0 == "_" }
+        return String(filtered.prefix(20))
     }
 }
 
