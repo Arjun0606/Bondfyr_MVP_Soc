@@ -50,8 +50,6 @@ struct ProfileFormView: View {
 
     // Auto-detect city
     @StateObject private var locationManager = LocationManager()
-    @State private var manualCityOverride: String = ""
-    @State private var cityOverrideEnabled: Bool = false
     
     // Profile completion check
     private var canContinue: Bool {
@@ -59,7 +57,8 @@ struct ProfileFormView: View {
         let ageValid = isOver18(dob: dob)
         let nameValid = fullName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
         let usernameOk = !username.isEmpty && (usernameStatus == .available || usernameStatus == .idle)
-        return nameValid && usernameOk && genderValid && ageValid
+        let cityValid = locationManager.currentCity != nil
+        return nameValid && usernameOk && genderValid && ageValid && cityValid
     }
     
     // Age verification helper
@@ -438,46 +437,32 @@ struct ProfileFormView: View {
                 }
 
     private var locationSection: some View {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Location")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    HStack {
-                        Image(systemName: "location.fill")
-                            .foregroundColor(.pink)
-                        Text(cityOverrideEnabled && !manualCityOverride.isEmpty ? manualCityOverride : (locationManager.currentCity ?? "Detecting location..."))
-                            .foregroundColor(.white)
-                        Spacer()
-                        if locationManager.currentCity == nil {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .pink))
-                                .scaleEffect(0.8)
-                        }
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(12)
-                    
-                    Toggle(isOn: $cityOverrideEnabled) {
-                        Text("Manually set city")
-                            .foregroundColor(.white)
-                    }
-                    .toggleStyle(SwitchToggleStyle(tint: .pink))
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Location (Auto‑detected)")
+                .font(.headline)
+                .foregroundColor(.white)
 
-                    if cityOverrideEnabled {
-                        TextField("Enter your city", text: $manualCityOverride)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(12)
-                            .foregroundColor(.white)
-                    }
-                    
-                    Text("Location is auto-detected for party discovery. You can override it if needed.")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-        }
+            HStack {
+                Image(systemName: "location.fill")
+                    .foregroundColor(.pink)
+                Text(locationManager.currentCity ?? "Detecting location…")
+                    .foregroundColor(.white)
+                Spacer()
+                if locationManager.currentCity == nil {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .pink))
+                        .scaleEffect(0.8)
                 }
+            }
+            .padding()
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(12)
+
+            Text("We use your current city for discovery and safety. Enable location in Settings if disabled.")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+    }
 
     private var socialMediaSection: some View {
                 VStack(alignment: .leading, spacing: 16) {
@@ -731,7 +716,7 @@ struct ProfileFormView: View {
         isSaving = true
         
         // Prepare data for update
-        let city = (cityOverrideEnabled && !manualCityOverride.isEmpty) ? manualCityOverride : (locationManager.currentCity ?? "Location Not Available")
+        let city = locationManager.currentCity ?? "Location Not Available"
         let instagram = instagramConnected ? instagramHandle : ""
         let snapchat = snapchatConnected ? "connected" : ""
         
