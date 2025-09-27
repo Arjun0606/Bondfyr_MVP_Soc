@@ -2252,6 +2252,22 @@ struct CreateAfterpartyView: View {
             return AnyView(Color.gray)
         }
     }
+
+    // Start time composed from selected date + chosen time
+    private var composedStartTime: Date {
+        let cal = Calendar.current
+        return cal.date(
+            bySettingHour: cal.component(.hour, from: customStartTime),
+            minute: cal.component(.minute, from: customStartTime),
+            second: 0,
+            of: selectedDate
+        ) ?? customStartTime
+    }
+    
+    // Prevent scheduling in the past (allow 5‑minute buffer)
+    private var isStartTimeValid: Bool {
+        composedStartTime > Date().addingTimeInterval(5 * 60)
+    }
     
     var body: some View {
         NavigationView {
@@ -2292,6 +2308,7 @@ struct CreateAfterpartyView: View {
                     EnhancedDateTimeSection(
                         selectedDate: $selectedDate,
                         customStartTime: $customStartTime,
+                        isStartTimeValid: isStartTimeValid,
                         formatTime: formatTime
                     )
                     
@@ -2515,12 +2532,15 @@ struct CreateAfterpartyView: View {
         Task {
             do {
                 // Combine selected date with start time
-                let finalStartTime = Calendar.current.date(
-                    bySettingHour: Calendar.current.component(.hour, from: customStartTime),
-                    minute: Calendar.current.component(.minute, from: customStartTime),
-                    second: 0,
-                    of: selectedDate
-                ) ?? customStartTime
+                let finalStartTime = composedStartTime
+
+                // Guard against past scheduling
+                if finalStartTime <= Date().addingTimeInterval(5 * 60) {
+                    isCreating = false
+                    showingError = true
+                    errorMessage = "Start time must be in the future"
+                    return
+                }
                 
                 // Parties run indefinitely until host ends them manually
                 // Set end time far in the future (1 year) - will be ended by host's "End Party" button
@@ -3943,6 +3963,7 @@ struct LocationDescriptionSection: View {
 struct EnhancedDateTimeSection: View {
     @Binding var selectedDate: Date
     @Binding var customStartTime: Date
+    var isStartTimeValid: Bool = true
     let formatTime: (Date) -> String
     
     var body: some View {
@@ -3958,7 +3979,7 @@ struct EnhancedDateTimeSection: View {
                     .font(.body)
                     .foregroundColor(.white)
                 
-                DatePicker("Select Date", selection: $selectedDate, displayedComponents: .date)
+                DatePicker("Select Date", selection: $selectedDate, in: Date()..., displayedComponents: .date)
                     .datePickerStyle(CompactDatePickerStyle())
                     .accentColor(.pink)
                     .colorScheme(.dark)
@@ -3981,6 +4002,16 @@ struct EnhancedDateTimeSection: View {
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
                     .labelsHidden()
+
+                if !isStartTimeValid {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
+                        Text("Start time must be in the future")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.top, 2)
+                }
             }
             
             // Party info note
