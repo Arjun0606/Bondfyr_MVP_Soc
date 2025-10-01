@@ -2,6 +2,8 @@
 
 This is the MVP (Minimum Viable Product) version of Bondfyr, a social app for finding and hosting afterparties.
 
+YOU CAN FIND US ON THE IOS APP STORE!!!
+
 ## Features
 
 - **Event Discovery**: Browse nightlife events in your city
